@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from api_tests.config import EnvironmentConfig, load_environment
+from api_tests.run_state import RunState, session_run_state
 
 ENV_CONFIG_KEY: pytest.StashKey[EnvironmentConfig] = pytest.StashKey()
 
@@ -28,3 +29,8 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.fixture(scope="session")
 def env_config(pytestconfig: pytest.Config) -> EnvironmentConfig:
     return pytestconfig.stash[ENV_CONFIG_KEY]
+
+
+@pytest.fixture(scope="session")
+def run_state() -> RunState:
+    return session_run_state()
