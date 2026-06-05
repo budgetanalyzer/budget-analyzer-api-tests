@@ -328,3 +328,10 @@ scratch/
 
 #Python cache
 __pycache__
+
+# Python packaging and virtual environments
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/

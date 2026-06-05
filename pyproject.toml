@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "budget-analyzer-api-tests"
+version = "0.1.0"
+description = "Black-box API tests for the Budget Analyzer public gateway API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "httpx",
+  "jsonschema",
+  "playwright",
+  "pydantic",
+  "PyYAML",
+  "pytest",
+  "referencing",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy",
+  "respx",
+  "ruff",
+  "types-PyYAML",
+]
+
+[tool.setuptools.packages.find]
+include = ["api_tests*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["api_tests"]
