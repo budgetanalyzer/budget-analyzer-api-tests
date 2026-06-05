@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+from api_tests.auth0 import Auth0ManagementError
+from api_tests.browser_login import BrowserLoginError
+from api_tests.client import GatewayClient
 from api_tests.config import EnvironmentConfig, load_environment
 from api_tests.run_state import RunState, session_run_state
 
@@ -34,3 +38,17 @@ def env_config(pytestconfig: pytest.Config) -> EnvironmentConfig:
 @pytest.fixture(scope="session")
 def run_state() -> RunState:
     return session_run_state()
+
+
+@pytest.fixture(scope="session")
+def auth_context(env_config: EnvironmentConfig, run_state: RunState) -> AuthContext:
+    try:
+        return load_auth_context(env_config, run_state)
+    except (AuthConfigurationError, Auth0ManagementError, BrowserLoginError) as exc:
+        pytest.fail(f"authentication prerequisite failed: {exc}", pytrace=False)
+
+
+@pytest.fixture(scope="session")
+def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
+    with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+        yield client

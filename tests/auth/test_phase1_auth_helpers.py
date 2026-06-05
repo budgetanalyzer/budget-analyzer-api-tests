@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import json
+from pathlib import Path
 from typing import cast
 
 import httpx
 import pytest
 
+from api_tests.auth import AuthConfigurationError, load_auth_context
 from api_tests.auth0 import (
     Auth0CreatedUser,
     Auth0ManagementClient,
@@ -15,6 +17,7 @@ from api_tests.auth0 import (
 )
 from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
 from api_tests.browser_login import read_session_cookie
+from api_tests.client import GatewayClient
 from api_tests.config import load_environment
 from api_tests.identities import create_run_identities
 from api_tests.run_state import RUN_ID_PATTERN, RunState, generate_run_id, session_run_state
@@ -174,3 +177,98 @@ def test_create_run_identities_provisions_and_logs_in_primary_and_secondary_user
     ]
     assert identities.primary_user.email == "primary-user@api-tests.example.invalid"
     assert identities.secondary_user.email == "secondary-user@api-tests.example.invalid"
+
+
+def test_env_cookie_auth_mode_reads_local_debug_cookie() -> None:
+    config = load_environment("local")
+    config = config.model_copy(update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})})
+
+    auth_context = load_auth_context(
+        config,
+        RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+        environ={"BA_SESSION": "debug-cookie"},
+    )
+
+    assert auth_context.mode == "env_cookie"
+    assert auth_context.identities is None
+    assert auth_context.session_cookie == SessionCookie(
+        name="BA_SESSION",
+        value="debug-cookie",
+        domain="",
+        path="/",
+    )
+
+
+def test_env_cookie_auth_mode_is_local_only() -> None:
+    config = load_environment("staging")
+    config = config.model_copy(update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})})
+
+    with pytest.raises(AuthConfigurationError, match="only allowed for local"):
+        load_auth_context(
+            config,
+            RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+            environ={"BA_SESSION": "debug-cookie"},
+        )
+
+
+def test_browser_auth0_mode_fails_before_network_when_management_env_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_environment("local")
+    for env_var in (
+        config.auth.auth0.management_domain_env,
+        config.auth.auth0.management_client_id_env,
+        config.auth.auth0.management_client_secret_env,
+        config.auth.auth0.connection_env,
+    ):
+        monkeypatch.delenv(env_var, raising=False)
+
+    with pytest.raises(RuntimeError, match="AUTH0_MGMT_DOMAIN"):
+        load_auth_context(config, RunState("ba-api-test-20260605T123456Z-1a2b3c4d"))
+
+
+def test_gateway_client_uses_origin_api_prefix_cookie_and_request_log(
+    tmp_path: Path,
+) -> None:
+    config = load_environment("local")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={
+                "content-type": "application/json",
+                "set-cookie": "BA_SESSION=secret",
+            },
+            json={
+                "ok": True,
+                "password": "secret-password",
+                "access_token": "secret-token",
+            },
+        )
+
+    artifact_path = tmp_path / "request-log.jsonl"
+    with GatewayClient(
+        config,
+        artifact_path=artifact_path,
+        session_cookie=SessionCookie(
+            name="BA_SESSION",
+            value="debug-cookie",
+            domain="",
+            path="/",
+        ),
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.api_request("GET", "/transactions")
+
+    assert response.status_code == 200
+    assert str(requests[0].url) == "https://app.budgetanalyzer.localhost/api/transactions"
+    assert requests[0].headers["cookie"] == "BA_SESSION=debug-cookie"
+
+    log_entry = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert log_entry["method"] == "GET"
+    assert log_entry["status"] == 200
+    assert log_entry["response_headers"]["set-cookie"] == "[REDACTED]"
+    assert "secret-password" not in log_entry["response_body_prefix"]
+    assert "secret-token" not in log_entry["response_body_prefix"]

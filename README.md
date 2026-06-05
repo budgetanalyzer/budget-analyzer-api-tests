@@ -8,10 +8,10 @@ This repository is being bootstrapped from the orchestration plan in
 ## Bootstrap
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -e ".[dev]"
-playwright install
+python -m pip install -e ".[dev]"
+python -m playwright install chromium
+pytest --env local --collect-only
+pytest --env local tests/api_docs
 ```
 
 Environment files under `environments/` are declarative and non-secret. Auth0
