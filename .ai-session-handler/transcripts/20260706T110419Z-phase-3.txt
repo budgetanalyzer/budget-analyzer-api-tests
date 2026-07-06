@@ -1,0 +1,1687 @@
+run_id: 20260706T110419Z-phase-3
+phase: phase-3 Consolidate Tooling Configuration
+plan: /workspace/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+state: /workspace/budget-analyzer-api-tests/.ai-session-handler/python-baseline-remediation-plan.json
+workspace: /workspace/budget-analyzer-api-tests
+started_at: 2026-07-06T11:04:19Z
+agent_cmd: /usr/bin/python3 .ai-session-handler/codex-high-exec-filter.py
+argv: /usr/bin/python3 .ai-session-handler/codex-high-exec-filter.py
+---
+Reading prompt from stdin...
+OpenAI Codex v0.142.5
+--------
+workdir: /workspace/budget-analyzer-api-tests
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 019f3719-b715-7300-b017-7a70f6aaedeb
+--------
+user
+AI SESSION HANDLER WORKER PROTOCOL
+
+CONTEXT
+- workspace_path: /workspace/budget-analyzer-api-tests
+- plan_path: /workspace/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+- state_path: /workspace/budget-analyzer-api-tests/.ai-session-handler/python-baseline-remediation-plan.json
+- run_id: 20260706T110419Z-phase-3
+- transcript_path: /workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T110419Z-phase-3.txt
+- selected_phase_id: phase-3
+- selected_phase_title: Consolidate Tooling Configuration
+
+INSTRUCTIONS
+- Read repository instructions first, including the nearest AGENTS.md.
+- Inspect current repository state before editing.
+- Implement exactly selected phase phase-3: Consolidate Tooling Configuration.
+- Do not proceed to later phases.
+- Follow the selected phase plan unless repository reality contradicts it.
+- Run the validation commands listed in the selected phase.
+- Do not run git commit, push, checkout, reset, clean, stash, branch creation, or automatic worktree operations.
+- Update only files required for the selected phase.
+- Do not make design-changing guesses. If implementation requires an unplanned product, architecture, schema, API, or workflow decision, stop with [phase-needs-clarification].
+- Treat user clarification as a first-class stop state, not as failure.
+- End with exactly one terminal marker from the grammar below.
+- Do not emit more than one terminal marker.
+
+FAILURE MODES
+- Use [phase-blocked] when the phase cannot be completed without external action.
+- Use [phase-needs-clarification] when a specific user decision is required.
+- Use [phase-complete] only after implementation and validation for this phase are complete.
+
+PREVIOUS STATE SUMMARY START
+schema_version: 1
+plan:
+  path: /home/devex/public-repos/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+  sha256: aaa3464a63641521ae5ee821c476320915f26e2109052cd5608c351901450ab3
+  accepted_at: 2026-07-06T07:19:54Z
+completed_phase_ids: phase-1, phase-2
+current_phase:
+  id: phase-3
+  title: Consolidate Tooling Configuration
+stop: none
+last_run:
+  run_id: 20260706T105557Z-phase-2
+  phase_id: phase-2
+  status: phase-complete
+  started_at: 2026-07-06T10:55:57Z
+  finished_at: 2026-07-06T10:58:53Z
+  exit_code: 0
+  transcript_path: /workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T105557Z-phase-2.txt
+  summary: Moved the package from api_tests/ to src/api_tests/, updated setuptools and Ruff src configuration, kept mypy packages = ["api_tests"], fixed repository_root() for the new layout, removed the validate-environment sys.path insertion, and updated README/AGENTS mypy commands to use src tests.
+
+Validation passed: editable install, api_tests imports from /workspace/budget-analyzer-api-tests/src/api_tests, repository_root resolves to the repo root, validate-environment local succeeds, ruff format --check succeeds, ruff check succeeds, mypy src tests succeeds, pytest collect-only succeeds with --import-mode=importlib and with the current default config.
+PREVIOUS STATE SUMMARY END
+
+SELECTED PHASE BODY START
+
+Goal: make this repo's tool configuration match the standard workspace shape.
+
+Steps:
+
+1. Move pytest settings from `pytest.ini` into
+   `[tool.pytest.ini_options]` in `pyproject.toml`.
+2. Add:
+   - `testpaths = ["tests"]`
+   - `addopts = "--strict-config --strict-markers --import-mode=importlib"`
+3. Add Ruff lint selections:
+
+   ```toml
+   [tool.ruff.lint]
+   select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+   ```
+
+4. Delete `pytest.ini` after the pyproject configuration is verified.
+5. Decide whether tool scripts should become package entry points or stay as
+   checked script files with typed `main()` functions.
+
+Acceptance checks:
+
+- pytest reports `configfile: pyproject.toml`.
+- Strict marker checking still recognizes all custom markers.
+- Ruff lint remains clean under the broader lint selection.
+
+SELECTED PHASE BODY END
+
+TERMINAL MARKER GRAMMAR START
+[phase-complete]summary[/phase-complete]
+[phase-blocked]reason[/phase-blocked]
+[phase-needs-clarification]specific question for user[/phase-needs-clarification]
+TERMINAL MARKER GRAMMAR END
+
+codex
+I’ll read the repository instructions and the selected plan context first, then inspect the current config before making the phase-3-only edits.
+exec
+/bin/bash -lc "sed -n '1,260p' AGENTS.md" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+# Budget Analyzer API Tests
+
+## Repository Purpose
+
+This repository contains standalone black-box tests for the Budget Analyzer
+public gateway API. It tests deployed environments through the same public lane
+used by the browser:
+
+```text
+test runner -> HTTPS ingress -> ext_authz -> NGINX -> services
+```
+
+The suite must stay separate from service implementation repositories and must
+not depend on service internals.
+
+## Session Initialization
+
+At the start of work:
+
+1. Read this `AGENTS.md`.
+2. Inspect the repository structure before editing.
+3. Read the nearest relevant modules, tests, environment files, and plan
+   documents before changing them.
+
+Keep changes scoped to the requested plan phase or user request. The source
+implementation plan is
+`../orchestration/docs/plans/openapi-black-box-api-test-repository-plan.md`.
+
+## Core Product Constraints
+
+- Keep this a black-box public API test suite. Do not add direct database,
+  Redis, RabbitMQ, Kubernetes, service-DNS, or service-internal setup paths.
+- Compose API requests as `{origin}{api_base_path}{openapi path}` through
+  `GatewayClient`.
+- Treat the OpenAPI document as the executable coverage manifest.
+- Keep environment YAML declarative and non-secret. Read secrets only from
+  environment variables or CI secret stores.
+- Do not write Auth0 Management API tokens, generated passwords, session
+  cookies, authorization headers, or other credentials to artifacts.
+- Use `browser_auth0` as the primary local and staging auth mode. `env_cookie`
+  is a local debug fallback unless a future production-safe smoke-session flow
+  is explicitly designed.
+- Production defaults must remain read-only: `allow_mutation: false` and
+  `allow_destructive: false`.
+- Do not broaden production permissions to reach coverage targets.
+- Keep admin/global operations deferred until a separate admin identity,
+  cleanup, and global-state safety plan exists.
+- Do not add generic cleanup callbacks or janitors in the initial suite.
+  Per-run generated users are the boundary for user-owned test data.
+
+## Implemented Workflow
+
+- Install the local development environment with:
+
+  ```bash
+  python -m pip install -e ".[dev]"
+  python -m playwright install chromium
+  ```
+
+- Validate environment configuration with:
+
+  ```bash
+  .venv/bin/python tools/validate-environment.py --env local
+  ```
+
+- Run local collection without a live target with:
+
+  ```bash
+  .venv/bin/python -m pytest --env local --collect-only
+  ```
+
+- Live API tests require the selected environment, Auth0 prerequisites, browser
+  login, and network access to be available.
+
+## Python Baseline
+
+Use modern, explicit Python. The implementation should feel like a small typed
+system, not loose scripting glue.
+
+- Require Python 3.12 unless the project intentionally changes runtime support.
+- Use a `src/` layout for importable code.
+- Put tests outside application code under `tests/`.
+- Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+- Keep development dependencies separate from test-runner execution
+  dependencies.
+- Prefer standard-library types and modules for orchestration unless the
+  repository plan explicitly calls for a test-harness dependency.
+- Use `pathlib.Path` for filesystem paths.
+- Read and write text with explicit `encoding="utf-8"`.
+- Use timezone-aware UTC timestamps for generated ids and serialized state.
+- Keep business logic out of CLI/tool entrypoints. Tools should parse
+  arguments, call typed functions, print user-facing messages, and return exit
+  codes.
+- Implement tool entrypoints as `main(argv: Sequence[str] | None = None) -> int`
+  where practical.
+- Keep generated artifacts out of version control: `.venv/`, `.mypy_cache/`,
+  `.ruff_cache/`, `dist/`, `build/`, `*.egg-info/`, `__pycache__/`,
+  `.coverage`, `htmlcov/`, `.pytest_cache/`, and generated request or coverage
+  artifacts.
+
+## Typing Standards
+
+- Run mypy in strict mode.
+- Annotate all public functions, methods, dataclasses, and module-level
+  constants where the type is not obvious.
+- Prefer precise stdlib types from `collections.abc` such as `Sequence`,
+  `Mapping`, `Iterable`, and `Callable` for interfaces.
+- Avoid `Any`. If it is unavoidable at external boundaries such as decoded
+  YAML, decoded JSON, OpenAPI documents, httpx, Playwright, or pytest hooks,
+  isolate it and validate into typed dataclasses or Pydantic models quickly.
+- Avoid broad `dict[str, object]` plumbing across modules.
+- Use dataclasses or Pydantic models for durable value objects such as
+  environment config, identities, run state, operation coverage, and process or
+  request results.
+- Use literals or enums for constrained status values, auth modes, environment
+  types, cleanup modes, and coverage states.
+- Do not silence mypy with broad ignore comments. A narrow ignore must include
+  the error code and a short reason.
+
+## Formatting And Linting
+
+Use Ruff as the single formatting, linting, pyupgrade, and import-sorting path.
+Do not add Black, isort, Flake8, or autopep8 unless the user explicitly asks
+for that tool split.
+
+Expected commands in this workspace use the repository-local virtualenv. If
+`.venv/` is missing, create or install the dev environment first rather than
+falling back to global tooling.
+
+Current transitional commands:
+
+```bash
+.venv/bin/python -m ruff format .
+.venv/bin/python -m ruff check . --fix
+.venv/bin/python -m mypy src tests
+.venv/bin/python -m pytest --env local --collect-only
+```
+
+After the `src/` migration, the mypy command should be:
+
+```bash
+.venv/bin/python -m mypy src tests
+```
+
+Ruff should use `line-length = 100`, `target-version = "py312"`,
+`src = ["src", "tests"]`, and lint selections including `E`, `F`, `I`, `UP`,
+`B`, `SIM`, and `RUF`.
+
+## Testing Standards
+
+Use pytest for tests.
+
+- Prefer `tmp_path`, `monkeypatch`, `capsys`, `httpx.MockTransport`, and
+  `respx` for harness unit tests.
+- Do not call real Auth0, real providers, or live Budget Analyzer targets from
+  unit tests.
+- Keep tests deterministic. Avoid sleeps except where timeout behavior is under
+  test, and keep those durations short.
+- Use OpenAPI markers consistently:
+
+  ```python
+  @pytest.mark.openapi("operationId")
+  ```
+
+- Use `placeholder` only while a phase is under construction. Placeholder
+  coverage is not an acceptable staging-gate completion state.
+- Mark mutating tests with `mutation`, destructive tests with `destructive`,
+  read-only tests with `readonly`, authorization tests with `authorization`,
+  and production-safe tests with `production_safe`.
+- Production execution should select only explicitly production-safe read-only
+  tests.
+- For pytest configuration, prefer strict config, strict markers, declared test
+  paths, and importlib import mode.
+
+## API Execution Safety
+
+- Use `GatewayClient` for API requests so base origin, API prefix, TLS policy,
+  timeout, cookies, and request logging stay centralized.
+- Use `raw_request` only for `/api-docs`, auth edge checks, and other explicitly
+  public non-API-prefix routes.
+- Never seed sessions in Redis, exchange Auth0 tokens directly for API access,
+  or bypass the Session Gateway.
+- Stream or record enough request details for diagnostics, but redact secrets
+  before writing artifacts.
+- Keep mutating tests guarded by environment policy before any mutating request
+  is made.
+
+## State, Files, And Schemas
+
+- Keep environment files under `environments/` non-secret.
+- Keep generated logs and coverage files under `artifacts/`.
+- Keep checked-in OpenAPI snapshots under `schemas/`.
+- Keep deferred admin/global operations explicit in
+  `schemas/deferred-admin-operations.yaml` once the coverage phase is active.
+- Make JSON artifacts stable and readable with indentation where they are meant
+  for review.
+- Preserve OpenAPI operation ids exactly. Do not rename them in test markers.
+
+## Error Handling
+
+- Return documented exit codes from tools instead of raising tracebacks for
+  expected user errors.
+- Convert validation, prerequisite, and configuration failures into clear
+  messages naming the environment file, missing variable, path, operation id,
+  marker, or command involved.
+- Treat missing Auth0 prerequisites as an expected stop condition for live
+  tests, not as a harness bug.
+- Do not guess through product, architecture, schema, API, or workflow
+  decisions not present in durable documentation or the current user request.
+
+## Documentation Discipline
+
+Update documentation in the same change as behavior, configuration, CLI,
+tooling, marker conventions, environment schema, or workflow changes.
+
+- Update `README.md` when setup, commands, naming, usage, or examples change.
+- Update `docs/` when architecture, OpenAPI coverage, artifact schema, marker
+  grammar, exit codes, CI workflow, or operational behavior changes.
+- Update this `AGENTS.md` when agent instructions, quality gates, tooling, or
+  repository workflow changes.
+- Do not leave documentation updates as follow-up work.
+
+exec
+/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'pyproject.toml' -g 'pytest.ini' -g 'README.md' -g 'docs/plans/python-baseline-remediation-plan.md' -g 'tools/**' -g 'tests/**' -g 'src/**'" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+/workspace/budget-analyzer-api-tests
+tools/validate-environment.py
+tools/check-openapi-coverage.py
+tools/refresh-openapi.py
+tools/export-openapi-coverage.py
+AGENTS.md
+pytest.ini
+README.md
+pyproject.toml
+src/api_tests/auth.py
+src/api_tests/browser_login.py
+src/api_tests/logging.py
+src/api_tests/config.py
+src/api_tests/__pycache__/auth0.cpython-312.pyc
+src/api_tests/__pycache__/config.cpython-312.pyc
+src/api_tests/__pycache__/run_state.cpython-312.pyc
+src/api_tests/__pycache__/logging.cpython-312.pyc
+src/api_tests/__pycache__/browser_login.cpython-312.pyc
+src/api_tests/__pycache__/identities.cpython-312.pyc
+src/api_tests/__pycache__/auth.cpython-312.pyc
+src/api_tests/__pycache__/client.cpython-312.pyc
+src/api_tests/__pycache__/__init__.cpython-312.pyc
+src/api_tests/run_state.py
+src/api_tests/client.py
+src/api_tests/auth0.py
+src/api_tests/schemas.py
+src/api_tests/openapi.py
+src/api_tests/identities.py
+src/api_tests/__init__.py
+src/api_tests/coverage.py
+src/api_tests/builders/views.py
+src/api_tests/builders/transactions.py
+src/api_tests/builders/statement_formats.py
+src/api_tests/builders/__init__.py
+docs/plans/python-baseline-remediation-plan.md
+tests/authorization/.gitkeep
+tests/__pycache__/conftest.cpython-312-pytest-9.0.3.pyc
+tests/currencies/.gitkeep
+src/budget_analyzer_api_tests.egg-info/PKG-INFO
+src/budget_analyzer_api_tests.egg-info/SOURCES.txt
+src/budget_analyzer_api_tests.egg-info/requires.txt
+src/budget_analyzer_api_tests.egg-info/dependency_links.txt
+src/budget_analyzer_api_tests.egg-info/top_level.txt
+tests/transactions/.gitkeep
+tests/api_docs/test_openapi_docs.py
+tests/api_docs/.gitkeep
+tests/conftest.py
+tests/views/.gitkeep
+tests/contract/test_environment_config.py
+tests/contract/.gitkeep
+tests/api_docs/__pycache__/test_openapi_docs.cpython-312-pytest-9.0.3.pyc
+tests/statement_formats/.gitkeep
+tests/contract/__pycache__/test_environment_config.cpython-312-pytest-9.0.3.pyc
+tests/exchange_rates/.gitkeep
+tests/auth/__pycache__/test_phase1_auth_helpers.cpython-312-pytest-9.0.3.pyc
+tests/auth/.gitkeep
+tests/auth/test_phase1_auth_helpers.py
+
+exec
+/bin/bash -lc "sed -n '1,260p' docs/plans/python-baseline-remediation-plan.md" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+# Plan: Python Baseline Remediation
+
+Date: 2026-07-05
+Status: Review complete, implementation pending
+
+Reviewed inputs:
+
+- `../orchestration/docs/plans/openapi-black-box-api-test-repository-plan.md`
+- `pyproject.toml`
+- `pytest.ini`
+- `.gitignore`
+- `api_tests/`
+- `tests/`
+- `tools/`
+- `environments/`
+
+## Goal
+
+Align `budget-analyzer-api-tests` with the Python baseline used across the
+workspace while preserving the black-box API test constraints from the OpenAPI
+test repository plan.
+
+The goal is consistency in Python project shape, tooling, typing, tests,
+artifact hygiene, and safety defaults. This plan does not change endpoint
+coverage scope.
+
+## Current Validation Results
+
+Commands run from this repository:
+
+```bash
+.venv/bin/python -m ruff format --check .
+.venv/bin/python -m ruff check .
+.venv/bin/python -m mypy api_tests tests
+.venv/bin/python -m pytest --env local --collect-only
+.venv/bin/python -m pytest --env local
+.venv/bin/python tools/validate-environment.py --env local
+```
+
+Observed results:
+
+- Ruff format check fails: `api_tests/auth0.py`,
+  `api_tests/browser_login.py`, `api_tests/config.py`, and
+  `tests/auth/test_phase1_auth_helpers.py` would be reformatted.
+- Ruff lint passes with the current, minimal Ruff configuration.
+- mypy strict fails with two errors:
+  - `tests/conftest.py`: generator fixture return type should be `Generator`
+    or a supertype.
+  - `tests/auth/test_phase1_auth_helpers.py`: `BrowserContext` is imported
+    through `api_tests.browser_login`, but that module does not explicitly
+    export it.
+- `pytest --env local --collect-only` passes and collects 15 tests.
+- `pytest --env local` produces 14 passes and one expected live-test setup
+  error when Auth0 prerequisites are absent:
+  `AUTH0_MGMT_DOMAIN` is missing.
+- `tools/validate-environment.py --env local` succeeds.
+
+## Conformance Findings
+
+1. The implementation uses a root-level `api_tests/` package. The workspace
+   Python baseline prefers `src/` layout to avoid accidental imports from the
+   repository root.
+2. Tool configuration is split between `pyproject.toml` and `pytest.ini`.
+   The baseline prefers packaging, Ruff, mypy, and pytest configuration in
+   `pyproject.toml`.
+3. Ruff is underconfigured compared with the baseline. It sets line length and
+   target version, but does not set `src` or lint selections such as `E`, `F`,
+   `I`, `UP`, `B`, `SIM`, and `RUF`.
+4. pytest configuration lacks strict config, strict markers, declared test
+   paths, and importlib import mode.
+5. mypy is strict, but the checked command should cover tests and eventually
+   `src`. Tool scripts are not currently part of the type-checking story.
+6. Several tool files are placeholders. `tools/validate-environment.py` works,
+   but it inserts the repository root into `sys.path`; this should disappear
+   after a `src/` layout and editable install are in place.
+7. The `.gitignore` is broad and appears copied from a Java, Spring Boot, and
+   React template. It includes the needed Python generated artifacts, but it is
+   noisier than this repository needs.
+8. The production environment currently uses `browser_auth0`. The repository
+   plan says production should not create per-run Auth0 users; production needs
+   an explicit read-only smoke-session strategy before production tests are
+   operational.
+9. The repository had no `AGENTS.md`. That instruction file has now been added
+   so future work has local Python, testing, and black-box safety rules.
+
+## Remediation Phases
+
+### Phase 1: Make Current Gates Green
+
+Goal: fix formatting and strict typing failures without changing behavior.
+
+Steps:
+
+1. Run Ruff formatting on the repository.
+2. Fix the `gateway_client` fixture return annotation in `tests/conftest.py`
+   using `Generator[GatewayClient]` or an equivalent precise type.
+3. Fix the `BrowserContext` typing issue by importing it from
+   `playwright.sync_api` in the test or by explicitly exporting it from a
+   dedicated test helper.
+4. Re-run:
+
+   ```bash
+   .venv/bin/python -m ruff format --check .
+   .venv/bin/python -m ruff check .
+   .venv/bin/python -m mypy api_tests tests
+   .venv/bin/python -m pytest --env local --collect-only
+   ```
+
+Acceptance checks:
+
+- Ruff format and lint pass.
+- mypy strict passes for implementation and tests.
+- pytest collection still succeeds without live Auth0 prerequisites.
+
+### Phase 2: Move To `src/` Layout
+
+Goal: align package layout with the workspace Python baseline.
+
+Steps:
+
+1. Move `api_tests/` to `src/api_tests/`.
+2. Update `pyproject.toml`:
+   - set `[tool.setuptools.packages.find] where = ["src"]`
+   - set `[tool.ruff] src = ["src", "tests"]`
+   - keep `packages = ["api_tests"]` for mypy
+3. Update imports only where the move exposes test assumptions.
+4. Update tool scripts so they rely on the installed package instead of
+   manually adding the repository root to `sys.path`.
+5. Update README and AGENTS commands from `mypy api_tests tests` to
+   `mypy src tests`.
+
+Acceptance checks:
+
+- Editable install imports `api_tests` from `src/api_tests`.
+- Running pytest with importlib import mode still imports the installed package,
+  not a package from the repository root.
+- `mypy src tests` passes.
+
+### Phase 3: Consolidate Tooling Configuration
+
+Goal: make this repo's tool configuration match the standard workspace shape.
+
+Steps:
+
+1. Move pytest settings from `pytest.ini` into
+   `[tool.pytest.ini_options]` in `pyproject.toml`.
+2. Add:
+   - `testpaths = ["tests"]`
+   - `addopts = "--strict-config --strict-markers --import-mode=importlib"`
+3. Add Ruff lint selections:
+
+   ```toml
+   [tool.ruff.lint]
+   select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+   ```
+
+4. Delete `pytest.ini` after the pyproject configuration is verified.
+5. Decide whether tool scripts should become package entry points or stay as
+   checked script files with typed `main()` functions.
+
+Acceptance checks:
+
+- pytest reports `configfile: pyproject.toml`.
+- Strict marker checking still recognizes all custom markers.
+- Ruff lint remains clean under the broader lint selection.
+
+### Phase 4: Tighten Types And Tool Entrypoints
+
+Goal: reduce loose boundary typing before the OpenAPI coverage harness grows.
+
+Steps:
+
+1. Replace broad `Any` usage where practical with typed boundary models,
+   protocols, or local aliases.
+2. Keep unavoidable external-boundary `Any` close to decoded YAML, decoded JSON,
+   OpenAPI documents, httpx hooks, pytest hooks, and Playwright objects.
+3. Implement each non-placeholder tool with
+   `main(argv: Sequence[str] | None = None) -> int`.
+4. Add unit tests for tool argument parsing and failure messages.
+5. Add mypy coverage for tools if they remain script files, or move tool logic
+   into package modules and type-check those modules through `src`.
+
+Acceptance checks:
+
+- Tool behavior is covered by tests that do not require live network access.
+- Expected user errors return clear messages and non-zero exit codes instead
+  of tracebacks.
+- Strict mypy remains clean.
+
+### Phase 5: Production Safety Alignment
+
+Goal: make production behavior match the plan's read-only safety model.
+
+Steps:
+
+1. Define the production authentication strategy before enabling production
+   runs:
+   - stable pre-provisioned smoke identity, or
+   - supplied `BA_SESSION` with explicit production-safe handling.
+2. Adjust `auth.mode` validation so production cannot accidentally create
+   per-run users.
+3. Add guard fixtures for `mutation` and `destructive` markers before mutating
+   endpoint tests are implemented.
+4. Add tests proving mutation and destructive tests skip before making network
+   requests when disabled.
+5. Document the production command:
+
+   ```bash
+   pytest --env production -m "readonly and production_safe"
+   ```
+
+Acceptance checks:
+
+- Production defaults cannot create users or mutate data.
+- Mutating tests are blocked by policy before request execution.
+- Read-only production smoke behavior is explicit in README and AGENTS.
+
+### Phase 6: Repository Hygiene
+
+Goal: keep generated artifacts and instructions clean.
+
+Steps:
+
+1. Replace the broad Java/React `.gitignore` with a repository-specific ignore
+   file covering Python, pytest, Ruff, mypy, Playwright artifacts, local
+   virtualenvs, generated test artifacts, and secrets.
+2. Confirm generated caches and egg-info files are not tracked.
+3. Keep `artifacts/.gitkeep`, `fixtures/statements/.gitkeep`,
+   `schemas/.gitkeep`, and environment skeleton files tracked.
+4. Update README to show the same local quality gates as AGENTS.
+
+Acceptance checks:
+
+- `git status --ignored --short` shows generated Python and test artifacts are
+  ignored.
+- The tracked file list contains only source, tests, docs, config, schemas,
+  fixtures, and intentional placeholders.
+
+### Phase 7: Resume OpenAPI Coverage Work
+
+Goal: continue the original repository plan after Python baseline alignment.
+
+Steps:
+
+1. Implement the Phase 2 OpenAPI coverage harness from the orchestration plan.
+2. Add `schemas/openapi.json` and
+   `schemas/deferred-admin-operations.yaml`.
+3. Add operation inventory and marker coverage tests.
+4. Replace marker-only placeholders with real tests according to later phases.
+
+Acceptance checks:
+
+- Coverage fails for new non-deferred operations without markers.
+- Deferred admin/global operations are explicit and reported separately.
+- Placeholder coverage is visible and can be failed in staging gates.
+
+## Recommended Immediate Order
+
+1. Phase 1, because it is low risk and makes the current repo healthy.
+2. Phase 2 and Phase 3 together, because layout and tool config affect the same
+
+exec
+/bin/bash -lc 'git status --short' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+ M .ai-session-handler/python-baseline-remediation-plan.json
+?? .ai-session-handler/prompts/20260706T110419Z-phase-3.txt
+?? .ai-session-handler/transcripts/20260706T110419Z-phase-3.txt
+
+codex
+The worktree already has session-handler files changed or untracked; I’ll leave those alone and scope edits to the phase-3 configuration files unless validation exposes a required adjacent change.
+exec
+/bin/bash -lc "sed -n '1,260p' pyproject.toml" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "budget-analyzer-api-tests"
+version = "0.1.0"
+description = "Black-box API tests for the Budget Analyzer public gateway API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "httpx",
+  "jsonschema",
+  "playwright",
+  "pydantic",
+  "PyYAML",
+  "pytest",
+  "referencing",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy",
+  "respx",
+  "ruff",
+  "types-PyYAML",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["api_tests*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["api_tests"]
+
+exec
+/bin/bash -lc "sed -n '1,220p' pytest.ini" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+[pytest]
+markers =
+    openapi(operation_id): associate a test with an OpenAPI operation id
+    placeholder: marker-only placeholder for planned endpoint coverage
+    mutation: test may create or update API resources
+    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+    readonly: test only reads API resources
+    authorization: test verifies authorization or resource isolation behavior
+    production_safe: test is allowed to run against production defaults
+
+exec
+/bin/bash -lc "for f in tools/*.py; do printf '%s\\n' \""'$f"; sed -n '"'1,220p' \""'$f"; done' in /workspace/budget-analyzer-api-tests
+exec
+/bin/bash -lc "rg -n \"pytestmark|@pytest\\.mark|markers|addinivalue_line|addoption|pytest_configure|pytest_collection\" tests src tools pyproject.toml pytest.ini" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+tools/check-openapi-coverage.py
+
+tools/export-openapi-coverage.py
+
+tools/refresh-openapi.py
+
+tools/validate-environment.py
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import sys
+
+import yaml
+
+from api_tests.config import load_environment, normalized_non_secret_settings
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+    parser.add_argument(
+        "--env",
+        default="local",
+        help="environment name to load from environments/<env>.yaml",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        config = load_environment(args.env)
+    except Exception as exc:
+        print(f"environment validation failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(yaml.safe_dump(normalized_non_secret_settings(config), sort_keys=False).strip())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+ succeeded in 0ms:
+pytest.ini:2:markers =
+tests/contract/test_environment_config.py:8:@pytest.mark.parametrize("environment_name", ["local", "staging", "production"])
+tests/conftest.py:17:def pytest_addoption(parser: pytest.Parser) -> None:
+tests/conftest.py:19:    group.addoption(
+tests/conftest.py:27:def pytest_configure(config: pytest.Config) -> None:
+
+codex
+The current pytest config only declares markers. I’m going to move that marker list into `pyproject.toml`, add the strict/importlib/testpaths options there, and keep the existing checked `tools/*.py` script workflow unchanged for this phase.
+apply patch
+patch: completed
+/workspace/budget-analyzer-api-tests/pyproject.toml
+/workspace/budget-analyzer-api-tests/pytest.ini
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..eea65f36d61f347f2cc9deaaac9f8e408800403c
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -36,7 +36,23 @@
+ target-version = "py312"
+ src = ["src", "tests"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..eea65f36d61f347f2cc9deaaac9f8e408800403c
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -36,7 +36,23 @@
+ target-version = "py312"
+ src = ["src", "tests"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+codex
+The phase config change is in place and `pytest.ini` is removed. I’ll run the acceptance checks now, starting with pytest collection so the active config file and marker strictness are visible.
+exec
+/bin/bash -lc '.venv/bin/python -m ruff check .' in /workspace/budget-analyzer-api-tests
+ exited 1 in 0ms:
+I001 [*] Import block is un-sorted or un-formatted
+ --> .ai-session-handler/codex-high-exec-filter.py:2:1
+  |
+1 |   #!/usr/bin/env python3
+2 | / from __future__ import annotations
+3 | |
+4 | | import os
+5 | | import re
+6 | | import subprocess
+7 | | import sys
+8 | | import tempfile
+9 | | from pathlib import Path
+  | |________________________^
+  |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> src/api_tests/auth.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from collections.abc import Mapping
+ 4 | | from dataclasses import dataclass
+ 5 | | import os
+ 6 | |
+ 7 | | from api_tests.auth0 import Auth0ManagementClient, settings_from_environment
+ 8 | | from api_tests.browser_login import SessionCookie
+ 9 | | from api_tests.config import EnvironmentConfig
+10 | | from api_tests.identities import RunIdentities, create_run_identities
+11 | | from api_tests.run_state import RunState
+   | |________________________________________^
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> src/api_tests/auth0.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from collections.abc import Mapping
+ 4 | | from dataclasses import dataclass, field
+ 5 | | import os
+ 6 | | import secrets
+ 7 | | import string
+ 8 | | from typing import Any
+ 9 | | from urllib.parse import urlparse
+10 | |
+11 | | import httpx
+12 | |
+13 | | from api_tests.config import EnvironmentConfig
+14 | | from api_tests.run_state import RunState
+   | |________________________________________^
+15 |
+16 |   REQUIRED_MANAGEMENT_SCOPES = "create:users"
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> src/api_tests/logging.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from collections.abc import Callable
+ 4 | | import json
+ 5 | | from pathlib import Path
+ 6 | | import re
+ 7 | | import time
+ 8 | | from typing import Any
+ 9 | |
+10 | | import httpx
+11 | |
+12 | | from api_tests.config import repository_root
+   | |____________________________________________^
+13 |
+14 |   MAX_BODY_BYTES = 4096
+   |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+ --> src/api_tests/run_state.py:1:1
+  |
+1 | / from __future__ import annotations
+2 | |
+3 | | from dataclasses import dataclass
+4 | | from datetime import UTC, datetime
+5 | | from functools import cache
+6 | | import re
+7 | | import secrets
+  | |______________^
+8 |
+9 |   RUN_ID_PATTERN = re.compile(r"^ba-api-test-\d{8}T\d{6}Z-[a-z0-9]{8}$")
+  |
+help: Organize imports
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> tests/auth/test_phase1_auth_helpers.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | from datetime import UTC, datetime
+ 4 | | import json
+ 5 | | from pathlib import Path
+ 6 | | from typing import cast
+ 7 | |
+ 8 | | import httpx
+ 9 | | from playwright.sync_api import BrowserContext
+10 | | import pytest
+11 | |
+12 | | from api_tests.auth import AuthConfigurationError, load_auth_context
+13 | | from api_tests.auth0 import (
+14 | |     Auth0CreatedUser,
+15 | |     Auth0ManagementClient,
+16 | |     Auth0ManagementSettings,
+17 | |     Auth0ScopeError,
+18 | | )
+19 | | from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+20 | | from api_tests.client import GatewayClient
+21 | | from api_tests.config import load_environment
+22 | | from api_tests.identities import create_run_identities
+23 | | from api_tests.run_state import RUN_ID_PATTERN, RunState, generate_run_id, session_run_state
+   | |____________________________________________________________________________________________^
+   |
+help: Organize imports
+
+Found 6 errors.
+[*] 6 fixable with the `--fix` option.
+
+exec
+/bin/bash -lc '.venv/bin/python -m pytest --env local --collect-only' in /workspace/budget-analyzer-api-tests
+exec
+/bin/bash -lc '.venv/bin/python -m ruff format --check .' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+25 files already formatted
+
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..eea65f36d61f347f2cc9deaaac9f8e408800403c
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -36,7 +36,23 @@
+ target-version = "py312"
+ src = ["src", "tests"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+ succeeded in 337ms:
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /workspace/budget-analyzer-api-tests
+configfile: pyproject.toml
+testpaths: tests
+plugins: respx-0.23.1, anyio-4.13.0
+collected 15 items
+
+<Dir budget-analyzer-api-tests>
+  <Dir tests>
+    <Dir api_docs>
+      <Module test_openapi_docs.py>
+        <Function test_openapi_docs_returns_json_contract>
+    <Dir auth>
+      <Module test_phase1_auth_helpers.py>
+        <Function test_generate_run_id_uses_required_format>
+        <Function test_session_run_state_is_stable_for_process_session>
+        <Function test_auth0_client_requests_management_token_and_creates_verified_user>
+        <Function test_auth0_scope_errors_are_clear>
+        <Function test_read_session_cookie_extracts_http_only_cookie_metadata>
+        <Function test_create_run_identities_provisions_and_logs_in_primary_and_secondary_users>
+        <Function test_env_cookie_auth_mode_reads_local_debug_cookie>
+        <Function test_env_cookie_auth_mode_is_local_only>
+        <Function test_browser_auth0_mode_fails_before_network_when_management_env_is_missing>
+        <Function test_gateway_client_uses_origin_api_prefix_cookie_and_request_log>
+    <Dir contract>
+      <Module test_environment_config.py>
+        <Function test_committed_environment_config_loads[local]>
+        <Function test_committed_environment_config_loads[staging]>
+        <Function test_committed_environment_config_loads[production]>
+        <Function test_env_config_fixture_exposes_selected_environment>
+
+========================= 15 tests collected in 0.01s ==========================
+
+codex
+Pytest is now using `pyproject.toml` and collected all 15 tests under strict config. The broader Ruff selection surfaced import-order issues plus a generated `.ai-session-handler` helper; I’ll fix source/test import order and exclude the session-handler workspace artifacts from Ruff rather than editing those generated files.
+exec
+/bin/bash -lc '.venv/bin/python -m ruff check src tests tools --fix' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+Found 5 errors (5 fixed, 0 remaining).
+
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..eea65f36d61f347f2cc9deaaac9f8e408800403c
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -36,7 +36,23 @@
+ target-version = "py312"
+ src = ["src", "tests"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+codex
+Ruff fixed the import ordering in the checked source and tests. I’m adding a Ruff exclude for `.ai-session-handler/` so the repository checks don’t lint session transcripts and handler internals.
+apply patch
+patch: completed
+/workspace/budget-analyzer-api-tests/pyproject.toml
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..493aece4575a6bc1388459bdbd53e73caf04b7bb
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -35,8 +35,25 @@
+ line-length = 100
+ target-version = "py312"
+ src = ["src", "tests"]
++extend-exclude = [".ai-session-handler"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..493aece4575a6bc1388459bdbd53e73caf04b7bb
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -35,8 +35,25 @@
+ line-length = 100
+ target-version = "py312"
+ src = ["src", "tests"]
++extend-exclude = [".ai-session-handler"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+codex
+The config now covers the generated session directory. I’ll rerun the phase checks from the repo root and include `pytest --markers` to verify the custom marker declarations are loaded from `pyproject.toml`.
+exec
+/bin/bash -lc '.venv/bin/python -m ruff check .' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+All checks passed!
+
+exec
+/bin/bash -lc '.venv/bin/python -m ruff format --check .' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+24 files already formatted
+
+exec
+/bin/bash -lc '.venv/bin/python -m pytest --markers' in /workspace/budget-analyzer-api-tests
+exec
+/bin/bash -lc '.venv/bin/python -m pytest --env local --collect-only' in /workspace/budget-analyzer-api-tests
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..493aece4575a6bc1388459bdbd53e73caf04b7bb
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -35,8 +35,25 @@
+ line-length = 100
+ target-version = "py312"
+ src = ["src", "tests"]
++extend-exclude = [".ai-session-handler"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+ succeeded in 346ms:
+@pytest.mark.openapi(operation_id): associate a test with an OpenAPI operation id
+
+@pytest.mark.placeholder: marker-only placeholder for planned endpoint coverage
+
+@pytest.mark.mutation: test may create or update API resources
+
+@pytest.mark.destructive: test may delete, hide, import, or otherwise destructively alter API resources
+
+@pytest.mark.readonly: test only reads API resources
+
+@pytest.mark.authorization: test verifies authorization or resource isolation behavior
+
+@pytest.mark.production_safe: test is allowed to run against production defaults
+
+@pytest.mark.anyio: mark the (coroutine function) test to be run asynchronously via anyio.
+
+@pytest.mark.respx(assert_all_called=False, assert_all_mocked=False, base_url=...): configure the respx_mock fixture. See https://lundberg.github.io/respx/api.html#configuration
+
+@pytest.mark.filterwarnings(warning): add a warning filter to the given test. see https://docs.pytest.org/en/stable/how-to/capture-warnings.html#pytest-mark-filterwarnings 
+
+@pytest.mark.skip(reason=None): skip the given test function with an optional reason. Example: skip(reason="no way of currently testing this") skips the test.
+
+@pytest.mark.skipif(condition, ..., *, reason=...): skip the given test function if any of the conditions evaluate to True. Example: skipif(sys.platform == 'win32') skips the test if we are on the win32 platform. See https://docs.pytest.org/en/stable/reference/reference.html#pytest-mark-skipif
+
+@pytest.mark.xfail(condition, ..., *, reason=..., run=True, raises=None, strict=strict_xfail): mark the test function as an expected failure if any of the conditions evaluate to True. Optionally specify a reason for better reporting and run=False if you don't even want to execute the test function. If only specific exception(s) are expected, you can list them in raises, and if the test fails in other ways, it will be reported as a true failure. See https://docs.pytest.org/en/stable/reference/reference.html#pytest-mark-xfail
+
+@pytest.mark.parametrize(argnames, argvalues): call a test function multiple times passing in different arguments in turn. argvalues generally needs to be a list of values if argnames specifies only one name or a list of tuples of values if argnames specifies multiple names. Example: @parametrize('arg1', [1,2]) would lead to two calls of the decorated test function, one with arg1=1 and another with arg1=2.see https://docs.pytest.org/en/stable/how-to/parametrize.html for more info and examples.
+
+@pytest.mark.usefixtures(fixturename1, fixturename2, ...): mark tests as needing all of the specified fixtures. see https://docs.pytest.org/en/stable/explanation/fixtures.html#usefixtures 
+
+@pytest.mark.tryfirst: mark a hook implementation function such that the plugin machinery will try to call it first/as early as possible. DEPRECATED, use @pytest.hookimpl(tryfirst=True) instead.
+
+@pytest.mark.trylast: mark a hook implementation function such that the plugin machinery will try to call it last/as late as possible. DEPRECATED, use @pytest.hookimpl(trylast=True) instead.
+
+
+ succeeded in 371ms:
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /workspace/budget-analyzer-api-tests
+configfile: pyproject.toml
+testpaths: tests
+plugins: respx-0.23.1, anyio-4.13.0
+collected 15 items
+
+<Dir budget-analyzer-api-tests>
+  <Dir tests>
+    <Dir api_docs>
+      <Module test_openapi_docs.py>
+        <Function test_openapi_docs_returns_json_contract>
+    <Dir auth>
+      <Module test_phase1_auth_helpers.py>
+        <Function test_generate_run_id_uses_required_format>
+        <Function test_session_run_state_is_stable_for_process_session>
+        <Function test_auth0_client_requests_management_token_and_creates_verified_user>
+        <Function test_auth0_scope_errors_are_clear>
+        <Function test_read_session_cookie_extracts_http_only_cookie_metadata>
+        <Function test_create_run_identities_provisions_and_logs_in_primary_and_secondary_users>
+        <Function test_env_cookie_auth_mode_reads_local_debug_cookie>
+        <Function test_env_cookie_auth_mode_is_local_only>
+        <Function test_browser_auth0_mode_fails_before_network_when_management_env_is_missing>
+        <Function test_gateway_client_uses_origin_api_prefix_cookie_and_request_log>
+    <Dir contract>
+      <Module test_environment_config.py>
+        <Function test_committed_environment_config_loads[local]>
+        <Function test_committed_environment_config_loads[staging]>
+        <Function test_committed_environment_config_loads[production]>
+        <Function test_env_config_fixture_exposes_selected_environment>
+
+========================= 15 tests collected in 0.02s ==========================
+
+codex
+The phase acceptance checks pass: pytest reports `configfile: pyproject.toml`, the custom markers are listed, and Ruff is clean with the broader selection. I’ll do a quick diff review now to make sure only phase-relevant files changed.
+exec
+/bin/bash -lc 'git diff -- pyproject.toml pytest.ini src/api_tests/auth.py src/api_tests/auth0.py src/api_tests/logging.py src/api_tests/run_state.py tests/auth/test_phase1_auth_helpers.py' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954e..493aece 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -35,8 +35,25 @@ include = ["api_tests*"]
+ line-length = 100
+ target-version = "py312"
+ src = ["src", "tests"]
++extend-exclude = [".ai-session-handler"]
++
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be2302..0000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+diff --git a/src/api_tests/auth.py b/src/api_tests/auth.py
+index cf4ead8..5625d93 100644
+--- a/src/api_tests/auth.py
++++ b/src/api_tests/auth.py
+@@ -1,8 +1,8 @@
+ from __future__ import annotations
+ 
++import os
+ from collections.abc import Mapping
+ from dataclasses import dataclass
+-import os
+ 
+ from api_tests.auth0 import Auth0ManagementClient, settings_from_environment
+ from api_tests.browser_login import SessionCookie
+diff --git a/src/api_tests/auth0.py b/src/api_tests/auth0.py
+index 3afad2e..7a84379 100644
+--- a/src/api_tests/auth0.py
++++ b/src/api_tests/auth0.py
+@@ -1,10 +1,10 @@
+ from __future__ import annotations
+ 
+-from collections.abc import Mapping
+-from dataclasses import dataclass, field
+ import os
+ import secrets
+ import string
++from collections.abc import Mapping
++from dataclasses import dataclass, field
+ from typing import Any
+ from urllib.parse import urlparse
+ 
+diff --git a/src/api_tests/logging.py b/src/api_tests/logging.py
+index 268880d..cc68b3e 100644
+--- a/src/api_tests/logging.py
++++ b/src/api_tests/logging.py
+@@ -1,10 +1,10 @@
+ from __future__ import annotations
+ 
+-from collections.abc import Callable
+ import json
+-from pathlib import Path
+ import re
+ import time
++from collections.abc import Callable
++from pathlib import Path
+ from typing import Any
+ 
+ import httpx
+diff --git a/src/api_tests/run_state.py b/src/api_tests/run_state.py
+index 3566daa..5ddc706 100644
+--- a/src/api_tests/run_state.py
++++ b/src/api_tests/run_state.py
+@@ -1,10 +1,10 @@
+ from __future__ import annotations
+ 
++import re
++import secrets
+ from dataclasses import dataclass
+ from datetime import UTC, datetime
+ from functools import cache
+-import re
+-import secrets
+ 
+ RUN_ID_PATTERN = re.compile(r"^ba-api-test-\d{8}T\d{6}Z-[a-z0-9]{8}$")
+ 
+diff --git a/tests/auth/test_phase1_auth_helpers.py b/tests/auth/test_phase1_auth_helpers.py
+index 04df6f8..9cbcbb8 100644
+--- a/tests/auth/test_phase1_auth_helpers.py
++++ b/tests/auth/test_phase1_auth_helpers.py
+@@ -1,13 +1,13 @@
+ from __future__ import annotations
+ 
+-from datetime import UTC, datetime
+ import json
++from datetime import UTC, datetime
+ from pathlib import Path
+ from typing import cast
+ 
+ import httpx
+-from playwright.sync_api import BrowserContext
+ import pytest
++from playwright.sync_api import BrowserContext
+ 
+ from api_tests.auth import AuthConfigurationError, load_auth_context
+ from api_tests.auth0 import (
+
+exec
+/bin/bash -lc 'git status --short' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+ M .ai-session-handler/python-baseline-remediation-plan.json
+ M pyproject.toml
+ D pytest.ini
+ M src/api_tests/auth.py
+ M src/api_tests/auth0.py
+ M src/api_tests/logging.py
+ M src/api_tests/run_state.py
+ M tests/auth/test_phase1_auth_helpers.py
+?? .ai-session-handler/prompts/20260706T110419Z-phase-3.txt
+?? .ai-session-handler/transcripts/20260706T110419Z-phase-3.txt
+
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..493aece4575a6bc1388459bdbd53e73caf04b7bb
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -35,8 +35,25 @@
+ line-length = 100
+ target-version = "py312"
+ src = ["src", "tests"]
++extend-exclude = [".ai-session-handler"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+codex
+The diff is confined to phase-3 config plus Ruff import-order fixes required by the new `I` rule. I’m running mypy once as a sanity check after the import reordering, even though the phase acceptance criteria were already satisfied.
+exec
+/bin/bash -lc '.venv/bin/python -m mypy src tests' in /workspace/budget-analyzer-api-tests
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..493aece4575a6bc1388459bdbd53e73caf04b7bb
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -35,8 +35,25 @@
+ line-length = 100
+ target-version = "py312"
+ src = ["src", "tests"]
++extend-exclude = [".ai-session-handler"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+ succeeded in 182ms:
+Success: no issues found in 20 source files
+
+codex
+[phase-complete]Moved pytest configuration into pyproject.toml, added testpaths/addopts with strict config, strict markers, and importlib import mode, added Ruff lint selections, excluded .ai-session-handler generated files from Ruff, deleted pytest.ini, and fixed import ordering required by the broader Ruff rules. Tool scripts stay as checked script files for this phase; entry-point refactoring remains deferred to phase 4.
+
+Validation passed: ruff check ., ruff format --check ., pytest --env local --collect-only reports configfile: pyproject.toml and 15 collected tests, pytest --markers shows all custom markers, and mypy src tests passes.[/phase-complete]
+diff --git a/pyproject.toml b/pyproject.toml
+index 6aa954eb98936a7e43018c688717b61dd8bd0a34..493aece4575a6bc1388459bdbd53e73caf04b7bb
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -35,8 +35,25 @@
+ line-length = 100
+ target-version = "py312"
+ src = ["src", "tests"]
++extend-exclude = [".ai-session-handler"]
+ 
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
++
+ [tool.mypy]
+ python_version = "3.12"
+ strict = true
+ packages = ["api_tests"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++addopts = "--strict-config --strict-markers --import-mode=importlib"
++markers = [
++  "openapi(operation_id): associate a test with an OpenAPI operation id",
++  "placeholder: marker-only placeholder for planned endpoint coverage",
++  "mutation: test may create or update API resources",
++  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
++  "readonly: test only reads API resources",
++  "authorization: test verifies authorization or resource isolation behavior",
++  "production_safe: test is allowed to run against production defaults",
++]
+diff --git a/pytest.ini b/pytest.ini
+deleted file mode 100644
+index 7be23025021b9a68e5317e49b05e795ddf0197a4..0000000000000000000000000000000000000000
+--- a/pytest.ini
++++ /dev/null
+@@ -1,9 +0,0 @@
+-[pytest]
+-markers =
+-    openapi(operation_id): associate a test with an OpenAPI operation id
+-    placeholder: marker-only placeholder for planned endpoint coverage
+-    mutation: test may create or update API resources
+-    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+-    readonly: test only reads API resources
+-    authorization: test verifies authorization or resource isolation behavior
+-    production_safe: test is allowed to run against production defaults
+
+tokens used
+54,481
+[phase-complete]Moved pytest configuration into pyproject.toml, added testpaths/addopts with strict config, strict markers, and importlib import mode, added Ruff lint selections, excluded .ai-session-handler generated files from Ruff, deleted pytest.ini, and fixed import ordering required by the broader Ruff rules. Tool scripts stay as checked script files for this phase; entry-point refactoring remains deferred to phase 4.
+
+Validation passed: ruff check ., ruff format --check ., pytest --env local --collect-only reports configfile: pyproject.toml and 15 collected tests, pytest --markers shows all custom markers, and mypy src tests passes.[/phase-complete]
+<phase-complete>Moved pytest configuration into pyproject.toml, added testpaths/addopts with strict config, strict markers, and importlib import mode, added Ruff lint selections, excluded .ai-session-handler generated files from Ruff, deleted pytest.ini, and fixed import ordering required by the broader Ruff rules. Tool scripts stay as checked script files for this phase; entry-point refactoring remains deferred to phase 4.
+
+Validation passed: ruff check ., ruff format --check ., pytest --env local --collect-only reports configfile: pyproject.toml and 15 collected tests, pytest --markers shows all custom markers, and mypy src tests passes.</phase-complete>

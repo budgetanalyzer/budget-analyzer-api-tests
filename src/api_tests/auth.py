@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-import os
 
 from api_tests.auth0 import Auth0ManagementClient, settings_from_environment
 from api_tests.browser_login import SessionCookie

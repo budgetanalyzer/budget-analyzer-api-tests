@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
 import httpx
-from playwright.sync_api import BrowserContext
 import pytest
+from playwright.sync_api import BrowserContext
 
 from api_tests.auth import AuthConfigurationError, load_auth_context
 from api_tests.auth0 import (

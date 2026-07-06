@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import re
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
-import re
-import secrets
 
 RUN_ID_PATTERN = re.compile(r"^ba-api-test-\d{8}T\d{6}Z-[a-z0-9]{8}$")
 

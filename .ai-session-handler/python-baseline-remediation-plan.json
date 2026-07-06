@@ -7,18 +7,19 @@
   },
   "completed_phase_ids": [
     "phase-1",
-    "phase-2"
+    "phase-2",
+    "phase-3"
   ],
   "current_phase": null,
   "stop": null,
   "last_run": {
-    "run_id": "20260706T105557Z-phase-2",
-    "phase_id": "phase-2",
+    "run_id": "20260706T110419Z-phase-3",
+    "phase_id": "phase-3",
     "status": "phase-complete",
-    "started_at": "2026-07-06T10:55:57Z",
-    "finished_at": "2026-07-06T10:58:53Z",
+    "started_at": "2026-07-06T11:04:19Z",
+    "finished_at": "2026-07-06T11:05:55Z",
     "exit_code": 0,
-    "transcript_path": "/workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T105557Z-phase-2.txt",
-    "summary": "Moved the package from api_tests/ to src/api_tests/, updated setuptools and Ruff src configuration, kept mypy packages = [\"api_tests\"], fixed repository_root() for the new layout, removed the validate-environment sys.path insertion, and updated README/AGENTS mypy commands to use src tests.\n\nValidation passed: editable install, api_tests imports from /workspace/budget-analyzer-api-tests/src/api_tests, repository_root resolves to the repo root, validate-environment local succeeds, ruff format --check succeeds, ruff check succeeds, mypy src tests succeeds, pytest collect-only succeeds with --import-mode=importlib and with the current default config."
+    "transcript_path": "/workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T110419Z-phase-3.txt",
+    "summary": "Moved pytest configuration into pyproject.toml, added testpaths/addopts with strict config, strict markers, and importlib import mode, added Ruff lint selections, excluded .ai-session-handler generated files from Ruff, deleted pytest.ini, and fixed import ordering required by the broader Ruff rules. Tool scripts stay as checked script files for this phase; entry-point refactoring remains deferred to phase 4.\n\nValidation passed: ruff check ., ruff format --check ., pytest --env local --collect-only reports configfile: pyproject.toml and 15 collected tests, pytest --markers shows all custom markers, and mypy src tests passes."
   }
 }

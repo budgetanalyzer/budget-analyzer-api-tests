@@ -35,8 +35,25 @@ include = ["api_tests*"]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+extend-exclude = [".ai-session-handler"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 packages = ["api_tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-config --strict-markers --import-mode=importlib"
+markers = [
+  "openapi(operation_id): associate a test with an OpenAPI operation id",
+  "placeholder: marker-only placeholder for planned endpoint coverage",
+  "mutation: test may create or update API resources",
+  "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
+  "readonly: test only reads API resources",
+  "authorization: test verifies authorization or resource isolation behavior",
+  "production_safe: test is allowed to run against production defaults",
+]
