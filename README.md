@@ -29,3 +29,9 @@ Run pytest against an environment:
 ```bash
 pytest --env local
 ```
+
+Run local type checks:
+
+```bash
+.venv/bin/python -m mypy src tests
+```

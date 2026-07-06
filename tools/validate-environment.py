@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
 import yaml
+
+from api_tests.config import load_environment, normalized_non_secret_settings
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,11 +20,6 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    repo_root = Path(__file__).resolve().parents[1]
-    sys.path.insert(0, str(repo_root))
-
-    from api_tests.config import load_environment, normalized_non_secret_settings
-
     args = parse_args()
     try:
         config = load_environment(args.env)

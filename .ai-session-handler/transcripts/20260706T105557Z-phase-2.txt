@@ -1,0 +1,3068 @@
+run_id: 20260706T105557Z-phase-2
+phase: phase-2 Move To `src/` Layout
+plan: /workspace/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+state: /workspace/budget-analyzer-api-tests/.ai-session-handler/python-baseline-remediation-plan.json
+workspace: /workspace/budget-analyzer-api-tests
+started_at: 2026-07-06T10:55:57Z
+agent_cmd: /usr/bin/python3 .ai-session-handler/codex-high-exec-filter.py
+argv: /usr/bin/python3 .ai-session-handler/codex-high-exec-filter.py
+---
+Reading prompt from stdin...
+OpenAI Codex v0.142.5
+--------
+workdir: /workspace/budget-analyzer-api-tests
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 019f3712-0bb4-7d50-851b-67baf8636be6
+--------
+user
+AI SESSION HANDLER WORKER PROTOCOL
+
+CONTEXT
+- workspace_path: /workspace/budget-analyzer-api-tests
+- plan_path: /workspace/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+- state_path: /workspace/budget-analyzer-api-tests/.ai-session-handler/python-baseline-remediation-plan.json
+- run_id: 20260706T105557Z-phase-2
+- transcript_path: /workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T105557Z-phase-2.txt
+- selected_phase_id: phase-2
+- selected_phase_title: Move To `src/` Layout
+
+INSTRUCTIONS
+- Read repository instructions first, including the nearest AGENTS.md.
+- Inspect current repository state before editing.
+- Implement exactly selected phase phase-2: Move To `src/` Layout.
+- Do not proceed to later phases.
+- Follow the selected phase plan unless repository reality contradicts it.
+- Run the validation commands listed in the selected phase.
+- Do not run git commit, push, checkout, reset, clean, stash, branch creation, or automatic worktree operations.
+- Update only files required for the selected phase.
+- Do not make design-changing guesses. If implementation requires an unplanned product, architecture, schema, API, or workflow decision, stop with [phase-needs-clarification].
+- Treat user clarification as a first-class stop state, not as failure.
+- End with exactly one terminal marker from the grammar below.
+- Do not emit more than one terminal marker.
+
+FAILURE MODES
+- Use [phase-blocked] when the phase cannot be completed without external action.
+- Use [phase-needs-clarification] when a specific user decision is required.
+- Use [phase-complete] only after implementation and validation for this phase are complete.
+
+PREVIOUS STATE SUMMARY START
+schema_version: 1
+plan:
+  path: /home/devex/public-repos/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+  sha256: aaa3464a63641521ae5ee821c476320915f26e2109052cd5608c351901450ab3
+  accepted_at: 2026-07-06T07:19:54Z
+completed_phase_ids: phase-1
+current_phase:
+  id: phase-2
+  title: Move To `src/` Layout
+stop: none
+last_run:
+  run_id: 20260706T093032Z-phase-1
+  phase_id: phase-1
+  status: phase-complete
+  started_at: 2026-07-06T09:30:32Z
+  finished_at: 2026-07-06T09:31:16Z
+  exit_code: 0
+  transcript_path: /workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T093032Z-phase-1.txt
+  summary: Phase 1 complete: Ruff formatting is clean; tests/conftest.py uses a precise Generator[GatewayClient, None, None] fixture return type; tests/auth/test_phase1_auth_helpers.py imports BrowserContext from playwright.sync_api. Validation passed: ruff format --check, ruff check, mypy api_tests tests, and pytest --env local --collect-only.
+PREVIOUS STATE SUMMARY END
+
+SELECTED PHASE BODY START
+
+Goal: align package layout with the workspace Python baseline.
+
+Steps:
+
+1. Move `api_tests/` to `src/api_tests/`.
+2. Update `pyproject.toml`:
+   - set `[tool.setuptools.packages.find] where = ["src"]`
+   - set `[tool.ruff] src = ["src", "tests"]`
+   - keep `packages = ["api_tests"]` for mypy
+3. Update imports only where the move exposes test assumptions.
+4. Update tool scripts so they rely on the installed package instead of
+   manually adding the repository root to `sys.path`.
+5. Update README and AGENTS commands from `mypy api_tests tests` to
+   `mypy src tests`.
+
+Acceptance checks:
+
+- Editable install imports `api_tests` from `src/api_tests`.
+- Running pytest with importlib import mode still imports the installed package,
+  not a package from the repository root.
+- `mypy src tests` passes.
+
+SELECTED PHASE BODY END
+
+TERMINAL MARKER GRAMMAR START
+[phase-complete]summary[/phase-complete]
+[phase-blocked]reason[/phase-blocked]
+[phase-needs-clarification]specific question for user[/phase-needs-clarification]
+TERMINAL MARKER GRAMMAR END
+
+codex
+I’ll scope this to phase 2 only: first I’m reading the local instructions, plan, and current layout, then I’ll make the `src/` migration and run the phase validation commands.
+exec
+/bin/bash -lc 'pwd && ls' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+/workspace/budget-analyzer-api-tests
+AGENTS.md
+LICENSE
+README.md
+api_tests
+artifacts
+budget_analyzer_api_tests.egg-info
+docs
+environments
+fixtures
+pyproject.toml
+pytest.ini
+schemas
+tests
+tools
+
+exec
+/bin/bash -lc "sed -n '1,240p' docs/plans/python-baseline-remediation-plan.md" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+# Plan: Python Baseline Remediation
+
+Date: 2026-07-05
+Status: Review complete, implementation pending
+
+Reviewed inputs:
+
+- `../orchestration/docs/plans/openapi-black-box-api-test-repository-plan.md`
+- `pyproject.toml`
+- `pytest.ini`
+- `.gitignore`
+- `api_tests/`
+- `tests/`
+- `tools/`
+- `environments/`
+
+## Goal
+
+Align `budget-analyzer-api-tests` with the Python baseline used across the
+workspace while preserving the black-box API test constraints from the OpenAPI
+test repository plan.
+
+The goal is consistency in Python project shape, tooling, typing, tests,
+artifact hygiene, and safety defaults. This plan does not change endpoint
+coverage scope.
+
+## Current Validation Results
+
+Commands run from this repository:
+
+```bash
+.venv/bin/python -m ruff format --check .
+.venv/bin/python -m ruff check .
+.venv/bin/python -m mypy api_tests tests
+.venv/bin/python -m pytest --env local --collect-only
+.venv/bin/python -m pytest --env local
+.venv/bin/python tools/validate-environment.py --env local
+```
+
+Observed results:
+
+- Ruff format check fails: `api_tests/auth0.py`,
+  `api_tests/browser_login.py`, `api_tests/config.py`, and
+  `tests/auth/test_phase1_auth_helpers.py` would be reformatted.
+- Ruff lint passes with the current, minimal Ruff configuration.
+- mypy strict fails with two errors:
+  - `tests/conftest.py`: generator fixture return type should be `Generator`
+    or a supertype.
+  - `tests/auth/test_phase1_auth_helpers.py`: `BrowserContext` is imported
+    through `api_tests.browser_login`, but that module does not explicitly
+    export it.
+- `pytest --env local --collect-only` passes and collects 15 tests.
+- `pytest --env local` produces 14 passes and one expected live-test setup
+  error when Auth0 prerequisites are absent:
+  `AUTH0_MGMT_DOMAIN` is missing.
+- `tools/validate-environment.py --env local` succeeds.
+
+## Conformance Findings
+
+1. The implementation uses a root-level `api_tests/` package. The workspace
+   Python baseline prefers `src/` layout to avoid accidental imports from the
+   repository root.
+2. Tool configuration is split between `pyproject.toml` and `pytest.ini`.
+   The baseline prefers packaging, Ruff, mypy, and pytest configuration in
+   `pyproject.toml`.
+3. Ruff is underconfigured compared with the baseline. It sets line length and
+   target version, but does not set `src` or lint selections such as `E`, `F`,
+   `I`, `UP`, `B`, `SIM`, and `RUF`.
+4. pytest configuration lacks strict config, strict markers, declared test
+   paths, and importlib import mode.
+5. mypy is strict, but the checked command should cover tests and eventually
+   `src`. Tool scripts are not currently part of the type-checking story.
+6. Several tool files are placeholders. `tools/validate-environment.py` works,
+   but it inserts the repository root into `sys.path`; this should disappear
+   after a `src/` layout and editable install are in place.
+7. The `.gitignore` is broad and appears copied from a Java, Spring Boot, and
+   React template. It includes the needed Python generated artifacts, but it is
+   noisier than this repository needs.
+8. The production environment currently uses `browser_auth0`. The repository
+   plan says production should not create per-run Auth0 users; production needs
+   an explicit read-only smoke-session strategy before production tests are
+   operational.
+9. The repository had no `AGENTS.md`. That instruction file has now been added
+   so future work has local Python, testing, and black-box safety rules.
+
+## Remediation Phases
+
+### Phase 1: Make Current Gates Green
+
+Goal: fix formatting and strict typing failures without changing behavior.
+
+Steps:
+
+1. Run Ruff formatting on the repository.
+2. Fix the `gateway_client` fixture return annotation in `tests/conftest.py`
+   using `Generator[GatewayClient]` or an equivalent precise type.
+3. Fix the `BrowserContext` typing issue by importing it from
+   `playwright.sync_api` in the test or by explicitly exporting it from a
+   dedicated test helper.
+4. Re-run:
+
+   ```bash
+   .venv/bin/python -m ruff format --check .
+   .venv/bin/python -m ruff check .
+   .venv/bin/python -m mypy api_tests tests
+   .venv/bin/python -m pytest --env local --collect-only
+   ```
+
+Acceptance checks:
+
+- Ruff format and lint pass.
+- mypy strict passes for implementation and tests.
+- pytest collection still succeeds without live Auth0 prerequisites.
+
+### Phase 2: Move To `src/` Layout
+
+Goal: align package layout with the workspace Python baseline.
+
+Steps:
+
+1. Move `api_tests/` to `src/api_tests/`.
+2. Update `pyproject.toml`:
+   - set `[tool.setuptools.packages.find] where = ["src"]`
+   - set `[tool.ruff] src = ["src", "tests"]`
+   - keep `packages = ["api_tests"]` for mypy
+3. Update imports only where the move exposes test assumptions.
+4. Update tool scripts so they rely on the installed package instead of
+   manually adding the repository root to `sys.path`.
+5. Update README and AGENTS commands from `mypy api_tests tests` to
+   `mypy src tests`.
+
+Acceptance checks:
+
+- Editable install imports `api_tests` from `src/api_tests`.
+- Running pytest with importlib import mode still imports the installed package,
+  not a package from the repository root.
+- `mypy src tests` passes.
+
+### Phase 3: Consolidate Tooling Configuration
+
+Goal: make this repo's tool configuration match the standard workspace shape.
+
+Steps:
+
+1. Move pytest settings from `pytest.ini` into
+   `[tool.pytest.ini_options]` in `pyproject.toml`.
+2. Add:
+   - `testpaths = ["tests"]`
+   - `addopts = "--strict-config --strict-markers --import-mode=importlib"`
+3. Add Ruff lint selections:
+
+   ```toml
+   [tool.ruff.lint]
+   select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+   ```
+
+4. Delete `pytest.ini` after the pyproject configuration is verified.
+5. Decide whether tool scripts should become package entry points or stay as
+   checked script files with typed `main()` functions.
+
+Acceptance checks:
+
+- pytest reports `configfile: pyproject.toml`.
+- Strict marker checking still recognizes all custom markers.
+- Ruff lint remains clean under the broader lint selection.
+
+### Phase 4: Tighten Types And Tool Entrypoints
+
+Goal: reduce loose boundary typing before the OpenAPI coverage harness grows.
+
+Steps:
+
+1. Replace broad `Any` usage where practical with typed boundary models,
+   protocols, or local aliases.
+2. Keep unavoidable external-boundary `Any` close to decoded YAML, decoded JSON,
+   OpenAPI documents, httpx hooks, pytest hooks, and Playwright objects.
+3. Implement each non-placeholder tool with
+   `main(argv: Sequence[str] | None = None) -> int`.
+4. Add unit tests for tool argument parsing and failure messages.
+5. Add mypy coverage for tools if they remain script files, or move tool logic
+   into package modules and type-check those modules through `src`.
+
+Acceptance checks:
+
+- Tool behavior is covered by tests that do not require live network access.
+- Expected user errors return clear messages and non-zero exit codes instead
+  of tracebacks.
+- Strict mypy remains clean.
+
+### Phase 5: Production Safety Alignment
+
+Goal: make production behavior match the plan's read-only safety model.
+
+Steps:
+
+1. Define the production authentication strategy before enabling production
+   runs:
+   - stable pre-provisioned smoke identity, or
+   - supplied `BA_SESSION` with explicit production-safe handling.
+2. Adjust `auth.mode` validation so production cannot accidentally create
+   per-run users.
+3. Add guard fixtures for `mutation` and `destructive` markers before mutating
+   endpoint tests are implemented.
+4. Add tests proving mutation and destructive tests skip before making network
+   requests when disabled.
+5. Document the production command:
+
+   ```bash
+   pytest --env production -m "readonly and production_safe"
+   ```
+
+Acceptance checks:
+
+- Production defaults cannot create users or mutate data.
+- Mutating tests are blocked by policy before request execution.
+- Read-only production smoke behavior is explicit in README and AGENTS.
+
+### Phase 6: Repository Hygiene
+
+Goal: keep generated artifacts and instructions clean.
+
+Steps:
+
+1. Replace the broad Java/React `.gitignore` with a repository-specific ignore
+   file covering Python, pytest, Ruff, mypy, Playwright artifacts, local
+   virtualenvs, generated test artifacts, and secrets.
+2. Confirm generated caches and egg-info files are not tracked.
+3. Keep `artifacts/.gitkeep`, `fixtures/statements/.gitkeep`,
+   `schemas/.gitkeep`, and environment skeleton files tracked.
+4. Update README to show the same local quality gates as AGENTS.
+
+Acceptance checks:
+
+- `git status --ignored --short` shows generated Python and test artifacts are
+  ignored.
+- The tracked file list contains only source, tests, docs, config, schemas,
+  fixtures, and intentional placeholders.
+
+### Phase 7: Resume OpenAPI Coverage Work
+
+
+exec
+/bin/bash -lc "sed -n '1,240p' AGENTS.md" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+# Budget Analyzer API Tests
+
+## Repository Purpose
+
+This repository contains standalone black-box tests for the Budget Analyzer
+public gateway API. It tests deployed environments through the same public lane
+used by the browser:
+
+```text
+test runner -> HTTPS ingress -> ext_authz -> NGINX -> services
+```
+
+The suite must stay separate from service implementation repositories and must
+not depend on service internals.
+
+## Session Initialization
+
+At the start of work:
+
+1. Read this `AGENTS.md`.
+2. Inspect the repository structure before editing.
+3. Read the nearest relevant modules, tests, environment files, and plan
+   documents before changing them.
+
+Keep changes scoped to the requested plan phase or user request. The source
+implementation plan is
+`../orchestration/docs/plans/openapi-black-box-api-test-repository-plan.md`.
+
+## Core Product Constraints
+
+- Keep this a black-box public API test suite. Do not add direct database,
+  Redis, RabbitMQ, Kubernetes, service-DNS, or service-internal setup paths.
+- Compose API requests as `{origin}{api_base_path}{openapi path}` through
+  `GatewayClient`.
+- Treat the OpenAPI document as the executable coverage manifest.
+- Keep environment YAML declarative and non-secret. Read secrets only from
+  environment variables or CI secret stores.
+- Do not write Auth0 Management API tokens, generated passwords, session
+  cookies, authorization headers, or other credentials to artifacts.
+- Use `browser_auth0` as the primary local and staging auth mode. `env_cookie`
+  is a local debug fallback unless a future production-safe smoke-session flow
+  is explicitly designed.
+- Production defaults must remain read-only: `allow_mutation: false` and
+  `allow_destructive: false`.
+- Do not broaden production permissions to reach coverage targets.
+- Keep admin/global operations deferred until a separate admin identity,
+  cleanup, and global-state safety plan exists.
+- Do not add generic cleanup callbacks or janitors in the initial suite.
+  Per-run generated users are the boundary for user-owned test data.
+
+## Implemented Workflow
+
+- Install the local development environment with:
+
+  ```bash
+  python -m pip install -e ".[dev]"
+  python -m playwright install chromium
+  ```
+
+- Validate environment configuration with:
+
+  ```bash
+  .venv/bin/python tools/validate-environment.py --env local
+  ```
+
+- Run local collection without a live target with:
+
+  ```bash
+  .venv/bin/python -m pytest --env local --collect-only
+  ```
+
+- Live API tests require the selected environment, Auth0 prerequisites, browser
+  login, and network access to be available.
+
+## Python Baseline
+
+Use modern, explicit Python. The implementation should feel like a small typed
+system, not loose scripting glue.
+
+- Require Python 3.12 unless the project intentionally changes runtime support.
+- Use a `src/` layout for importable code. The current root-level `api_tests/`
+  package is transitional; migrate it to `src/api_tests/` before expanding the
+  harness substantially.
+- Put tests outside application code under `tests/`.
+- Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+- Keep development dependencies separate from test-runner execution
+  dependencies.
+- Prefer standard-library types and modules for orchestration unless the
+  repository plan explicitly calls for a test-harness dependency.
+- Use `pathlib.Path` for filesystem paths.
+- Read and write text with explicit `encoding="utf-8"`.
+- Use timezone-aware UTC timestamps for generated ids and serialized state.
+- Keep business logic out of CLI/tool entrypoints. Tools should parse
+  arguments, call typed functions, print user-facing messages, and return exit
+  codes.
+- Implement tool entrypoints as `main(argv: Sequence[str] | None = None) -> int`
+  where practical.
+- Keep generated artifacts out of version control: `.venv/`, `.mypy_cache/`,
+  `.ruff_cache/`, `dist/`, `build/`, `*.egg-info/`, `__pycache__/`,
+  `.coverage`, `htmlcov/`, `.pytest_cache/`, and generated request or coverage
+  artifacts.
+
+## Typing Standards
+
+- Run mypy in strict mode.
+- Annotate all public functions, methods, dataclasses, and module-level
+  constants where the type is not obvious.
+- Prefer precise stdlib types from `collections.abc` such as `Sequence`,
+  `Mapping`, `Iterable`, and `Callable` for interfaces.
+- Avoid `Any`. If it is unavoidable at external boundaries such as decoded
+  YAML, decoded JSON, OpenAPI documents, httpx, Playwright, or pytest hooks,
+  isolate it and validate into typed dataclasses or Pydantic models quickly.
+- Avoid broad `dict[str, object]` plumbing across modules.
+- Use dataclasses or Pydantic models for durable value objects such as
+  environment config, identities, run state, operation coverage, and process or
+  request results.
+- Use literals or enums for constrained status values, auth modes, environment
+  types, cleanup modes, and coverage states.
+- Do not silence mypy with broad ignore comments. A narrow ignore must include
+  the error code and a short reason.
+
+## Formatting And Linting
+
+Use Ruff as the single formatting, linting, pyupgrade, and import-sorting path.
+Do not add Black, isort, Flake8, or autopep8 unless the user explicitly asks
+for that tool split.
+
+Expected commands in this workspace use the repository-local virtualenv. If
+`.venv/` is missing, create or install the dev environment first rather than
+falling back to global tooling.
+
+Current transitional commands:
+
+```bash
+.venv/bin/python -m ruff format .
+.venv/bin/python -m ruff check . --fix
+.venv/bin/python -m mypy api_tests tests
+.venv/bin/python -m pytest --env local --collect-only
+```
+
+After the `src/` migration, the mypy command should be:
+
+```bash
+.venv/bin/python -m mypy src tests
+```
+
+Ruff should use `line-length = 100`, `target-version = "py312"`,
+`src = ["src", "tests"]`, and lint selections including `E`, `F`, `I`, `UP`,
+`B`, `SIM`, and `RUF`.
+
+## Testing Standards
+
+Use pytest for tests.
+
+- Prefer `tmp_path`, `monkeypatch`, `capsys`, `httpx.MockTransport`, and
+  `respx` for harness unit tests.
+- Do not call real Auth0, real providers, or live Budget Analyzer targets from
+  unit tests.
+- Keep tests deterministic. Avoid sleeps except where timeout behavior is under
+  test, and keep those durations short.
+- Use OpenAPI markers consistently:
+
+  ```python
+  @pytest.mark.openapi("operationId")
+  ```
+
+- Use `placeholder` only while a phase is under construction. Placeholder
+  coverage is not an acceptable staging-gate completion state.
+- Mark mutating tests with `mutation`, destructive tests with `destructive`,
+  read-only tests with `readonly`, authorization tests with `authorization`,
+  and production-safe tests with `production_safe`.
+- Production execution should select only explicitly production-safe read-only
+  tests.
+- For pytest configuration, prefer strict config, strict markers, declared test
+  paths, and importlib import mode.
+
+## API Execution Safety
+
+- Use `GatewayClient` for API requests so base origin, API prefix, TLS policy,
+  timeout, cookies, and request logging stay centralized.
+- Use `raw_request` only for `/api-docs`, auth edge checks, and other explicitly
+  public non-API-prefix routes.
+- Never seed sessions in Redis, exchange Auth0 tokens directly for API access,
+  or bypass the Session Gateway.
+- Stream or record enough request details for diagnostics, but redact secrets
+  before writing artifacts.
+- Keep mutating tests guarded by environment policy before any mutating request
+  is made.
+
+## State, Files, And Schemas
+
+- Keep environment files under `environments/` non-secret.
+- Keep generated logs and coverage files under `artifacts/`.
+- Keep checked-in OpenAPI snapshots under `schemas/`.
+- Keep deferred admin/global operations explicit in
+  `schemas/deferred-admin-operations.yaml` once the coverage phase is active.
+- Make JSON artifacts stable and readable with indentation where they are meant
+  for review.
+- Preserve OpenAPI operation ids exactly. Do not rename them in test markers.
+
+## Error Handling
+
+- Return documented exit codes from tools instead of raising tracebacks for
+  expected user errors.
+- Convert validation, prerequisite, and configuration failures into clear
+  messages naming the environment file, missing variable, path, operation id,
+  marker, or command involved.
+- Treat missing Auth0 prerequisites as an expected stop condition for live
+  tests, not as a harness bug.
+- Do not guess through product, architecture, schema, API, or workflow
+  decisions not present in durable documentation or the current user request.
+
+## Documentation Discipline
+
+Update documentation in the same change as behavior, configuration, CLI,
+tooling, marker conventions, environment schema, or workflow changes.
+
+- Update `README.md` when setup, commands, naming, usage, or examples change.
+- Update `docs/` when architecture, OpenAPI coverage, artifact schema, marker
+  grammar, exit codes, CI workflow, or operational behavior changes.
+- Update this `AGENTS.md` when agent instructions, quality gates, tooling, or
+  repository workflow changes.
+- Do not leave documentation updates as follow-up work.
+
+exec
+/bin/bash -lc 'find .. -name AGENTS.md -print' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+../home-claude/AGENTS.md
+../ai-session-handler/AGENTS.md
+../budget-analyzer-web/AGENTS.md
+../issan-claude/AGENTS.md
+../financial-claude/AGENTS.md
+../transaction-service/AGENTS.md
+../orchestration/AGENTS.md
+../budget-analyzer-api-tests/AGENTS.md
+../sysadmin-claude/AGENTS.md
+../architecture-conversations/AGENTS.md
+../shopping-claude/AGENTS.md
+../workspace/AGENTS.md
+../session-gateway/AGENTS.md
+../ext-authz/AGENTS.md
+../permission-service/AGENTS.md
+../currency-service/AGENTS.md
+../job-hunt-claude/AGENTS.md
+../service-common/AGENTS.md
+
+codex
+The local plan confirms phase 2 is only the layout migration plus command/doc updates. I’m checking package configuration, tests, and tool scripts now so the move doesn’t mask import assumptions.
+exec
+/bin/bash -lc "sed -n '1,260p' pyproject.toml" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "budget-analyzer-api-tests"
+version = "0.1.0"
+description = "Black-box API tests for the Budget Analyzer public gateway API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "httpx",
+  "jsonschema",
+  "playwright",
+  "pydantic",
+  "PyYAML",
+  "pytest",
+  "referencing",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy",
+  "respx",
+  "ruff",
+  "types-PyYAML",
+]
+
+[tool.setuptools.packages.find]
+include = ["api_tests*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["api_tests"]
+
+exec
+/bin/bash -lc 'find api_tests tests tools -maxdepth 3 -type f | sort' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+api_tests/__init__.py
+api_tests/__pycache__/__init__.cpython-312.pyc
+api_tests/__pycache__/auth.cpython-312.pyc
+api_tests/__pycache__/auth0.cpython-312.pyc
+api_tests/__pycache__/browser_login.cpython-312.pyc
+api_tests/__pycache__/client.cpython-312.pyc
+api_tests/__pycache__/config.cpython-312.pyc
+api_tests/__pycache__/identities.cpython-312.pyc
+api_tests/__pycache__/logging.cpython-312.pyc
+api_tests/__pycache__/run_state.cpython-312.pyc
+api_tests/auth.py
+api_tests/auth0.py
+api_tests/browser_login.py
+api_tests/builders/__init__.py
+api_tests/builders/statement_formats.py
+api_tests/builders/transactions.py
+api_tests/builders/views.py
+api_tests/client.py
+api_tests/config.py
+api_tests/coverage.py
+api_tests/identities.py
+api_tests/logging.py
+api_tests/openapi.py
+api_tests/run_state.py
+api_tests/schemas.py
+tests/__pycache__/conftest.cpython-312-pytest-9.0.3.pyc
+tests/api_docs/.gitkeep
+tests/api_docs/__pycache__/test_openapi_docs.cpython-312-pytest-9.0.3.pyc
+tests/api_docs/test_openapi_docs.py
+tests/auth/.gitkeep
+tests/auth/__pycache__/test_phase1_auth_helpers.cpython-312-pytest-9.0.3.pyc
+tests/auth/test_phase1_auth_helpers.py
+tests/authorization/.gitkeep
+tests/conftest.py
+tests/contract/.gitkeep
+tests/contract/__pycache__/test_environment_config.cpython-312-pytest-9.0.3.pyc
+tests/contract/test_environment_config.py
+tests/currencies/.gitkeep
+tests/exchange_rates/.gitkeep
+tests/statement_formats/.gitkeep
+tests/transactions/.gitkeep
+tests/views/.gitkeep
+tools/check-openapi-coverage.py
+tools/export-openapi-coverage.py
+tools/refresh-openapi.py
+tools/validate-environment.py
+
+exec
+/bin/bash -lc "sed -n '1,220p' /workspace/AGENTS.md" in /workspace/budget-analyzer-api-tests
+ exited 2 in 0ms:
+sed: can't read /workspace/AGENTS.md: No such file or directory
+
+exec
+/bin/bash -lc 'git status --short' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+ M .ai-session-handler/python-baseline-remediation-plan.json
+?? .ai-session-handler/prompts/20260706T105557Z-phase-2.txt
+?? .ai-session-handler/transcripts/20260706T105557Z-phase-2.txt
+
+exec
+/bin/bash -lc "rg -n \"sys\\.path|api_tests|mypy api_tests|packages\\.find|tool\\.ruff|pythonpath\" README.md AGENTS.md pyproject.toml pytest.ini tests tools api_tests docs" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+pyproject.toml:30:[tool.setuptools.packages.find]
+pyproject.toml:31:include = ["api_tests*"]
+pyproject.toml:33:[tool.ruff]
+pyproject.toml:40:packages = ["api_tests"]
+AGENTS.md:81:- Use a `src/` layout for importable code. The current root-level `api_tests/`
+AGENTS.md:82:  package is transitional; migrate it to `src/api_tests/` before expanding the
+AGENTS.md:137:.venv/bin/python -m mypy api_tests tests
+docs/plans/python-baseline-remediation-plan.md:12:- `api_tests/`
+docs/plans/python-baseline-remediation-plan.md:34:.venv/bin/python -m mypy api_tests tests
+docs/plans/python-baseline-remediation-plan.md:42:- Ruff format check fails: `api_tests/auth0.py`,
+docs/plans/python-baseline-remediation-plan.md:43:  `api_tests/browser_login.py`, `api_tests/config.py`, and
+docs/plans/python-baseline-remediation-plan.md:50:    through `api_tests.browser_login`, but that module does not explicitly
+docs/plans/python-baseline-remediation-plan.md:60:1. The implementation uses a root-level `api_tests/` package. The workspace
+docs/plans/python-baseline-remediation-plan.md:74:   but it inserts the repository root into `sys.path`; this should disappear
+docs/plans/python-baseline-remediation-plan.md:105:   .venv/bin/python -m mypy api_tests tests
+docs/plans/python-baseline-remediation-plan.md:121:1. Move `api_tests/` to `src/api_tests/`.
+docs/plans/python-baseline-remediation-plan.md:123:   - set `[tool.setuptools.packages.find] where = ["src"]`
+docs/plans/python-baseline-remediation-plan.md:124:   - set `[tool.ruff] src = ["src", "tests"]`
+docs/plans/python-baseline-remediation-plan.md:125:   - keep `packages = ["api_tests"]` for mypy
+docs/plans/python-baseline-remediation-plan.md:128:   manually adding the repository root to `sys.path`.
+docs/plans/python-baseline-remediation-plan.md:129:5. Update README and AGENTS commands from `mypy api_tests tests` to
+docs/plans/python-baseline-remediation-plan.md:134:- Editable install imports `api_tests` from `src/api_tests`.
+docs/plans/python-baseline-remediation-plan.md:153:   [tool.ruff.lint]
+tools/validate-environment.py:23:    sys.path.insert(0, str(repo_root))
+tools/validate-environment.py:25:    from api_tests.config import load_environment, normalized_non_secret_settings
+tests/contract/test_environment_config.py:5:from api_tests.config import EnvironmentConfig, load_environment
+api_tests/auth.py:7:from api_tests.auth0 import Auth0ManagementClient, settings_from_environment
+api_tests/auth.py:8:from api_tests.browser_login import SessionCookie
+api_tests/auth.py:9:from api_tests.config import EnvironmentConfig
+api_tests/auth.py:10:from api_tests.identities import RunIdentities, create_run_identities
+api_tests/auth.py:11:from api_tests.run_state import RunState
+api_tests/browser_login.py:9:from api_tests.config import EnvironmentConfig
+api_tests/logging.py:12:from api_tests.config import repository_root
+api_tests/auth0.py:13:from api_tests.config import EnvironmentConfig
+api_tests/auth0.py:14:from api_tests.run_state import RunState
+tests/auth/test_phase1_auth_helpers.py:12:from api_tests.auth import AuthConfigurationError, load_auth_context
+tests/auth/test_phase1_auth_helpers.py:13:from api_tests.auth0 import (
+tests/auth/test_phase1_auth_helpers.py:19:from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+tests/auth/test_phase1_auth_helpers.py:20:from api_tests.client import GatewayClient
+tests/auth/test_phase1_auth_helpers.py:21:from api_tests.config import load_environment
+tests/auth/test_phase1_auth_helpers.py:22:from api_tests.identities import create_run_identities
+tests/auth/test_phase1_auth_helpers.py:23:from api_tests.run_state import RUN_ID_PATTERN, RunState, generate_run_id, session_run_state
+api_tests/identities.py:6:from api_tests.auth0 import Auth0CreatedUser, Auth0ManagementClient, settings_from_environment
+api_tests/identities.py:7:from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, login_with_browser
+api_tests/identities.py:8:from api_tests.config import EnvironmentConfig
+api_tests/identities.py:9:from api_tests.run_state import RunState
+api_tests/client.py:9:from api_tests.browser_login import SessionCookie
+api_tests/client.py:10:from api_tests.config import EnvironmentConfig
+api_tests/client.py:11:from api_tests.logging import request_response_hooks
+tests/conftest.py:7:from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+tests/conftest.py:8:from api_tests.auth0 import Auth0ManagementError
+tests/conftest.py:9:from api_tests.browser_login import BrowserLoginError
+tests/conftest.py:10:from api_tests.client import GatewayClient
+tests/conftest.py:11:from api_tests.config import EnvironmentConfig, load_environment
+tests/conftest.py:12:from api_tests.run_state import RunState, session_run_state
+tests/api_docs/test_openapi_docs.py:5:from api_tests.client import GatewayClient
+tests/api_docs/test_openapi_docs.py:6:from api_tests.config import EnvironmentConfig
+
+codex
+The only current worktree changes are session-handler artifacts, so I’ll leave them alone. I found the one tool script that mutates `sys.path`; the rest of the import changes look like packaging/configuration rather than application code changes.
+exec
+/bin/bash -lc "sed -n '1,260p' README.md" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+# Budget Analyzer API Tests
+
+Standalone black-box API tests for the Budget Analyzer public gateway API.
+
+This repository is being bootstrapped from the orchestration plan in
+`../orchestration/docs/plans/openapi-black-box-api-test-repository-plan.md`.
+
+## Bootstrap
+
+```bash
+python -m pip install -e ".[dev]"
+python -m playwright install chromium
+pytest --env local --collect-only
+pytest --env local tests/api_docs
+```
+
+Environment files under `environments/` are declarative and non-secret. Auth0
+Management API inputs and session cookies are read from the environment
+variables named by the selected YAML.
+
+Validate an environment file:
+
+```bash
+python tools/validate-environment.py --env local
+```
+
+Run pytest against an environment:
+
+```bash
+pytest --env local
+```
+
+exec
+/bin/bash -lc "sed -n '1,220p' tools/validate-environment.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import yaml
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+    parser.add_argument(
+        "--env",
+        default="local",
+        help="environment name to load from environments/<env>.yaml",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root))
+
+    from api_tests.config import load_environment, normalized_non_secret_settings
+
+    args = parse_args()
+    try:
+        config = load_environment(args.env)
+    except Exception as exc:
+        print(f"environment validation failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(yaml.safe_dump(normalized_non_secret_settings(config), sort_keys=False).strip())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+exec
+/bin/bash -lc "sed -n '1,220p' tools/check-openapi-coverage.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+exec
+/bin/bash -lc "sed -n '1,220p' tools/refresh-openapi.py" in /workspace/budget-analyzer-api-tests
+exec
+/bin/bash -lc "sed -n '1,220p' tools/export-openapi-coverage.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+ succeeded in 0ms:
+exec
+/bin/bash -lc "sed -n '1,220p' pytest.ini" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+[pytest]
+markers =
+    openapi(operation_id): associate a test with an OpenAPI operation id
+    placeholder: marker-only placeholder for planned endpoint coverage
+    mutation: test may create or update API resources
+    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+    readonly: test only reads API resources
+    authorization: test verifies authorization or resource isolation behavior
+    production_safe: test is allowed to run against production defaults
+
+codex
+Before editing, I’m checking whether any package code derives repository paths from its own location. That’s the main place a `src/` move can cause behavior changes even when imports still work.
+exec
+/bin/bash -lc "sed -n '1,260p' api_tests/config.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Literal, Self
+from urllib.parse import urlparse
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+EnvironmentType = Literal["local", "staging", "production"]
+AuthMode = Literal["browser_auth0", "env_cookie"]
+CleanupMode = Literal["none"]
+
+
+class StrictConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class BrowserConfig(StrictConfigModel):
+    headless: bool
+
+
+class Auth0Config(StrictConfigModel):
+    management_domain_env: str
+    management_client_id_env: str
+    management_client_secret_env: str
+    connection_env: str
+    test_email_domain: str
+
+    @field_validator(
+        "management_domain_env",
+        "management_client_id_env",
+        "management_client_secret_env",
+        "connection_env",
+    )
+    @classmethod
+    def validate_env_var_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("environment variable name must not be empty")
+        if not value.replace("_", "").isalnum() or not value[0].isalpha():
+            raise ValueError(f"invalid environment variable name: {value}")
+        return value
+
+    @field_validator("test_email_domain")
+    @classmethod
+    def validate_test_email_domain(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not value or "@" in value or "/" in value or "." not in value:
+            raise ValueError("test_email_domain must be a DNS-style domain")
+        return value
+
+
+class AuthConfig(StrictConfigModel):
+    mode: AuthMode
+    cookie_env: str
+    browser: BrowserConfig
+    auth0: Auth0Config
+
+    @field_validator("cookie_env")
+    @classmethod
+    def validate_cookie_env(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("cookie_env must not be empty")
+        if not value.replace("_", "").isalnum() or not value[0].isalpha():
+            raise ValueError(f"invalid cookie_env environment variable name: {value}")
+        return value
+
+
+class DataConfig(StrictConfigModel):
+    namespace_prefix: str
+    cleanup: CleanupMode
+    per_run_user_boundary: bool
+
+    @field_validator("namespace_prefix")
+    @classmethod
+    def validate_namespace_prefix(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("namespace_prefix must not be empty")
+        return value
+
+
+class TimeoutConfig(StrictConfigModel):
+    request_seconds: float = Field(gt=0)
+    eventually_seconds: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_timeout_order(self) -> Self:
+        if self.eventually_seconds < self.request_seconds:
+            raise ValueError("eventually_seconds must be greater than or equal to request_seconds")
+        return self
+
+
+class EnvironmentConfig(StrictConfigModel):
+    name: str
+    origin: str
+    api_base_path: str
+    openapi_path: str
+    verify_tls: bool
+    environment_type: EnvironmentType
+    allow_mutation: bool
+    allow_destructive: bool
+    session_cookie_name: str
+    auth: AuthConfig
+    data: DataConfig
+    timeouts: TimeoutConfig
+
+    @field_validator("name", "session_cookie_name")
+    @classmethod
+    def validate_non_empty_string(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("value must not be empty")
+        return value
+
+    @field_validator("origin")
+    @classmethod
+    def validate_origin(cls, value: str) -> str:
+        value = value.strip().rstrip("/")
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("origin must be an absolute HTTP(S) URL")
+        if parsed.path or parsed.params or parsed.query or parsed.fragment:
+            raise ValueError("origin must not include a path, query, or fragment")
+        return value
+
+    @field_validator("api_base_path", "openapi_path")
+    @classmethod
+    def validate_absolute_path(cls, value: str) -> str:
+        value = value.strip()
+        if not value.startswith("/"):
+            raise ValueError("path must start with /")
+        if "//" in value:
+            raise ValueError("path must not contain duplicate slashes")
+        return value.rstrip("/") if value != "/" else value
+
+    @model_validator(mode="after")
+    def validate_environment_policy(self) -> Self:
+        if self.environment_type == "production":
+            if self.allow_mutation:
+                raise ValueError("production environments must not allow mutation by default")
+            if self.allow_destructive:
+                raise ValueError(
+                    "production environments must not allow destructive tests by default"
+                )
+        if self.allow_destructive and not self.allow_mutation:
+            raise ValueError("allow_destructive requires allow_mutation")
+        return self
+
+
+def repository_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def environments_dir() -> Path:
+    return repository_root() / "environments"
+
+
+def environment_path(name: str, base_dir: Path | None = None) -> Path:
+    if "/" in name or "\\" in name or name in {"", ".", ".."}:
+        raise ValueError(f"invalid environment name: {name}")
+
+    directory = base_dir or environments_dir()
+    path = directory / f"{name}.yaml"
+    if not path.is_file():
+        raise FileNotFoundError(f"environment file not found: {path}")
+    return path
+
+
+def load_environment(name: str, base_dir: Path | None = None) -> EnvironmentConfig:
+    return load_environment_file(environment_path(name, base_dir))
+
+
+def load_environment_file(path: Path) -> EnvironmentConfig:
+    with path.open("r", encoding="utf-8") as config_file:
+        raw_config = yaml.safe_load(config_file)
+
+    if not isinstance(raw_config, dict):
+        raise ValueError(f"environment file must contain a YAML mapping: {path}")
+
+    return EnvironmentConfig.model_validate(raw_config)
+
+
+def normalized_non_secret_settings(config: EnvironmentConfig) -> dict[str, Any]:
+    return {
+        "name": config.name,
+        "origin": config.origin,
+        "api_base_path": config.api_base_path,
+        "openapi_path": config.openapi_path,
+        "verify_tls": config.verify_tls,
+        "environment_type": config.environment_type,
+        "allow_mutation": config.allow_mutation,
+        "allow_destructive": config.allow_destructive,
+        "session_cookie_name": config.session_cookie_name,
+        "auth": {
+            "mode": config.auth.mode,
+            "cookie_env": config.auth.cookie_env,
+            "browser": config.auth.browser.model_dump(mode="json"),
+            "auth0": {
+                "management_domain_env": config.auth.auth0.management_domain_env,
+                "management_client_id_env": config.auth.auth0.management_client_id_env,
+                "management_client_secret_env": config.auth.auth0.management_client_secret_env,
+                "connection_env": config.auth.auth0.connection_env,
+                "test_email_domain": config.auth.auth0.test_email_domain,
+            },
+        },
+        "data": config.data.model_dump(mode="json"),
+        "timeouts": config.timeouts.model_dump(mode="json"),
+    }
+
+exec
+/bin/bash -lc "ls -a .venv 2>/dev/null | sed -n '1,20p'" in /workspace/budget-analyzer-api-tests
+exec
+/bin/bash -lc "sed -n '1,220p' api_tests/logging.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+.
+..
+bin
+include
+lib
+lib64
+pyvenv.cfg
+
+ succeeded in 0ms:
+from __future__ import annotations
+
+from collections.abc import Callable
+import json
+from pathlib import Path
+import re
+import time
+from typing import Any
+
+import httpx
+
+from api_tests.config import repository_root
+
+MAX_BODY_BYTES = 4096
+REQUEST_STARTED_AT = "budget_analyzer_request_started_at"
+SENSITIVE_HEADER_NAMES = {"authorization", "cookie", "set-cookie"}
+SENSITIVE_KEY_RE = re.compile(
+    r"(authorization|cookie|password|client_secret|access_token|refresh_token|id_token|token)",
+    re.IGNORECASE,
+)
+
+
+def request_response_hooks(
+    *,
+    artifact_path: Path | None = None,
+) -> dict[str, list[Callable[[Any], None]]]:
+    path = artifact_path or repository_root() / "artifacts" / "request-log.jsonl"
+    return {
+        "request": [_record_request_start],
+        "response": [_make_response_logger(path)],
+    }
+
+
+def _record_request_start(request: httpx.Request) -> None:
+    request.extensions[REQUEST_STARTED_AT] = time.perf_counter()
+
+
+def _make_response_logger(artifact_path: Path) -> Callable[[httpx.Response], None]:
+    def log_response(response: httpx.Response) -> None:
+        response.read()
+        started_at = response.request.extensions.get(REQUEST_STARTED_AT)
+        elapsed_seconds = None
+        if isinstance(started_at, float):
+            elapsed_seconds = round(time.perf_counter() - started_at, 6)
+
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        with artifact_path.open("a", encoding="utf-8") as log_file:
+            log_file.write(
+                json.dumps(
+                    {
+                        "method": response.request.method,
+                        "url": _redact_url(str(response.request.url)),
+                        "status": response.status_code,
+                        "elapsed_seconds": elapsed_seconds,
+                        "response_headers": _redact_headers(response.headers),
+                        "response_body_prefix": _redact_body_prefix(response),
+                    },
+                    sort_keys=True,
+                )
+            )
+            log_file.write("\n")
+
+    return log_response
+
+
+def _redact_headers(headers: httpx.Headers) -> dict[str, str]:
+    redacted: dict[str, str] = {}
+    for name, value in headers.items():
+        redacted[name] = "[REDACTED]" if name.lower() in SENSITIVE_HEADER_NAMES else value
+    return redacted
+
+
+def _redact_body_prefix(response: httpx.Response) -> str:
+    body_prefix = response.content[:MAX_BODY_BYTES]
+    text = body_prefix.decode(response.encoding or "utf-8", errors="replace")
+
+    content_type = response.headers.get("content-type", "")
+    if "json" not in content_type.lower():
+        return _redact_sensitive_text(text)
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return _redact_sensitive_text(text)
+
+    return json.dumps(_redact_json(payload), sort_keys=True)
+
+
+def _redact_json(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            str(key): "[REDACTED]" if SENSITIVE_KEY_RE.search(str(key)) else _redact_json(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_json(item) for item in value]
+    if isinstance(value, str):
+        return _redact_sensitive_text(value)
+    return value
+
+
+def _redact_sensitive_text(value: str) -> str:
+    redacted = re.sub(
+        r"(?i)(authorization:\s*bearer\s+)[^\s,;]+",
+        r"\1[REDACTED]",
+        value,
+    )
+    redacted = re.sub(
+        r"(?i)((?:access_token|refresh_token|id_token|password|client_secret)"
+        r'["\']?\s*[:=]\s*["\']?)[^"\'\s,;}]+',
+        r"\1[REDACTED]",
+        redacted,
+    )
+    redacted = re.sub(
+        r"(?i)((?:cookie|set-cookie)\s*:\s*)[^\n\r]+",
+        r"\1[REDACTED]",
+        redacted,
+    )
+    return redacted
+
+
+def _redact_url(url: str) -> str:
+    return _redact_sensitive_text(url)
+
+exec
+/bin/bash -lc "rg -n \"parents\\[|__file__|repository_root\\(|Path\\(__file__\\)\" api_tests tests tools" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+tools/validate-environment.py:22:    repo_root = Path(__file__).resolve().parents[1]
+api_tests/logging.py:27:    path = artifact_path or repository_root() / "artifacts" / "request-log.jsonl"
+api_tests/config.py:153:def repository_root() -> Path:
+api_tests/config.py:154:    return Path(__file__).resolve().parents[1]
+api_tests/config.py:158:    return repository_root() / "environments"
+
+codex
+One real code adjustment is needed: `repository_root()` currently assumes `api_tests/` lives at the repository root. After moving to `src/api_tests`, it must climb one more parent so environment and artifact paths still resolve to the repository.
+exec
+/bin/bash -lc "sed -n '1,240p' tests/contract/test_environment_config.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+import pytest
+
+from api_tests.config import EnvironmentConfig, load_environment
+
+
+@pytest.mark.parametrize("environment_name", ["local", "staging", "production"])
+def test_committed_environment_config_loads(environment_name: str) -> None:
+    config = load_environment(environment_name)
+
+    assert config.name == environment_name
+    if config.environment_type == "production":
+        assert config.allow_mutation is False
+        assert config.allow_destructive is False
+
+
+def test_env_config_fixture_exposes_selected_environment(env_config: EnvironmentConfig) -> None:
+    assert env_config.name
+    assert env_config.origin
+
+exec
+/bin/bash -lc "sed -n '1,260p' tests/conftest.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+from collections.abc import Generator
+
+import pytest
+
+from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+from api_tests.auth0 import Auth0ManagementError
+from api_tests.browser_login import BrowserLoginError
+from api_tests.client import GatewayClient
+from api_tests.config import EnvironmentConfig, load_environment
+from api_tests.run_state import RunState, session_run_state
+
+ENV_CONFIG_KEY: pytest.StashKey[EnvironmentConfig] = pytest.StashKey()
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    group = parser.getgroup("budget-analyzer-api-tests")
+    group.addoption(
+        "--env",
+        action="store",
+        default="local",
+        help="environment name to load from environments/<env>.yaml",
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    env_name = str(config.getoption("--env"))
+    try:
+        config.stash[ENV_CONFIG_KEY] = load_environment(env_name)
+    except Exception as exc:
+        raise pytest.UsageError(f"failed to load --env {env_name!r}: {exc}") from exc
+
+
+@pytest.fixture(scope="session")
+def env_config(pytestconfig: pytest.Config) -> EnvironmentConfig:
+    return pytestconfig.stash[ENV_CONFIG_KEY]
+
+
+@pytest.fixture(scope="session")
+def run_state() -> RunState:
+    return session_run_state()
+
+
+@pytest.fixture(scope="session")
+def auth_context(env_config: EnvironmentConfig, run_state: RunState) -> AuthContext:
+    try:
+        return load_auth_context(env_config, run_state)
+    except (AuthConfigurationError, Auth0ManagementError, BrowserLoginError) as exc:
+        pytest.fail(f"authentication prerequisite failed: {exc}", pytrace=False)
+
+
+@pytest.fixture(scope="session")
+def gateway_client(
+    auth_context: AuthContext,
+    env_config: EnvironmentConfig,
+) -> Generator[GatewayClient, None, None]:
+    with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+        yield client
+
+exec
+/bin/bash -lc "sed -n '1,320p' tests/auth/test_phase1_auth_helpers.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+from datetime import UTC, datetime
+import json
+from pathlib import Path
+from typing import cast
+
+import httpx
+from playwright.sync_api import BrowserContext
+import pytest
+
+from api_tests.auth import AuthConfigurationError, load_auth_context
+from api_tests.auth0 import (
+    Auth0CreatedUser,
+    Auth0ManagementClient,
+    Auth0ManagementSettings,
+    Auth0ScopeError,
+)
+from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+from api_tests.client import GatewayClient
+from api_tests.config import load_environment
+from api_tests.identities import create_run_identities
+from api_tests.run_state import RUN_ID_PATTERN, RunState, generate_run_id, session_run_state
+
+
+def test_generate_run_id_uses_required_format() -> None:
+    run_id = generate_run_id(
+        now=datetime(2026, 6, 5, 12, 34, 56, tzinfo=UTC),
+        random_suffix="1a2b3c4d",
+    )
+
+    assert run_id == "ba-api-test-20260605T123456Z-1a2b3c4d"
+    assert RUN_ID_PATTERN.fullmatch(run_id)
+
+
+def test_session_run_state_is_stable_for_process_session() -> None:
+    session_run_state.cache_clear()
+
+    first = session_run_state()
+    second = session_run_state()
+
+    assert first is second
+    assert RUN_ID_PATTERN.fullmatch(first.run_id)
+
+
+def test_auth0_client_requests_management_token_and_creates_verified_user() -> None:
+    settings = Auth0ManagementSettings(
+        domain="tenant.example.auth0.com",
+        client_id="client-id",
+        client_secret="client-secret",
+        connection="Username-Password-Authentication",
+        test_email_domain="api-tests.example.invalid",
+    )
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/oauth/token":
+            assert request.url.scheme == "https"
+            assert request.url.host == "tenant.example.auth0.com"
+            return httpx.Response(200, json={"access_token": "management-token"})
+
+        if request.url.path == "/api/v2/users":
+            payload = json.loads(request.content.decode("utf-8"))
+            assert request.headers["Authorization"] == "Bearer management-token"
+            assert payload["connection"] == "Username-Password-Authentication"
+            assert payload["email_verified"] is True
+            assert payload["verify_email"] is False
+            assert payload["email"].endswith("@api-tests.example.invalid")
+            assert "password" in payload
+            return httpx.Response(201, json={"user_id": "auth0|generated-user"})
+
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as http_client:
+        client = Auth0ManagementClient(settings, client=http_client)
+        user = client.create_database_user(
+            run_state=RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+            label="Primary User",
+        )
+
+    assert len(requests) == 2
+    assert user.user_id == "auth0|generated-user"
+    assert user.email.startswith("ba-api-test-20260605T123456Z-1a2b3c4d-primary-user-")
+    assert user.password
+
+
+def test_auth0_scope_errors_are_clear() -> None:
+    settings = Auth0ManagementSettings(
+        domain="https://tenant.example.auth0.com",
+        client_id="client-id",
+        client_secret="client-secret",
+        connection="Username-Password-Authentication",
+        test_email_domain="api-tests.example.invalid",
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            json={
+                "error": "insufficient_scope",
+                "error_description": "Insufficient scope, expected any of: create:users",
+            },
+            request=request,
+        )
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as http_client:
+        client = Auth0ManagementClient(settings, client=http_client)
+        with pytest.raises(Auth0ScopeError, match="create:users"):
+            client.request_management_api_token()
+
+
+def test_read_session_cookie_extracts_http_only_cookie_metadata() -> None:
+    class FakeContext:
+        def cookies(self) -> list[dict[str, object]]:
+            return [
+                {"name": "unrelated", "value": "x", "domain": "example.test", "path": "/"},
+                {
+                    "name": "BA_SESSION",
+                    "value": "session-value",
+                    "domain": "app.budgetanalyzer.localhost",
+                    "path": "/",
+                    "httpOnly": True,
+                },
+            ]
+
+    cookie = read_session_cookie(cast(BrowserContext, FakeContext()), "BA_SESSION")
+
+    assert cookie == SessionCookie(
+        name="BA_SESSION",
+        value="session-value",
+        domain="app.budgetanalyzer.localhost",
+        path="/",
+    )
+
+
+def test_create_run_identities_provisions_and_logs_in_primary_and_secondary_users() -> None:
+    config = load_environment("local")
+    created_labels: list[str] = []
+    login_credentials: list[BrowserLoginCredentials] = []
+
+    class FakeAuth0Client:
+        def create_database_user(self, *, run_state: RunState, label: str) -> Auth0CreatedUser:
+            created_labels.append(label)
+            return Auth0CreatedUser(
+                email=f"{label}@api-tests.example.invalid",
+                password=f"{label}-password",
+                user_id=f"auth0|{label}",
+            )
+
+    def fake_login(
+        environment_config: object,
+        credentials: BrowserLoginCredentials,
+    ) -> SessionCookie:
+        assert environment_config is config
+        login_credentials.append(credentials)
+        return SessionCookie(
+            name="BA_SESSION",
+            value=f"{credentials.email}-cookie",
+            domain="app.budgetanalyzer.localhost",
+            path="/",
+        )
+
+    identities = create_run_identities(
+        config,
+        RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+        auth0_client=cast(Auth0ManagementClient, FakeAuth0Client()),
+        login=fake_login,
+    )
+
+    assert created_labels == ["primary-user", "secondary-user"]
+    assert [credentials.email for credentials in login_credentials] == [
+        "primary-user@api-tests.example.invalid",
+        "secondary-user@api-tests.example.invalid",
+    ]
+    assert identities.primary_user.email == "primary-user@api-tests.example.invalid"
+    assert identities.secondary_user.email == "secondary-user@api-tests.example.invalid"
+
+
+def test_env_cookie_auth_mode_reads_local_debug_cookie() -> None:
+    config = load_environment("local")
+    config = config.model_copy(
+        update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})}
+    )
+
+    auth_context = load_auth_context(
+        config,
+        RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+        environ={"BA_SESSION": "debug-cookie"},
+    )
+
+    assert auth_context.mode == "env_cookie"
+    assert auth_context.identities is None
+    assert auth_context.session_cookie == SessionCookie(
+        name="BA_SESSION",
+        value="debug-cookie",
+        domain="",
+        path="/",
+    )
+
+
+def test_env_cookie_auth_mode_is_local_only() -> None:
+    config = load_environment("staging")
+    config = config.model_copy(
+        update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})}
+    )
+
+    with pytest.raises(AuthConfigurationError, match="only allowed for local"):
+        load_auth_context(
+            config,
+            RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+            environ={"BA_SESSION": "debug-cookie"},
+        )
+
+
+def test_browser_auth0_mode_fails_before_network_when_management_env_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_environment("local")
+    for env_var in (
+        config.auth.auth0.management_domain_env,
+        config.auth.auth0.management_client_id_env,
+        config.auth.auth0.management_client_secret_env,
+        config.auth.auth0.connection_env,
+    ):
+        monkeypatch.delenv(env_var, raising=False)
+
+    with pytest.raises(RuntimeError, match="AUTH0_MGMT_DOMAIN"):
+        load_auth_context(config, RunState("ba-api-test-20260605T123456Z-1a2b3c4d"))
+
+
+def test_gateway_client_uses_origin_api_prefix_cookie_and_request_log(
+    tmp_path: Path,
+) -> None:
+    config = load_environment("local")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={
+                "content-type": "application/json",
+                "set-cookie": "BA_SESSION=secret",
+            },
+            json={
+                "ok": True,
+                "password": "secret-password",
+                "access_token": "secret-token",
+            },
+        )
+
+    artifact_path = tmp_path / "request-log.jsonl"
+    with GatewayClient(
+        config,
+        artifact_path=artifact_path,
+        session_cookie=SessionCookie(
+            name="BA_SESSION",
+            value="debug-cookie",
+            domain="",
+            path="/",
+        ),
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.api_request("GET", "/transactions")
+
+    assert response.status_code == 200
+    assert str(requests[0].url) == "https://app.budgetanalyzer.localhost/api/transactions"
+    assert requests[0].headers["cookie"] == "BA_SESSION=debug-cookie"
+
+    log_entry = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert log_entry["method"] == "GET"
+    assert log_entry["status"] == 200
+    assert log_entry["response_headers"]["set-cookie"] == "[REDACTED]"
+    assert "secret-password" not in log_entry["response_body_prefix"]
+    assert "secret-token" not in log_entry["response_body_prefix"]
+
+exec
+/bin/bash -lc "sed -n '1,220p' tests/api_docs/test_openapi_docs.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+import httpx
+
+from api_tests.client import GatewayClient
+from api_tests.config import EnvironmentConfig
+
+
+def test_openapi_docs_returns_json_contract(
+    env_config: EnvironmentConfig,
+    gateway_client: GatewayClient,
+) -> None:
+    response = gateway_client.raw_request("GET", env_config.openapi_path)
+
+    assert response.status_code == httpx.codes.OK
+    assert response.headers["content-type"].lower().startswith("application/json")
+
+    body = response.json()
+    assert isinstance(body.get("openapi"), str)
+    assert isinstance(body.get("paths"), dict)
+
+codex
+I’m making the scoped edits now: move the package under `src/`, teach setuptools and Ruff about `src`, adjust repository path resolution, remove the script’s `sys.path` insertion, and update the documented mypy command.
+exec
+/bin/bash -lc 'mkdir -p src' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'mv api_tests src/api_tests' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+apply patch
+patch: completed
+/workspace/budget-analyzer-api-tests/AGENTS.md
+/workspace/budget-analyzer-api-tests/README.md
+/workspace/budget-analyzer-api-tests/pyproject.toml
+/workspace/budget-analyzer-api-tests/src/api_tests/config.py
+/workspace/budget-analyzer-api-tests/tools/validate-environment.py
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+codex
+The file move and scoped edits are in place. I’m checking for stale references to the old root package path and then I’ll reinstall editable so validation exercises the new package layout.
+exec
+/bin/bash -lc 'find src tests tools -maxdepth 3 -type f | sort' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+src/api_tests/__init__.py
+src/api_tests/__pycache__/__init__.cpython-312.pyc
+src/api_tests/__pycache__/auth.cpython-312.pyc
+src/api_tests/__pycache__/auth0.cpython-312.pyc
+src/api_tests/__pycache__/browser_login.cpython-312.pyc
+src/api_tests/__pycache__/client.cpython-312.pyc
+src/api_tests/__pycache__/config.cpython-312.pyc
+src/api_tests/__pycache__/identities.cpython-312.pyc
+src/api_tests/__pycache__/logging.cpython-312.pyc
+src/api_tests/__pycache__/run_state.cpython-312.pyc
+src/api_tests/auth.py
+src/api_tests/auth0.py
+src/api_tests/browser_login.py
+src/api_tests/builders/__init__.py
+src/api_tests/builders/statement_formats.py
+src/api_tests/builders/transactions.py
+src/api_tests/builders/views.py
+src/api_tests/client.py
+src/api_tests/config.py
+src/api_tests/coverage.py
+src/api_tests/identities.py
+src/api_tests/logging.py
+src/api_tests/openapi.py
+src/api_tests/run_state.py
+src/api_tests/schemas.py
+tests/__pycache__/conftest.cpython-312-pytest-9.0.3.pyc
+tests/api_docs/.gitkeep
+tests/api_docs/__pycache__/test_openapi_docs.cpython-312-pytest-9.0.3.pyc
+tests/api_docs/test_openapi_docs.py
+tests/auth/.gitkeep
+tests/auth/__pycache__/test_phase1_auth_helpers.cpython-312-pytest-9.0.3.pyc
+tests/auth/test_phase1_auth_helpers.py
+tests/authorization/.gitkeep
+tests/conftest.py
+tests/contract/.gitkeep
+tests/contract/__pycache__/test_environment_config.cpython-312-pytest-9.0.3.pyc
+tests/contract/test_environment_config.py
+tests/currencies/.gitkeep
+tests/exchange_rates/.gitkeep
+tests/statement_formats/.gitkeep
+tests/transactions/.gitkeep
+tests/views/.gitkeep
+tools/check-openapi-coverage.py
+tools/export-openapi-coverage.py
+tools/refresh-openapi.py
+tools/validate-environment.py
+
+exec
+/bin/bash -lc "rg -n \"mypy api_tests|sys\\.path|Path\\(__file__\\)\\.resolve\\(\\)\\.parents\\[1\\]|api_tests/|root-level "'`api_tests`" README.md AGENTS.md pyproject.toml pytest.ini tests tools src docs/plans/python-baseline-remediation-plan.md' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+/bin/bash: line 1: api_tests: command not found
+docs/plans/python-baseline-remediation-plan.md:12:- `api_tests/`
+docs/plans/python-baseline-remediation-plan.md:34:.venv/bin/python -m mypy api_tests tests
+docs/plans/python-baseline-remediation-plan.md:42:- Ruff format check fails: `api_tests/auth0.py`,
+docs/plans/python-baseline-remediation-plan.md:43:  `api_tests/browser_login.py`, `api_tests/config.py`, and
+docs/plans/python-baseline-remediation-plan.md:60:1. The implementation uses a root-level `api_tests/` package. The workspace
+docs/plans/python-baseline-remediation-plan.md:74:   but it inserts the repository root into `sys.path`; this should disappear
+docs/plans/python-baseline-remediation-plan.md:105:   .venv/bin/python -m mypy api_tests tests
+docs/plans/python-baseline-remediation-plan.md:121:1. Move `api_tests/` to `src/api_tests/`.
+docs/plans/python-baseline-remediation-plan.md:128:   manually adding the repository root to `sys.path`.
+docs/plans/python-baseline-remediation-plan.md:129:5. Update README and AGENTS commands from `mypy api_tests tests` to
+
+exec
+/bin/bash -lc "sed -n '25,48p' pyproject.toml" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+  "respx",
+  "ruff",
+  "types-PyYAML",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["api_tests*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["api_tests"]
+
+exec
+/bin/bash -lc 'git status --short' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+ M .ai-session-handler/python-baseline-remediation-plan.json
+ M AGENTS.md
+ M README.md
+ D api_tests/__init__.py
+ D api_tests/auth.py
+ D api_tests/auth0.py
+ D api_tests/browser_login.py
+ D api_tests/builders/__init__.py
+ D api_tests/builders/statement_formats.py
+ D api_tests/builders/transactions.py
+ D api_tests/builders/views.py
+ D api_tests/client.py
+ D api_tests/config.py
+ D api_tests/coverage.py
+ D api_tests/identities.py
+ D api_tests/logging.py
+ D api_tests/openapi.py
+ D api_tests/run_state.py
+ D api_tests/schemas.py
+ M pyproject.toml
+ M tools/validate-environment.py
+?? .ai-session-handler/prompts/20260706T105557Z-phase-2.txt
+?? .ai-session-handler/transcripts/20260706T105557Z-phase-2.txt
+?? src/
+
+exec
+/bin/bash -lc "sed -n '1,80p' tools/validate-environment.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import sys
+
+import yaml
+
+from api_tests.config import load_environment, normalized_non_secret_settings
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+    parser.add_argument(
+        "--env",
+        default="local",
+        help="environment name to load from environments/<env>.yaml",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        config = load_environment(args.env)
+    except Exception as exc:
+        print(f"environment validation failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(yaml.safe_dump(normalized_non_secret_settings(config), sort_keys=False).strip())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+codex
+The search command tripped over shell backticks in one pattern, so I’m rerunning that check with proper quoting. The remaining stale references are expected historical text in the phase plan; I’m not editing the plan body for this phase.
+exec
+/bin/bash -lc "rg -n 'mypy api_tests|sys\\.path|Path\\(__file__\\)\\.resolve\\(\\)\\.parents\\[1\\]|api_tests/|root-level "'`api_tests`'"' README.md AGENTS.md pyproject.toml pytest.ini tests tools src" in /workspace/budget-analyzer-api-tests
+ exited 1 in 0ms:
+exec
+/bin/bash -lc '.venv/bin/python -m pip install -e ".[dev]"' in /workspace/budget-analyzer-api-tests
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+ succeeded in 2524ms:
+Obtaining file:///workspace/budget-analyzer-api-tests
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: httpx in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (0.28.1)
+Requirement already satisfied: jsonschema in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (4.26.0)
+Requirement already satisfied: playwright in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (1.60.0)
+Requirement already satisfied: pydantic in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (2.13.4)
+Requirement already satisfied: PyYAML in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (6.0.3)
+Requirement already satisfied: pytest in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (9.0.3)
+Requirement already satisfied: referencing in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (0.37.0)
+Requirement already satisfied: mypy in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (2.1.0)
+Requirement already satisfied: respx in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (0.23.1)
+Requirement already satisfied: ruff in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (0.15.16)
+Requirement already satisfied: types-PyYAML in ./.venv/lib/python3.12/site-packages (from budget-analyzer-api-tests==0.1.0) (6.0.12.20260518)
+Requirement already satisfied: anyio in ./.venv/lib/python3.12/site-packages (from httpx->budget-analyzer-api-tests==0.1.0) (4.13.0)
+Requirement already satisfied: certifi in ./.venv/lib/python3.12/site-packages (from httpx->budget-analyzer-api-tests==0.1.0) (2026.5.20)
+Requirement already satisfied: httpcore==1.* in ./.venv/lib/python3.12/site-packages (from httpx->budget-analyzer-api-tests==0.1.0) (1.0.9)
+Requirement already satisfied: idna in ./.venv/lib/python3.12/site-packages (from httpx->budget-analyzer-api-tests==0.1.0) (3.18)
+Requirement already satisfied: h11>=0.16 in ./.venv/lib/python3.12/site-packages (from httpcore==1.*->httpx->budget-analyzer-api-tests==0.1.0) (0.16.0)
+Requirement already satisfied: attrs>=22.2.0 in ./.venv/lib/python3.12/site-packages (from jsonschema->budget-analyzer-api-tests==0.1.0) (26.1.0)
+Requirement already satisfied: jsonschema-specifications>=2023.03.6 in ./.venv/lib/python3.12/site-packages (from jsonschema->budget-analyzer-api-tests==0.1.0) (2025.9.1)
+Requirement already satisfied: rpds-py>=0.25.0 in ./.venv/lib/python3.12/site-packages (from jsonschema->budget-analyzer-api-tests==0.1.0) (2026.5.1)
+Requirement already satisfied: typing-extensions>=4.4.0 in ./.venv/lib/python3.12/site-packages (from referencing->budget-analyzer-api-tests==0.1.0) (4.15.0)
+Requirement already satisfied: mypy_extensions>=1.0.0 in ./.venv/lib/python3.12/site-packages (from mypy->budget-analyzer-api-tests==0.1.0) (1.1.0)
+Requirement already satisfied: pathspec>=1.0.0 in ./.venv/lib/python3.12/site-packages (from mypy->budget-analyzer-api-tests==0.1.0) (1.1.1)
+Requirement already satisfied: librt>=0.11.0 in ./.venv/lib/python3.12/site-packages (from mypy->budget-analyzer-api-tests==0.1.0) (0.11.0)
+Requirement already satisfied: ast-serialize<1.0.0,>=0.3.0 in ./.venv/lib/python3.12/site-packages (from mypy->budget-analyzer-api-tests==0.1.0) (0.5.0)
+Requirement already satisfied: pyee<14,>=13 in ./.venv/lib/python3.12/site-packages (from playwright->budget-analyzer-api-tests==0.1.0) (13.0.1)
+Requirement already satisfied: greenlet<4.0.0,>=3.1.1 in ./.venv/lib/python3.12/site-packages (from playwright->budget-analyzer-api-tests==0.1.0) (3.5.1)
+Requirement already satisfied: annotated-types>=0.6.0 in ./.venv/lib/python3.12/site-packages (from pydantic->budget-analyzer-api-tests==0.1.0) (0.7.0)
+Requirement already satisfied: pydantic-core==2.46.4 in ./.venv/lib/python3.12/site-packages (from pydantic->budget-analyzer-api-tests==0.1.0) (2.46.4)
+Requirement already satisfied: typing-inspection>=0.4.2 in ./.venv/lib/python3.12/site-packages (from pydantic->budget-analyzer-api-tests==0.1.0) (0.4.2)
+Requirement already satisfied: iniconfig>=1.0.1 in ./.venv/lib/python3.12/site-packages (from pytest->budget-analyzer-api-tests==0.1.0) (2.3.0)
+Requirement already satisfied: packaging>=22 in ./.venv/lib/python3.12/site-packages (from pytest->budget-analyzer-api-tests==0.1.0) (26.2)
+Requirement already satisfied: pluggy<2,>=1.5 in ./.venv/lib/python3.12/site-packages (from pytest->budget-analyzer-api-tests==0.1.0) (1.6.0)
+Requirement already satisfied: pygments>=2.7.2 in ./.venv/lib/python3.12/site-packages (from pytest->budget-analyzer-api-tests==0.1.0) (2.20.0)
+Checking if build backend supports build_editable: started
+Checking if build backend supports build_editable: finished with status 'done'
+Building wheels for collected packages: budget-analyzer-api-tests
+  Building editable for budget-analyzer-api-tests (pyproject.toml): started
+  Building editable for budget-analyzer-api-tests (pyproject.toml): finished with status 'done'
+  Created wheel for budget-analyzer-api-tests: filename=budget_analyzer_api_tests-0.1.0-0.editable-py3-none-any.whl size=2853 sha256=8bba9f6551bcd1f686e0fdcb54d0559a1245e23af97763280947296b9ede8511
+  Stored in directory: /tmp/pip-ephem-wheel-cache-qzbrkyfp/wheels/01/b0/9e/07cd0eb5144468d6e5ab4848cc7245fff4a30e59540c30917f
+Successfully built budget-analyzer-api-tests
+Installing collected packages: budget-analyzer-api-tests
+  Attempting uninstall: budget-analyzer-api-tests
+    Found existing installation: budget-analyzer-api-tests 0.1.0
+    Uninstalling budget-analyzer-api-tests-0.1.0:
+      Successfully uninstalled budget-analyzer-api-tests-0.1.0
+Successfully installed budget-analyzer-api-tests-0.1.0
+
+codex
+Editable install succeeded against the new layout. I’m running the acceptance checks now, including an explicit import-path check and pytest collection with importlib mode to confirm tests use the installed package from `src`.
+exec
+/bin/bash -lc '.venv/bin/python -c "import api_tests; print(api_tests.__file__)"' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+/workspace/budget-analyzer-api-tests/src/api_tests/__init__.py
+
+exec
+/bin/bash -lc '.venv/bin/python -m ruff check .' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+All checks passed!
+
+exec
+/bin/bash -lc '.venv/bin/python -m ruff format --check .' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+25 files already formatted
+
+exec
+/bin/bash -lc '.venv/bin/python -m mypy src tests' in /workspace/budget-analyzer-api-tests
+exec
+/bin/bash -lc '.venv/bin/python tools/validate-environment.py --env local' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+name: local
+origin: https://app.budgetanalyzer.localhost
+api_base_path: /api
+openapi_path: /api-docs/openapi.json
+verify_tls: true
+environment_type: local
+allow_mutation: true
+allow_destructive: true
+session_cookie_name: BA_SESSION
+auth:
+  mode: browser_auth0
+  cookie_env: BA_SESSION
+  browser:
+    headless: true
+  auth0:
+    management_domain_env: AUTH0_MGMT_DOMAIN
+    management_client_id_env: AUTH0_MGMT_CLIENT_ID
+    management_client_secret_env: AUTH0_MGMT_CLIENT_SECRET
+    connection_env: AUTH0_TEST_CONNECTION
+    test_email_domain: api-tests.example.invalid
+data:
+  namespace_prefix: ba-api-test
+  cleanup: none
+  per_run_user_boundary: true
+timeouts:
+  request_seconds: 15.0
+  eventually_seconds: 30.0
+
+exec
+/bin/bash -lc '.venv/bin/python -m pytest --env local --collect-only --import-mode=importlib' in /workspace/budget-analyzer-api-tests
+ succeeded in 204ms:
+Success: no issues found in 20 source files
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+ succeeded in 318ms:
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /workspace/budget-analyzer-api-tests
+configfile: pytest.ini
+plugins: respx-0.23.1, anyio-4.13.0
+collected 15 items
+
+<Dir budget-analyzer-api-tests>
+  <Dir tests>
+    <Dir api_docs>
+      <Module test_openapi_docs.py>
+        <Function test_openapi_docs_returns_json_contract>
+    <Dir auth>
+      <Module test_phase1_auth_helpers.py>
+        <Function test_generate_run_id_uses_required_format>
+        <Function test_session_run_state_is_stable_for_process_session>
+        <Function test_auth0_client_requests_management_token_and_creates_verified_user>
+        <Function test_auth0_scope_errors_are_clear>
+        <Function test_read_session_cookie_extracts_http_only_cookie_metadata>
+        <Function test_create_run_identities_provisions_and_logs_in_primary_and_secondary_users>
+        <Function test_env_cookie_auth_mode_reads_local_debug_cookie>
+        <Function test_env_cookie_auth_mode_is_local_only>
+        <Function test_browser_auth0_mode_fails_before_network_when_management_env_is_missing>
+        <Function test_gateway_client_uses_origin_api_prefix_cookie_and_request_log>
+    <Dir contract>
+      <Module test_environment_config.py>
+        <Function test_committed_environment_config_loads[local]>
+        <Function test_committed_environment_config_loads[staging]>
+        <Function test_committed_environment_config_loads[production]>
+        <Function test_env_config_fixture_exposes_selected_environment>
+
+========================= 15 tests collected in 0.02s ==========================
+
+codex
+The core checks passed: import path resolves to `src/api_tests`, the environment tool works without modifying `sys.path`, Ruff is clean, mypy is clean, and pytest collection passes under importlib mode. I’m running the normal collect-only command as a final compatibility check with the repository’s current pytest config.
+exec
+/bin/bash -lc '.venv/bin/python -m pytest --env local --collect-only' in /workspace/budget-analyzer-api-tests
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+ succeeded in 302ms:
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /workspace/budget-analyzer-api-tests
+configfile: pytest.ini
+plugins: respx-0.23.1, anyio-4.13.0
+collected 15 items
+
+<Dir budget-analyzer-api-tests>
+  <Dir tests>
+    <Dir api_docs>
+      <Module test_openapi_docs.py>
+        <Function test_openapi_docs_returns_json_contract>
+    <Dir auth>
+      <Module test_phase1_auth_helpers.py>
+        <Function test_generate_run_id_uses_required_format>
+        <Function test_session_run_state_is_stable_for_process_session>
+        <Function test_auth0_client_requests_management_token_and_creates_verified_user>
+        <Function test_auth0_scope_errors_are_clear>
+        <Function test_read_session_cookie_extracts_http_only_cookie_metadata>
+        <Function test_create_run_identities_provisions_and_logs_in_primary_and_secondary_users>
+        <Function test_env_cookie_auth_mode_reads_local_debug_cookie>
+        <Function test_env_cookie_auth_mode_is_local_only>
+        <Function test_browser_auth0_mode_fails_before_network_when_management_env_is_missing>
+        <Function test_gateway_client_uses_origin_api_prefix_cookie_and_request_log>
+    <Dir contract>
+      <Module test_environment_config.py>
+        <Function test_committed_environment_config_loads[local]>
+        <Function test_committed_environment_config_loads[staging]>
+        <Function test_committed_environment_config_loads[production]>
+        <Function test_env_config_fixture_exposes_selected_environment>
+
+========================= 15 tests collected in 0.01s ==========================
+
+codex
+Validation is complete. I’m doing one last diff/status review to make sure the changed files match phase 2 and no unrelated files were touched by me.
+exec
+/bin/bash -lc 'git status --short' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+ M .ai-session-handler/python-baseline-remediation-plan.json
+ M AGENTS.md
+ M README.md
+ D api_tests/__init__.py
+ D api_tests/auth.py
+ D api_tests/auth0.py
+ D api_tests/browser_login.py
+ D api_tests/builders/__init__.py
+ D api_tests/builders/statement_formats.py
+ D api_tests/builders/transactions.py
+ D api_tests/builders/views.py
+ D api_tests/client.py
+ D api_tests/config.py
+ D api_tests/coverage.py
+ D api_tests/identities.py
+ D api_tests/logging.py
+ D api_tests/openapi.py
+ D api_tests/run_state.py
+ D api_tests/schemas.py
+ M pyproject.toml
+ M tools/validate-environment.py
+?? .ai-session-handler/prompts/20260706T105557Z-phase-2.txt
+?? .ai-session-handler/transcripts/20260706T105557Z-phase-2.txt
+?? src/
+
+exec
+/bin/bash -lc 'git diff -- pyproject.toml tools/validate-environment.py AGENTS.md README.md src/api_tests/config.py' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c865..7d166ec 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@ Use modern, explicit Python. The implementation should feel like a small typed
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@ Current transitional commands:
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23..defa69d 100644
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@ Run pytest against an environment:
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4..6aa954e 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@ dev = [
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3f..de3c871 100644
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@ from __future__ import annotations
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@ def parse_args() -> argparse.Namespace:
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+exec
+/bin/bash -lc 'git diff --stat' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+ .../python-baseline-remediation-plan.json          |   5 +-
+ AGENTS.md                                          |   6 +-
+ README.md                                          |   6 +
+ api_tests/__init__.py                              |   1 -
+ api_tests/auth.py                                  |  86 --------
+ api_tests/auth0.py                                 | 227 ---------------------
+ api_tests/browser_login.py                         | 116 -----------
+ api_tests/builders/__init__.py                     |   1 -
+ api_tests/builders/statement_formats.py            |   1 -
+ api_tests/builders/transactions.py                 |   1 -
+ api_tests/builders/views.py                        |   1 -
+ api_tests/client.py                                |  65 ------
+ api_tests/config.py                                | 211 -------------------
+ api_tests/coverage.py                              |   1 -
+ api_tests/identities.py                            | 100 ---------
+ api_tests/logging.py                               | 123 -----------
+ api_tests/openapi.py                               |   1 -
+ api_tests/run_state.py                             |  36 ----
+ api_tests/schemas.py                               |   1 -
+ pyproject.toml                                     |   2 +
+ tools/validate-environment.py                      |   8 +-
+ 21 files changed, 16 insertions(+), 983 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+codex
+The diff matches the phase scope. One note: the session-handler state/transcript files were already present as session artifacts, and I did not edit them as part of the migration.
+exec
+/bin/bash -lc '.venv/bin/python -c "from api_tests.config import repository_root; print(repository_root())"' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+/workspace/budget-analyzer-api-tests
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+codex
+[phase-complete]Moved the package from api_tests/ to src/api_tests/, updated setuptools and Ruff src configuration, kept mypy packages = ["api_tests"], fixed repository_root() for the new layout, removed the validate-environment sys.path insertion, and updated README/AGENTS mypy commands to use src tests.
+
+Validation passed: editable install, api_tests imports from /workspace/budget-analyzer-api-tests/src/api_tests, repository_root resolves to the repo root, validate-environment local succeeds, ruff format --check succeeds, ruff check succeeds, mypy src tests succeeds, pytest collect-only succeeds with --import-mode=importlib and with the current default config.[/phase-complete]
+diff --git a/AGENTS.md b/AGENTS.md
+index 444c8653b24ae901e1f88af2b57d47feccd2577b..7d166ecd6f40f561ea000b438aef14b7bb1ae6c1
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -78,9 +78,7 @@
+ system, not loose scripting glue.
+ 
+ - Require Python 3.12 unless the project intentionally changes runtime support.
+-- Use a `src/` layout for importable code. The current root-level `api_tests/`
+-  package is transitional; migrate it to `src/api_tests/` before expanding the
+-  harness substantially.
++- Use a `src/` layout for importable code.
+ - Put tests outside application code under `tests/`.
+ - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+ - Keep development dependencies separate from test-runner execution
+@@ -134,7 +132,7 @@
+ ```bash
+ .venv/bin/python -m ruff format .
+ .venv/bin/python -m ruff check . --fix
+-.venv/bin/python -m mypy api_tests tests
++.venv/bin/python -m mypy src tests
+ .venv/bin/python -m pytest --env local --collect-only
+ ```
+ 
+diff --git a/README.md b/README.md
+index 3610d23bfbe5e776f6f78b2b3ba0751167f6cb3c..defa69dc0c9f0064dc60493524edf9064282a0f0
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,9 @@
+ ```bash
+ pytest --env local
+ ```
++
++Run local type checks:
++
++```bash
++.venv/bin/python -m mypy src tests
++```
+diff --git a/pyproject.toml b/pyproject.toml
+index d8230a4feeba9014877a4785769cfc1b7ddd68f4..6aa954eb98936a7e43018c688717b61dd8bd0a34
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -28,11 +28,13 @@
+ ]
+ 
+ [tool.setuptools.packages.find]
++where = ["src"]
+ include = ["api_tests*"]
+ 
+ [tool.ruff]
+ line-length = 100
+ target-version = "py312"
++src = ["src", "tests"]
+ 
+ [tool.mypy]
+ python_version = "3.12"
+diff --git a/src/api_tests/config.py b/src/api_tests/config.py
+index 8ac36feffef562cb5e7e44517835101958f86839..b9008ec325001ab07fb3e1ea5d7f5ff1c32cf5d3
+--- a/src/api_tests/config.py
++++ b/src/api_tests/config.py
+@@ -151,7 +151,7 @@
+ 
+ 
+ def repository_root() -> Path:
+-    return Path(__file__).resolve().parents[1]
++    return Path(__file__).resolve().parents[2]
+ 
+ 
+ def environments_dir() -> Path:
+diff --git a/tools/validate-environment.py b/tools/validate-environment.py
+index 6ce6c3fbec5e8105a57e333cfd37dba65197bf3e..de3c87151e131f2669f207dc7e8ab7438284d8dc
+--- a/tools/validate-environment.py
++++ b/tools/validate-environment.py
+@@ -3,10 +3,11 @@
+ 
+ import argparse
+ import sys
+-from pathlib import Path
+ 
+ import yaml
+ 
++from api_tests.config import load_environment, normalized_non_secret_settings
++
+ 
+ def parse_args() -> argparse.Namespace:
+     parser = argparse.ArgumentParser(description="Validate a Budget Analyzer API test environment")
+@@ -19,11 +20,6 @@
+ 
+ 
+ def main() -> int:
+-    repo_root = Path(__file__).resolve().parents[1]
+-    sys.path.insert(0, str(repo_root))
+-
+-    from api_tests.config import load_environment, normalized_non_secret_settings
+-
+     args = parse_args()
+     try:
+         config = load_environment(args.env)
+
+tokens used
+81,541
+[phase-complete]Moved the package from api_tests/ to src/api_tests/, updated setuptools and Ruff src configuration, kept mypy packages = ["api_tests"], fixed repository_root() for the new layout, removed the validate-environment sys.path insertion, and updated README/AGENTS mypy commands to use src tests.
+
+Validation passed: editable install, api_tests imports from /workspace/budget-analyzer-api-tests/src/api_tests, repository_root resolves to the repo root, validate-environment local succeeds, ruff format --check succeeds, ruff check succeeds, mypy src tests succeeds, pytest collect-only succeeds with --import-mode=importlib and with the current default config.[/phase-complete]
+<phase-complete>Moved the package from api_tests/ to src/api_tests/, updated setuptools and Ruff src configuration, kept mypy packages = ["api_tests"], fixed repository_root() for the new layout, removed the validate-environment sys.path insertion, and updated README/AGENTS mypy commands to use src tests.
+
+Validation passed: editable install, api_tests imports from /workspace/budget-analyzer-api-tests/src/api_tests, repository_root resolves to the repo root, validate-environment local succeeds, ruff format --check succeeds, ruff check succeeds, mypy src tests succeeds, pytest collect-only succeeds with --import-mode=importlib and with the current default config.</phase-complete>

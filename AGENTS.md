@@ -78,9 +78,7 @@ Use modern, explicit Python. The implementation should feel like a small typed
 system, not loose scripting glue.
 
 - Require Python 3.12 unless the project intentionally changes runtime support.
-- Use a `src/` layout for importable code. The current root-level `api_tests/`
-  package is transitional; migrate it to `src/api_tests/` before expanding the
-  harness substantially.
+- Use a `src/` layout for importable code.
 - Put tests outside application code under `tests/`.
 - Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
 - Keep development dependencies separate from test-runner execution
@@ -134,7 +132,7 @@ Current transitional commands:
 ```bash
 .venv/bin/python -m ruff format .
 .venv/bin/python -m ruff check . --fix
-.venv/bin/python -m mypy api_tests tests
+.venv/bin/python -m mypy src tests
 .venv/bin/python -m pytest --env local --collect-only
 ```
 
