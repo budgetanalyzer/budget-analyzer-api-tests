@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from api_tests.coverage import OperationCoverage
+from api_tests.tools import openapi_coverage
 from api_tests.tools.openapi_coverage import check_main, export_main
 
 
@@ -39,8 +41,31 @@ def test_export_openapi_coverage_writes_artifact(
 def test_check_openapi_coverage_fails_placeholder_gate(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output_path = tmp_path / "openapi-coverage.json"
+
+    def fake_build_coverage(
+        *,
+        env_name: str,
+        source: openapi_coverage.CoverageDocumentSource,
+    ) -> tuple[OperationCoverage, ...]:
+        assert env_name == "local"
+        assert source == "snapshot"
+        return (
+            OperationCoverage(
+                operation_id="placeholderOperation",
+                method="GET",
+                path="/v1/placeholder",
+                source="snapshot",
+                deferred_admin=False,
+                marker_count=1,
+                placeholder_marker_count=1,
+                status="placeholder",
+            ),
+        )
+
+    monkeypatch.setattr(openapi_coverage, "build_coverage", fake_build_coverage)
 
     exit_code = check_main(["--env", "local", "--output", str(output_path), "--fail-placeholder"])
 

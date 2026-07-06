@@ -34,7 +34,10 @@ def test_openapi_snapshot_operation_coverage() -> None:
         missing
     )
     assert deferred_ids == {operation.operation_id for operation in deferred}
-    assert placeholder_operation_ids(coverage)
+    assert not placeholder_operation_ids(coverage), (
+        "OpenAPI operations still covered only by placeholder markers: "
+        + ", ".join(placeholder_operation_ids(coverage))
+    )
 
 
 def test_iter_operations_requires_operation_id() -> None:

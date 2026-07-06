@@ -72,7 +72,7 @@ implementation plan is
 - Check OpenAPI marker coverage against the checked-in snapshot with:
 
   ```bash
-  .venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing
+  .venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder
   ```
 
 - Export the OpenAPI coverage artifact with:
@@ -152,7 +152,7 @@ Current transitional commands:
 .venv/bin/python -m ruff check . --fix
 .venv/bin/python -m mypy src tests
 .venv/bin/python -m pytest --env local --collect-only
-.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing
+.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder
 ```
 
 After the `src/` migration, the mypy command should be:

@@ -33,20 +33,19 @@ Run pytest against an environment:
 Check OpenAPI marker coverage against the checked-in snapshot:
 
 ```bash
-.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing
+.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder
 ```
 
-Export the coverage artifact, including deferred admin operations and
-placeholder status:
+Export the coverage artifact, including deferred admin operation status:
 
 ```bash
 .venv/bin/python tools/export-openapi-coverage.py --env local
 ```
 
-Fail a staging-style gate while marker-only placeholders remain:
+Fail a staging-style gate if marker-only placeholders reappear:
 
 ```bash
-.venv/bin/python tools/export-openapi-coverage.py --env local --fail-placeholder
+.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder
 ```
 
 Refresh `schemas/openapi.json` from a live environment only when intentionally
@@ -70,5 +69,5 @@ Run local quality gates:
 .venv/bin/python -m ruff check . --fix
 .venv/bin/python -m mypy src tests
 .venv/bin/python -m pytest --env local --collect-only
-.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing
+.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder
 ```
