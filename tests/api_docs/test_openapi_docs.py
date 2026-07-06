@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from api_tests.client import GatewayClient
 from api_tests.config import EnvironmentConfig
 
 
+@pytest.mark.readonly
+@pytest.mark.production_safe
 def test_openapi_docs_returns_json_contract(
     env_config: EnvironmentConfig,
     gateway_client: GatewayClient,

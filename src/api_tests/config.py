@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Literal, Self, TypedDict
 from urllib.parse import urlparse
 
 import yaml
@@ -10,6 +10,51 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 EnvironmentType = Literal["local", "staging", "production"]
 AuthMode = Literal["browser_auth0", "env_cookie"]
 CleanupMode = Literal["none"]
+
+
+class BrowserNonSecretSettings(TypedDict):
+    headless: bool
+
+
+class Auth0NonSecretSettings(TypedDict):
+    management_domain_env: str
+    management_client_id_env: str
+    management_client_secret_env: str
+    connection_env: str
+    test_email_domain: str
+
+
+class AuthNonSecretSettings(TypedDict):
+    mode: AuthMode
+    cookie_env: str
+    browser: BrowserNonSecretSettings
+    auth0: Auth0NonSecretSettings
+
+
+class DataNonSecretSettings(TypedDict):
+    namespace_prefix: str
+    cleanup: CleanupMode
+    per_run_user_boundary: bool
+
+
+class TimeoutNonSecretSettings(TypedDict):
+    request_seconds: float
+    eventually_seconds: float
+
+
+class EnvironmentNonSecretSettings(TypedDict):
+    name: str
+    origin: str
+    api_base_path: str
+    openapi_path: str
+    verify_tls: bool
+    environment_type: EnvironmentType
+    allow_mutation: bool
+    allow_destructive: bool
+    session_cookie_name: str
+    auth: AuthNonSecretSettings
+    data: DataNonSecretSettings
+    timeouts: TimeoutNonSecretSettings
 
 
 class StrictConfigModel(BaseModel):
@@ -145,6 +190,17 @@ class EnvironmentConfig(StrictConfigModel):
                 raise ValueError(
                     "production environments must not allow destructive tests by default"
                 )
+            if self.auth.mode != "env_cookie":
+                raise ValueError(
+                    "production auth.mode must use env_cookie with a pre-provisioned "
+                    "read-only smoke session"
+                )
+            if self.auth.cookie_env != self.session_cookie_name:
+                raise ValueError(
+                    "production auth.cookie_env must match the configured session cookie name"
+                )
+            if self.data.per_run_user_boundary:
+                raise ValueError("production environments must not create per-run users")
         if self.allow_destructive and not self.allow_mutation:
             raise ValueError("allow_destructive requires allow_mutation")
         return self
@@ -183,7 +239,7 @@ def load_environment_file(path: Path) -> EnvironmentConfig:
     return EnvironmentConfig.model_validate(raw_config)
 
 
-def normalized_non_secret_settings(config: EnvironmentConfig) -> dict[str, Any]:
+def normalized_non_secret_settings(config: EnvironmentConfig) -> EnvironmentNonSecretSettings:
     return {
         "name": config.name,
         "origin": config.origin,
@@ -197,7 +253,9 @@ def normalized_non_secret_settings(config: EnvironmentConfig) -> dict[str, Any]:
         "auth": {
             "mode": config.auth.mode,
             "cookie_env": config.auth.cookie_env,
-            "browser": config.auth.browser.model_dump(mode="json"),
+            "browser": {
+                "headless": config.auth.browser.headless,
+            },
             "auth0": {
                 "management_domain_env": config.auth.auth0.management_domain_env,
                 "management_client_id_env": config.auth.auth0.management_client_id_env,
@@ -206,6 +264,13 @@ def normalized_non_secret_settings(config: EnvironmentConfig) -> dict[str, Any]:
                 "test_email_domain": config.auth.auth0.test_email_domain,
             },
         },
-        "data": config.data.model_dump(mode="json"),
-        "timeouts": config.timeouts.model_dump(mode="json"),
+        "data": {
+            "namespace_prefix": config.data.namespace_prefix,
+            "cleanup": config.data.cleanup,
+            "per_run_user_boundary": config.data.per_run_user_boundary,
+        },
+        "timeouts": {
+            "request_seconds": config.timeouts.request_seconds,
+            "eventually_seconds": config.timeouts.eventually_seconds,
+        },
     }

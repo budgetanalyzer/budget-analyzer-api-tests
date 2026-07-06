@@ -1,0 +1,22 @@
+deferred_admin_operations:
+  - operationId: countTransactionsAcrossUsers
+    method: GET
+    path: /v1/transactions/search/count
+  - operationId: create
+    method: POST
+    path: /v1/currencies
+  - operationId: update
+    method: PUT
+    path: /v1/currencies/{id}
+  - operationId: importLatestExchangeRates
+    method: POST
+    path: /v1/exchange-rates/import
+  - operationId: getUsers
+    method: GET
+    path: /v1/users
+  - operationId: getUser
+    method: GET
+    path: /v1/users/{id}
+  - operationId: deactivateUser
+    method: POST
+    path: /v1/users/{id}/deactivate

@@ -10,8 +10,8 @@ This repository is being bootstrapped from the orchestration plan in
 ```bash
 python -m pip install -e ".[dev]"
 python -m playwright install chromium
-pytest --env local --collect-only
-pytest --env local tests/api_docs
+.venv/bin/python -m pytest --env local --collect-only
+.venv/bin/python -m pytest --env local tests/api_docs
 ```
 
 Environment files under `environments/` are declarative and non-secret. Auth0
@@ -21,17 +21,54 @@ variables named by the selected YAML.
 Validate an environment file:
 
 ```bash
-python tools/validate-environment.py --env local
+.venv/bin/python tools/validate-environment.py --env local
 ```
 
 Run pytest against an environment:
 
 ```bash
-pytest --env local
+.venv/bin/python -m pytest --env local
 ```
 
-Run local type checks:
+Check OpenAPI marker coverage against the checked-in snapshot:
 
 ```bash
+.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing
+```
+
+Export the coverage artifact, including deferred admin operations and
+placeholder status:
+
+```bash
+.venv/bin/python tools/export-openapi-coverage.py --env local
+```
+
+Fail a staging-style gate while marker-only placeholders remain:
+
+```bash
+.venv/bin/python tools/export-openapi-coverage.py --env local --fail-placeholder
+```
+
+Refresh `schemas/openapi.json` from a live environment only when intentionally
+updating the checked-in contract snapshot:
+
+```bash
+.venv/bin/python tools/refresh-openapi.py --env local
+```
+
+Run the production read-only smoke selection only with a pre-provisioned
+read-only `BA_SESSION` value:
+
+```bash
+BA_SESSION=... .venv/bin/python -m pytest --env production -m "readonly and production_safe"
+```
+
+Run local quality gates:
+
+```bash
+.venv/bin/python -m ruff format .
+.venv/bin/python -m ruff check . --fix
 .venv/bin/python -m mypy src tests
+.venv/bin/python -m pytest --env local --collect-only
+.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing
 ```

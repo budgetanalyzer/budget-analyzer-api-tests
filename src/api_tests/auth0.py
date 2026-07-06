@@ -5,7 +5,6 @@ import secrets
 import string
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -196,16 +195,18 @@ def _email_safe_token(value: str) -> str:
     return token
 
 
-def _json_object(response: httpx.Response, *, action: str) -> dict[str, Any]:
+def _json_object(response: httpx.Response, *, action: str) -> Mapping[str, object]:
     try:
-        body = response.json()
+        body: object = response.json()
     except ValueError as exc:
         raise Auth0ManagementError(f"Auth0 response for {action} was not JSON") from exc
 
     if not isinstance(body, dict):
         raise Auth0ManagementError(f"Auth0 response for {action} was not a JSON object")
+    if not all(isinstance(key, str) for key in body):
+        raise Auth0ManagementError(f"Auth0 response for {action} had a non-string key")
 
-    return body
+    return {key: value for key, value in body.items() if isinstance(key, str)}
 
 
 def _raise_auth0_error(

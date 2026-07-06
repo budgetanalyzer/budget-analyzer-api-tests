@@ -8,18 +8,22 @@
   "completed_phase_ids": [
     "phase-1",
     "phase-2",
-    "phase-3"
+    "phase-3",
+    "phase-4",
+    "phase-5",
+    "phase-6",
+    "phase-7"
   ],
   "current_phase": null,
   "stop": null,
   "last_run": {
-    "run_id": "20260706T110419Z-phase-3",
-    "phase_id": "phase-3",
+    "run_id": "20260706T143653Z-phase-7",
+    "phase_id": "phase-7",
     "status": "phase-complete",
-    "started_at": "2026-07-06T11:04:19Z",
-    "finished_at": "2026-07-06T11:05:55Z",
+    "started_at": "2026-07-06T14:36:53Z",
+    "finished_at": "2026-07-06T14:47:41Z",
     "exit_code": 0,
-    "transcript_path": "/workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T110419Z-phase-3.txt",
-    "summary": "Moved pytest configuration into pyproject.toml, added testpaths/addopts with strict config, strict markers, and importlib import mode, added Ruff lint selections, excluded .ai-session-handler generated files from Ruff, deleted pytest.ini, and fixed import ordering required by the broader Ruff rules. Tool scripts stay as checked script files for this phase; entry-point refactoring remains deferred to phase 4.\n\nValidation passed: ruff check ., ruff format --check ., pytest --env local --collect-only reports configfile: pyproject.toml and 15 collected tests, pytest --markers shows all custom markers, and mypy src tests passes."
+    "transcript_path": "/workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T143653Z-phase-7.txt",
+    "summary": "Implemented phase 7 OpenAPI coverage harness: added `schemas/openapi.json`, deferred admin manifest, OpenAPI inventory parsing, coverage modeling, pytest marker collection, coverage contract/unit tests, CLI tools, and marker-only placeholders for all 36 non-deferred operations. Updated README/AGENTS workflow docs.\n\nValidation passed: Ruff format/check, mypy `src tests`, pytest collect-only, focused coverage/tool tests, non-live pytest subset, environment validation, `check-openapi-coverage --fail-missing`, and coverage export. The `--fail-placeholder` gate fails as expected with 36 placeholder operations visible; coverage reports 43 operations, 0 missing, 36 placeholder, 7 deferred admin/global."
   }
 }

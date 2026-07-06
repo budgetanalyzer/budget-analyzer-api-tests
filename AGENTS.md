@@ -38,8 +38,8 @@ implementation plan is
 - Do not write Auth0 Management API tokens, generated passwords, session
   cookies, authorization headers, or other credentials to artifacts.
 - Use `browser_auth0` as the primary local and staging auth mode. `env_cookie`
-  is a local debug fallback unless a future production-safe smoke-session flow
-  is explicitly designed.
+  is allowed for local debugging and for production read-only smoke runs with a
+  supplied, pre-provisioned `BA_SESSION`.
 - Production defaults must remain read-only: `allow_mutation: false` and
   `allow_destructive: false`.
 - Do not broaden production permissions to reach coverage targets.
@@ -69,8 +69,26 @@ implementation plan is
   .venv/bin/python -m pytest --env local --collect-only
   ```
 
+- Check OpenAPI marker coverage against the checked-in snapshot with:
+
+  ```bash
+  .venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing
+  ```
+
+- Export the OpenAPI coverage artifact with:
+
+  ```bash
+  .venv/bin/python tools/export-openapi-coverage.py --env local
+  ```
+
 - Live API tests require the selected environment, Auth0 prerequisites, browser
   login, and network access to be available.
+- Production smoke execution requires a supplied read-only `BA_SESSION` and
+  must use:
+
+  ```bash
+  pytest --env production -m "readonly and production_safe"
+  ```
 
 ## Python Baseline
 
@@ -134,6 +152,7 @@ Current transitional commands:
 .venv/bin/python -m ruff check . --fix
 .venv/bin/python -m mypy src tests
 .venv/bin/python -m pytest --env local --collect-only
+.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing
 ```
 
 After the `src/` migration, the mypy command should be:
@@ -169,6 +188,8 @@ Use pytest for tests.
   and production-safe tests with `production_safe`.
 - Production execution should select only explicitly production-safe read-only
   tests.
+- Mutation and destructive markers must be blocked by environment policy before
+  request fixtures or network-capable clients are set up.
 - For pytest configuration, prefer strict config, strict markers, declared test
   paths, and importlib import mode.
 

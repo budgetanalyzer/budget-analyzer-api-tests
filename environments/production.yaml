@@ -8,7 +8,7 @@ allow_mutation: false
 allow_destructive: false
 session_cookie_name: BA_SESSION
 auth:
-  mode: browser_auth0
+  mode: env_cookie
   cookie_env: BA_SESSION
   browser:
     headless: true
@@ -21,7 +21,7 @@ auth:
 data:
   namespace_prefix: ba-api-test
   cleanup: none
-  per_run_user_boundary: true
+  per_run_user_boundary: false
 timeouts:
   request_seconds: 15
   eventually_seconds: 30

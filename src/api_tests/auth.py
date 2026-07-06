@@ -65,8 +65,15 @@ def _env_cookie_context(
     *,
     environ: Mapping[str, str] | None,
 ) -> AuthContext:
-    if config.environment_type != "local":
-        raise AuthConfigurationError("auth.mode env_cookie is only allowed for local debugging")
+    if config.environment_type == "production":
+        if config.allow_mutation or config.allow_destructive or config.data.per_run_user_boundary:
+            raise AuthConfigurationError(
+                "production env_cookie auth requires read-only policy and no per-run users"
+            )
+    elif config.environment_type != "local":
+        raise AuthConfigurationError(
+            "auth.mode env_cookie is only allowed for local debugging or production smoke sessions"
+        )
 
     source = environ or os.environ
     cookie_value = source.get(config.auth.cookie_env, "").strip()

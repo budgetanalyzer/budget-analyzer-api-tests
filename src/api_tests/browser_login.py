@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TypedDict
 
 import httpx
 from playwright.sync_api import BrowserContext, Page, sync_playwright
@@ -23,6 +23,12 @@ class BrowserLoginCredentials:
 class SessionCookie:
     name: str
     value: str = field(repr=False)
+    domain: str
+    path: str
+
+
+class CookieMetadata(TypedDict):
+    name: str
     domain: str
     path: str
 
@@ -112,5 +118,5 @@ def cookie_value(cookie: SessionCookie) -> str:
     return cookie.value
 
 
-def cookie_metadata(cookie: SessionCookie) -> dict[str, Any]:
+def cookie_metadata(cookie: SessionCookie) -> CookieMetadata:
     return {"name": cookie.name, "domain": cookie.domain, "path": cookie.path}

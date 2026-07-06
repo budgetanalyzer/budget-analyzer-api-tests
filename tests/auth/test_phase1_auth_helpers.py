@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import TypedDict, cast
 
 import httpx
 import pytest
@@ -21,6 +21,14 @@ from api_tests.client import GatewayClient
 from api_tests.config import load_environment
 from api_tests.identities import create_run_identities
 from api_tests.run_state import RUN_ID_PATTERN, RunState, generate_run_id, session_run_state
+
+
+class FakeBrowserCookie(TypedDict, total=False):
+    name: str
+    value: str
+    domain: str
+    path: str
+    httpOnly: bool
 
 
 def test_generate_run_id_uses_required_format() -> None:
@@ -114,7 +122,7 @@ def test_auth0_scope_errors_are_clear() -> None:
 
 def test_read_session_cookie_extracts_http_only_cookie_metadata() -> None:
     class FakeContext:
-        def cookies(self) -> list[dict[str, object]]:
+        def cookies(self) -> list[FakeBrowserCookie]:
             return [
                 {"name": "unrelated", "value": "x", "domain": "example.test", "path": "/"},
                 {
@@ -201,13 +209,32 @@ def test_env_cookie_auth_mode_reads_local_debug_cookie() -> None:
     )
 
 
-def test_env_cookie_auth_mode_is_local_only() -> None:
+def test_env_cookie_auth_mode_reads_production_smoke_cookie() -> None:
+    config = load_environment("production")
+
+    auth_context = load_auth_context(
+        config,
+        RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+        environ={"BA_SESSION": "production-smoke-cookie"},
+    )
+
+    assert auth_context.mode == "env_cookie"
+    assert auth_context.identities is None
+    assert auth_context.session_cookie == SessionCookie(
+        name="BA_SESSION",
+        value="production-smoke-cookie",
+        domain="",
+        path="/",
+    )
+
+
+def test_env_cookie_auth_mode_rejects_staging() -> None:
     config = load_environment("staging")
     config = config.model_copy(
         update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})}
     )
 
-    with pytest.raises(AuthConfigurationError, match="only allowed for local"):
+    with pytest.raises(AuthConfigurationError, match="local debugging or production smoke"):
         load_auth_context(
             config,
             RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),

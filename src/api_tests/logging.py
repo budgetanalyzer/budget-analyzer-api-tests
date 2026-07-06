@@ -5,7 +5,6 @@ import re
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -18,12 +17,13 @@ SENSITIVE_KEY_RE = re.compile(
     r"(authorization|cookie|password|client_secret|access_token|refresh_token|id_token|token)",
     re.IGNORECASE,
 )
+HttpxEventHook = Callable[..., object]
 
 
 def request_response_hooks(
     *,
     artifact_path: Path | None = None,
-) -> dict[str, list[Callable[[Any], None]]]:
+) -> dict[str, list[HttpxEventHook]]:
     path = artifact_path or repository_root() / "artifacts" / "request-log.jsonl"
     return {
         "request": [_record_request_start],
