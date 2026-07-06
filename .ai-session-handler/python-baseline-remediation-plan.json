@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "path": "/home/devex/public-repos/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md",
+    "sha256": "aaa3464a63641521ae5ee821c476320915f26e2109052cd5608c351901450ab3",
+    "accepted_at": "2026-07-06T07:19:54Z"
+  },
+  "completed_phase_ids": [
+    "phase-1"
+  ],
+  "current_phase": null,
+  "stop": null,
+  "last_run": {
+    "run_id": "20260706T093032Z-phase-1",
+    "phase_id": "phase-1",
+    "status": "phase-complete",
+    "started_at": "2026-07-06T09:30:32Z",
+    "finished_at": "2026-07-06T09:31:16Z",
+    "exit_code": 0,
+    "transcript_path": "/workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T093032Z-phase-1.txt",
+    "summary": "Phase 1 complete: Ruff formatting is clean; tests/conftest.py uses a precise Generator[GatewayClient, None, None] fixture return type; tests/auth/test_phase1_auth_helpers.py imports BrowserContext from playwright.sync_api. Validation passed: ruff format --check, ruff check, mypy api_tests tests, and pytest --env local --collect-only."
+  }
+}

@@ -221,8 +221,7 @@ def _raise_auth0_error(
 
     if response.status_code in {401, 403} and "scope" in body_text.lower():
         raise Auth0ScopeError(
-            f"{message}. Confirm the Auth0 Management API application has scope "
-            f"{required_scope!r}."
+            f"{message}. Confirm the Auth0 Management API application has scope {required_scope!r}."
         )
 
     raise Auth0ManagementError(message)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import pytest
 
 from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
@@ -49,6 +51,9 @@ def auth_context(env_config: EnvironmentConfig, run_state: RunState) -> AuthCont
 
 
 @pytest.fixture(scope="session")
-def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
+def gateway_client(
+    auth_context: AuthContext,
+    env_config: EnvironmentConfig,
+) -> Generator[GatewayClient, None, None]:
     with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
         yield client

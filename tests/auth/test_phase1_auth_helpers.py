@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import cast
 
 import httpx
+from playwright.sync_api import BrowserContext
 import pytest
 
 from api_tests.auth import AuthConfigurationError, load_auth_context
@@ -15,8 +16,7 @@ from api_tests.auth0 import (
     Auth0ManagementSettings,
     Auth0ScopeError,
 )
-from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
-from api_tests.browser_login import read_session_cookie
+from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
 from api_tests.client import GatewayClient
 from api_tests.config import load_environment
 from api_tests.identities import create_run_identities
@@ -181,7 +181,9 @@ def test_create_run_identities_provisions_and_logs_in_primary_and_secondary_user
 
 def test_env_cookie_auth_mode_reads_local_debug_cookie() -> None:
     config = load_environment("local")
-    config = config.model_copy(update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})})
+    config = config.model_copy(
+        update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})}
+    )
 
     auth_context = load_auth_context(
         config,
@@ -201,7 +203,9 @@ def test_env_cookie_auth_mode_reads_local_debug_cookie() -> None:
 
 def test_env_cookie_auth_mode_is_local_only() -> None:
     config = load_environment("staging")
-    config = config.model_copy(update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})})
+    config = config.model_copy(
+        update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})}
+    )
 
     with pytest.raises(AuthConfigurationError, match="only allowed for local"):
         load_auth_context(

@@ -45,7 +45,9 @@ def login_with_browser(
                     timeout=timeout_ms,
                 )
                 fill_auth0_login_form(page, credentials, timeout_ms=timeout_ms)
-                page.wait_for_url(f"{config.origin}/**", wait_until="networkidle", timeout=timeout_ms)
+                page.wait_for_url(
+                    f"{config.origin}/**", wait_until="networkidle", timeout=timeout_ms
+                )
                 cookie = read_session_cookie(context, config.session_cookie_name)
             finally:
                 context.close()

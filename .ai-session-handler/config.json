@@ -1,0 +1,6 @@
+{
+  "agent_cmd": "codex exec",
+  "max_phases": 1,
+  "timeout_seconds": 3600,
+  "stop_on_regex": []
+}

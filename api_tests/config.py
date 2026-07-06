@@ -142,7 +142,9 @@ class EnvironmentConfig(StrictConfigModel):
             if self.allow_mutation:
                 raise ValueError("production environments must not allow mutation by default")
             if self.allow_destructive:
-                raise ValueError("production environments must not allow destructive tests by default")
+                raise ValueError(
+                    "production environments must not allow destructive tests by default"
+                )
         if self.allow_destructive and not self.allow_mutation:
             raise ValueError("allow_destructive requires allow_mutation")
         return self

@@ -1,0 +1,7 @@
+run_id: 20260706T071954Z-phase-1
+phase: phase-1 Make Current Gates Green
+plan: /home/devex/public-repos/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+state: /home/devex/public-repos/budget-analyzer-api-tests/.ai-session-handler/python-baseline-remediation-plan.json
+started_at: 2026-07-06T07:19:54Z
+agent_cmd: env CODEX_REASONING_EFFORT=high ../workspace/ai-agent-sandbox/scripts/codex-lean.sh exec
+---

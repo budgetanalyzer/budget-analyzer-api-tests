@@ -1,0 +1,2060 @@
+run_id: 20260706T092819Z-phase-1
+phase: phase-1 Make Current Gates Green
+plan: /workspace/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+state: /workspace/budget-analyzer-api-tests/.ai-session-handler/python-baseline-remediation-plan.json
+workspace: /workspace/budget-analyzer-api-tests
+started_at: 2026-07-06T09:28:19Z
+agent_cmd: env CODEX_REASONING_EFFORT=high codex-lean exec
+argv: env CODEX_REASONING_EFFORT=high codex-lean exec
+---
+Reading prompt from stdin...
+OpenAI Codex v0.142.5
+--------
+workdir: /workspace/budget-analyzer-api-tests
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 019f36c1-d397-7543-b60c-c7eb3e6f27fb
+--------
+user
+AI SESSION HANDLER WORKER PROTOCOL
+
+CONTEXT
+- workspace_path: /workspace/budget-analyzer-api-tests
+- plan_path: /workspace/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+- state_path: /workspace/budget-analyzer-api-tests/.ai-session-handler/python-baseline-remediation-plan.json
+- run_id: 20260706T092819Z-phase-1
+- transcript_path: /workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T092819Z-phase-1.txt
+- selected_phase_id: phase-1
+- selected_phase_title: Make Current Gates Green
+
+INSTRUCTIONS
+- Read repository instructions first, including the nearest AGENTS.md.
+- Inspect current repository state before editing.
+- Implement exactly selected phase phase-1: Make Current Gates Green.
+- Do not proceed to later phases.
+- Follow the selected phase plan unless repository reality contradicts it.
+- Run the validation commands listed in the selected phase.
+- Do not run git commit, push, checkout, reset, clean, stash, branch creation, or automatic worktree operations.
+- Update only files required for the selected phase.
+- Do not make design-changing guesses. If implementation requires an unplanned product, architecture, schema, API, or workflow decision, stop with <phase-needs-clarification>.
+- Treat user clarification as a first-class stop state, not as failure.
+- End with exactly one terminal marker from the grammar below.
+- Do not emit more than one terminal marker.
+
+FAILURE MODES
+- Use <phase-blocked> when the phase cannot be completed without external action.
+- Use <phase-needs-clarification> when a specific user decision is required.
+- Use <phase-complete> only after implementation and validation for this phase are complete.
+
+PREVIOUS STATE SUMMARY START
+schema_version: 1
+plan:
+  path: /home/devex/public-repos/budget-analyzer-api-tests/docs/plans/python-baseline-remediation-plan.md
+  sha256: aaa3464a63641521ae5ee821c476320915f26e2109052cd5608c351901450ab3
+  accepted_at: 2026-07-06T07:19:54Z
+completed_phase_ids: none
+current_phase:
+  id: phase-1
+  title: Make Current Gates Green
+stop: none
+last_run:
+  run_id: 20260706T090945Z-phase-1
+  phase_id: phase-1
+  status: agent-failed
+  started_at: 2026-07-06T09:09:45Z
+  finished_at: 2026-07-06T09:09:45Z
+  exit_code: 4
+  transcript_path: /home/devex/public-repos/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260706T090945Z-phase-1.txt
+  summary: agent command exited with code 1
+PREVIOUS STATE SUMMARY END
+
+SELECTED PHASE BODY START
+
+Goal: fix formatting and strict typing failures without changing behavior.
+
+Steps:
+
+1. Run Ruff formatting on the repository.
+2. Fix the `gateway_client` fixture return annotation in `tests/conftest.py`
+   using `Generator[GatewayClient]` or an equivalent precise type.
+3. Fix the `BrowserContext` typing issue by importing it from
+   `playwright.sync_api` in the test or by explicitly exporting it from a
+   dedicated test helper.
+4. Re-run:
+
+   ```bash
+   .venv/bin/python -m ruff format --check .
+   .venv/bin/python -m ruff check .
+   .venv/bin/python -m mypy api_tests tests
+   .venv/bin/python -m pytest --env local --collect-only
+   ```
+
+Acceptance checks:
+
+- Ruff format and lint pass.
+- mypy strict passes for implementation and tests.
+- pytest collection still succeeds without live Auth0 prerequisites.
+
+SELECTED PHASE BODY END
+
+TERMINAL MARKER GRAMMAR START
+<phase-complete>summary</phase-complete>
+<phase-blocked>reason</phase-blocked>
+<phase-needs-clarification>specific question for user</phase-needs-clarification>
+TERMINAL MARKER GRAMMAR END
+
+codex
+I’ll follow the phase boundary strictly: first read the repo instructions and current plan context, then fix only the formatting/type issues needed for the listed gates.
+exec
+/bin/bash -lc "sed -n '1,260p' AGENTS.md" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+# Budget Analyzer API Tests
+
+## Repository Purpose
+
+This repository contains standalone black-box tests for the Budget Analyzer
+public gateway API. It tests deployed environments through the same public lane
+used by the browser:
+
+```text
+test runner -> HTTPS ingress -> ext_authz -> NGINX -> services
+```
+
+The suite must stay separate from service implementation repositories and must
+not depend on service internals.
+
+## Session Initialization
+
+At the start of work:
+
+1. Read this `AGENTS.md`.
+2. Inspect the repository structure before editing.
+3. Read the nearest relevant modules, tests, environment files, and plan
+   documents before changing them.
+
+Keep changes scoped to the requested plan phase or user request. The source
+implementation plan is
+`../orchestration/docs/plans/openapi-black-box-api-test-repository-plan.md`.
+
+## Core Product Constraints
+
+- Keep this a black-box public API test suite. Do not add direct database,
+  Redis, RabbitMQ, Kubernetes, service-DNS, or service-internal setup paths.
+- Compose API requests as `{origin}{api_base_path}{openapi path}` through
+  `GatewayClient`.
+- Treat the OpenAPI document as the executable coverage manifest.
+- Keep environment YAML declarative and non-secret. Read secrets only from
+  environment variables or CI secret stores.
+- Do not write Auth0 Management API tokens, generated passwords, session
+  cookies, authorization headers, or other credentials to artifacts.
+- Use `browser_auth0` as the primary local and staging auth mode. `env_cookie`
+  is a local debug fallback unless a future production-safe smoke-session flow
+  is explicitly designed.
+- Production defaults must remain read-only: `allow_mutation: false` and
+  `allow_destructive: false`.
+- Do not broaden production permissions to reach coverage targets.
+- Keep admin/global operations deferred until a separate admin identity,
+  cleanup, and global-state safety plan exists.
+- Do not add generic cleanup callbacks or janitors in the initial suite.
+  Per-run generated users are the boundary for user-owned test data.
+
+## Implemented Workflow
+
+- Install the local development environment with:
+
+  ```bash
+  python -m pip install -e ".[dev]"
+  python -m playwright install chromium
+  ```
+
+- Validate environment configuration with:
+
+  ```bash
+  .venv/bin/python tools/validate-environment.py --env local
+  ```
+
+- Run local collection without a live target with:
+
+  ```bash
+  .venv/bin/python -m pytest --env local --collect-only
+  ```
+
+- Live API tests require the selected environment, Auth0 prerequisites, browser
+  login, and network access to be available.
+
+## Python Baseline
+
+Use modern, explicit Python. The implementation should feel like a small typed
+system, not loose scripting glue.
+
+- Require Python 3.12 unless the project intentionally changes runtime support.
+- Use a `src/` layout for importable code. The current root-level `api_tests/`
+  package is transitional; migrate it to `src/api_tests/` before expanding the
+  harness substantially.
+- Put tests outside application code under `tests/`.
+- Configure packaging, Ruff, mypy, and pytest in `pyproject.toml`.
+- Keep development dependencies separate from test-runner execution
+  dependencies.
+- Prefer standard-library types and modules for orchestration unless the
+  repository plan explicitly calls for a test-harness dependency.
+- Use `pathlib.Path` for filesystem paths.
+- Read and write text with explicit `encoding="utf-8"`.
+- Use timezone-aware UTC timestamps for generated ids and serialized state.
+- Keep business logic out of CLI/tool entrypoints. Tools should parse
+  arguments, call typed functions, print user-facing messages, and return exit
+  codes.
+- Implement tool entrypoints as `main(argv: Sequence[str] | None = None) -> int`
+  where practical.
+- Keep generated artifacts out of version control: `.venv/`, `.mypy_cache/`,
+  `.ruff_cache/`, `dist/`, `build/`, `*.egg-info/`, `__pycache__/`,
+  `.coverage`, `htmlcov/`, `.pytest_cache/`, and generated request or coverage
+  artifacts.
+
+## Typing Standards
+
+- Run mypy in strict mode.
+- Annotate all public functions, methods, dataclasses, and module-level
+  constants where the type is not obvious.
+- Prefer precise stdlib types from `collections.abc` such as `Sequence`,
+  `Mapping`, `Iterable`, and `Callable` for interfaces.
+- Avoid `Any`. If it is unavoidable at external boundaries such as decoded
+  YAML, decoded JSON, OpenAPI documents, httpx, Playwright, or pytest hooks,
+  isolate it and validate into typed dataclasses or Pydantic models quickly.
+- Avoid broad `dict[str, object]` plumbing across modules.
+- Use dataclasses or Pydantic models for durable value objects such as
+  environment config, identities, run state, operation coverage, and process or
+  request results.
+- Use literals or enums for constrained status values, auth modes, environment
+  types, cleanup modes, and coverage states.
+- Do not silence mypy with broad ignore comments. A narrow ignore must include
+  the error code and a short reason.
+
+## Formatting And Linting
+
+Use Ruff as the single formatting, linting, pyupgrade, and import-sorting path.
+Do not add Black, isort, Flake8, or autopep8 unless the user explicitly asks
+for that tool split.
+
+Expected commands in this workspace use the repository-local virtualenv. If
+`.venv/` is missing, create or install the dev environment first rather than
+falling back to global tooling.
+
+Current transitional commands:
+
+```bash
+.venv/bin/python -m ruff format .
+.venv/bin/python -m ruff check . --fix
+.venv/bin/python -m mypy api_tests tests
+.venv/bin/python -m pytest --env local --collect-only
+```
+
+After the `src/` migration, the mypy command should be:
+
+```bash
+.venv/bin/python -m mypy src tests
+```
+
+Ruff should use `line-length = 100`, `target-version = "py312"`,
+`src = ["src", "tests"]`, and lint selections including `E`, `F`, `I`, `UP`,
+`B`, `SIM`, and `RUF`.
+
+## Testing Standards
+
+Use pytest for tests.
+
+- Prefer `tmp_path`, `monkeypatch`, `capsys`, `httpx.MockTransport`, and
+  `respx` for harness unit tests.
+- Do not call real Auth0, real providers, or live Budget Analyzer targets from
+  unit tests.
+- Keep tests deterministic. Avoid sleeps except where timeout behavior is under
+  test, and keep those durations short.
+- Use OpenAPI markers consistently:
+
+  ```python
+  @pytest.mark.openapi("operationId")
+  ```
+
+- Use `placeholder` only while a phase is under construction. Placeholder
+  coverage is not an acceptable staging-gate completion state.
+- Mark mutating tests with `mutation`, destructive tests with `destructive`,
+  read-only tests with `readonly`, authorization tests with `authorization`,
+  and production-safe tests with `production_safe`.
+- Production execution should select only explicitly production-safe read-only
+  tests.
+- For pytest configuration, prefer strict config, strict markers, declared test
+  paths, and importlib import mode.
+
+## API Execution Safety
+
+- Use `GatewayClient` for API requests so base origin, API prefix, TLS policy,
+  timeout, cookies, and request logging stay centralized.
+- Use `raw_request` only for `/api-docs`, auth edge checks, and other explicitly
+  public non-API-prefix routes.
+- Never seed sessions in Redis, exchange Auth0 tokens directly for API access,
+  or bypass the Session Gateway.
+- Stream or record enough request details for diagnostics, but redact secrets
+  before writing artifacts.
+- Keep mutating tests guarded by environment policy before any mutating request
+  is made.
+
+## State, Files, And Schemas
+
+- Keep environment files under `environments/` non-secret.
+- Keep generated logs and coverage files under `artifacts/`.
+- Keep checked-in OpenAPI snapshots under `schemas/`.
+- Keep deferred admin/global operations explicit in
+  `schemas/deferred-admin-operations.yaml` once the coverage phase is active.
+- Make JSON artifacts stable and readable with indentation where they are meant
+  for review.
+- Preserve OpenAPI operation ids exactly. Do not rename them in test markers.
+
+## Error Handling
+
+- Return documented exit codes from tools instead of raising tracebacks for
+  expected user errors.
+- Convert validation, prerequisite, and configuration failures into clear
+  messages naming the environment file, missing variable, path, operation id,
+  marker, or command involved.
+- Treat missing Auth0 prerequisites as an expected stop condition for live
+  tests, not as a harness bug.
+- Do not guess through product, architecture, schema, API, or workflow
+  decisions not present in durable documentation or the current user request.
+
+## Documentation Discipline
+
+Update documentation in the same change as behavior, configuration, CLI,
+tooling, marker conventions, environment schema, or workflow changes.
+
+- Update `README.md` when setup, commands, naming, usage, or examples change.
+- Update `docs/` when architecture, OpenAPI coverage, artifact schema, marker
+  grammar, exit codes, CI workflow, or operational behavior changes.
+- Update this `AGENTS.md` when agent instructions, quality gates, tooling, or
+  repository workflow changes.
+- Do not leave documentation updates as follow-up work.
+
+exec
+/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'docs/plans/python-baseline-remediation-plan.md' -g 'tests/conftest.py' -g '*.py' | sort" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+/workspace/budget-analyzer-api-tests
+AGENTS.md
+api_tests/__init__.py
+api_tests/auth.py
+api_tests/auth0.py
+api_tests/browser_login.py
+api_tests/builders/__init__.py
+api_tests/builders/statement_formats.py
+api_tests/builders/transactions.py
+api_tests/builders/views.py
+api_tests/client.py
+api_tests/config.py
+api_tests/coverage.py
+api_tests/identities.py
+api_tests/logging.py
+api_tests/openapi.py
+api_tests/run_state.py
+api_tests/schemas.py
+docs/plans/python-baseline-remediation-plan.md
+tests/api_docs/test_openapi_docs.py
+tests/auth/test_phase1_auth_helpers.py
+tests/conftest.py
+tests/contract/test_environment_config.py
+tools/check-openapi-coverage.py
+tools/export-openapi-coverage.py
+tools/refresh-openapi.py
+tools/validate-environment.py
+
+exec
+/bin/bash -lc "sed -n '1,220p' docs/plans/python-baseline-remediation-plan.md" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+# Plan: Python Baseline Remediation
+
+Date: 2026-07-05
+Status: Review complete, implementation pending
+
+Reviewed inputs:
+
+- `../orchestration/docs/plans/openapi-black-box-api-test-repository-plan.md`
+- `pyproject.toml`
+- `pytest.ini`
+- `.gitignore`
+- `api_tests/`
+- `tests/`
+- `tools/`
+- `environments/`
+
+## Goal
+
+Align `budget-analyzer-api-tests` with the Python baseline used across the
+workspace while preserving the black-box API test constraints from the OpenAPI
+test repository plan.
+
+The goal is consistency in Python project shape, tooling, typing, tests,
+artifact hygiene, and safety defaults. This plan does not change endpoint
+coverage scope.
+
+## Current Validation Results
+
+Commands run from this repository:
+
+```bash
+.venv/bin/python -m ruff format --check .
+.venv/bin/python -m ruff check .
+.venv/bin/python -m mypy api_tests tests
+.venv/bin/python -m pytest --env local --collect-only
+.venv/bin/python -m pytest --env local
+.venv/bin/python tools/validate-environment.py --env local
+```
+
+Observed results:
+
+- Ruff format check fails: `api_tests/auth0.py`,
+  `api_tests/browser_login.py`, `api_tests/config.py`, and
+  `tests/auth/test_phase1_auth_helpers.py` would be reformatted.
+- Ruff lint passes with the current, minimal Ruff configuration.
+- mypy strict fails with two errors:
+  - `tests/conftest.py`: generator fixture return type should be `Generator`
+    or a supertype.
+  - `tests/auth/test_phase1_auth_helpers.py`: `BrowserContext` is imported
+    through `api_tests.browser_login`, but that module does not explicitly
+    export it.
+- `pytest --env local --collect-only` passes and collects 15 tests.
+- `pytest --env local` produces 14 passes and one expected live-test setup
+  error when Auth0 prerequisites are absent:
+  `AUTH0_MGMT_DOMAIN` is missing.
+- `tools/validate-environment.py --env local` succeeds.
+
+## Conformance Findings
+
+1. The implementation uses a root-level `api_tests/` package. The workspace
+   Python baseline prefers `src/` layout to avoid accidental imports from the
+   repository root.
+2. Tool configuration is split between `pyproject.toml` and `pytest.ini`.
+   The baseline prefers packaging, Ruff, mypy, and pytest configuration in
+   `pyproject.toml`.
+3. Ruff is underconfigured compared with the baseline. It sets line length and
+   target version, but does not set `src` or lint selections such as `E`, `F`,
+   `I`, `UP`, `B`, `SIM`, and `RUF`.
+4. pytest configuration lacks strict config, strict markers, declared test
+   paths, and importlib import mode.
+5. mypy is strict, but the checked command should cover tests and eventually
+   `src`. Tool scripts are not currently part of the type-checking story.
+6. Several tool files are placeholders. `tools/validate-environment.py` works,
+   but it inserts the repository root into `sys.path`; this should disappear
+   after a `src/` layout and editable install are in place.
+7. The `.gitignore` is broad and appears copied from a Java, Spring Boot, and
+   React template. It includes the needed Python generated artifacts, but it is
+   noisier than this repository needs.
+8. The production environment currently uses `browser_auth0`. The repository
+   plan says production should not create per-run Auth0 users; production needs
+   an explicit read-only smoke-session strategy before production tests are
+   operational.
+9. The repository had no `AGENTS.md`. That instruction file has now been added
+   so future work has local Python, testing, and black-box safety rules.
+
+## Remediation Phases
+
+### Phase 1: Make Current Gates Green
+
+Goal: fix formatting and strict typing failures without changing behavior.
+
+Steps:
+
+1. Run Ruff formatting on the repository.
+2. Fix the `gateway_client` fixture return annotation in `tests/conftest.py`
+   using `Generator[GatewayClient]` or an equivalent precise type.
+3. Fix the `BrowserContext` typing issue by importing it from
+   `playwright.sync_api` in the test or by explicitly exporting it from a
+   dedicated test helper.
+4. Re-run:
+
+   ```bash
+   .venv/bin/python -m ruff format --check .
+   .venv/bin/python -m ruff check .
+   .venv/bin/python -m mypy api_tests tests
+   .venv/bin/python -m pytest --env local --collect-only
+   ```
+
+Acceptance checks:
+
+- Ruff format and lint pass.
+- mypy strict passes for implementation and tests.
+- pytest collection still succeeds without live Auth0 prerequisites.
+
+### Phase 2: Move To `src/` Layout
+
+Goal: align package layout with the workspace Python baseline.
+
+Steps:
+
+1. Move `api_tests/` to `src/api_tests/`.
+2. Update `pyproject.toml`:
+   - set `[tool.setuptools.packages.find] where = ["src"]`
+   - set `[tool.ruff] src = ["src", "tests"]`
+   - keep `packages = ["api_tests"]` for mypy
+3. Update imports only where the move exposes test assumptions.
+4. Update tool scripts so they rely on the installed package instead of
+   manually adding the repository root to `sys.path`.
+5. Update README and AGENTS commands from `mypy api_tests tests` to
+   `mypy src tests`.
+
+Acceptance checks:
+
+- Editable install imports `api_tests` from `src/api_tests`.
+- Running pytest with importlib import mode still imports the installed package,
+  not a package from the repository root.
+- `mypy src tests` passes.
+
+### Phase 3: Consolidate Tooling Configuration
+
+Goal: make this repo's tool configuration match the standard workspace shape.
+
+Steps:
+
+1. Move pytest settings from `pytest.ini` into
+   `[tool.pytest.ini_options]` in `pyproject.toml`.
+2. Add:
+   - `testpaths = ["tests"]`
+   - `addopts = "--strict-config --strict-markers --import-mode=importlib"`
+3. Add Ruff lint selections:
+
+   ```toml
+   [tool.ruff.lint]
+   select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+   ```
+
+4. Delete `pytest.ini` after the pyproject configuration is verified.
+5. Decide whether tool scripts should become package entry points or stay as
+   checked script files with typed `main()` functions.
+
+Acceptance checks:
+
+- pytest reports `configfile: pyproject.toml`.
+- Strict marker checking still recognizes all custom markers.
+- Ruff lint remains clean under the broader lint selection.
+
+### Phase 4: Tighten Types And Tool Entrypoints
+
+Goal: reduce loose boundary typing before the OpenAPI coverage harness grows.
+
+Steps:
+
+1. Replace broad `Any` usage where practical with typed boundary models,
+   protocols, or local aliases.
+2. Keep unavoidable external-boundary `Any` close to decoded YAML, decoded JSON,
+   OpenAPI documents, httpx hooks, pytest hooks, and Playwright objects.
+3. Implement each non-placeholder tool with
+   `main(argv: Sequence[str] | None = None) -> int`.
+4. Add unit tests for tool argument parsing and failure messages.
+5. Add mypy coverage for tools if they remain script files, or move tool logic
+   into package modules and type-check those modules through `src`.
+
+Acceptance checks:
+
+- Tool behavior is covered by tests that do not require live network access.
+- Expected user errors return clear messages and non-zero exit codes instead
+  of tracebacks.
+- Strict mypy remains clean.
+
+### Phase 5: Production Safety Alignment
+
+Goal: make production behavior match the plan's read-only safety model.
+
+Steps:
+
+1. Define the production authentication strategy before enabling production
+   runs:
+   - stable pre-provisioned smoke identity, or
+   - supplied `BA_SESSION` with explicit production-safe handling.
+2. Adjust `auth.mode` validation so production cannot accidentally create
+   per-run users.
+3. Add guard fixtures for `mutation` and `destructive` markers before mutating
+   endpoint tests are implemented.
+4. Add tests proving mutation and destructive tests skip before making network
+   requests when disabled.
+5. Document the production command:
+
+   ```bash
+   pytest --env production -m "readonly and production_safe"
+   ```
+
+Acceptance checks:
+
+- Production defaults cannot create users or mutate data.
+- Mutating tests are blocked by policy before request execution.
+- Read-only production smoke behavior is explicit in README and AGENTS.
+
+### Phase 6: Repository Hygiene
+
+Goal: keep generated artifacts and instructions clean.
+
+exec
+/bin/bash -lc 'git status --short' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+?? .ai-session-handler/
+?? AGENTS.md
+?? docs/
+
+codex
+The repo already has untracked instruction/plan/session files, so I’ll leave those alone and keep the phase edits confined to Python files that fail the current gates. Next I’m reading the exact fixtures/tests around the two mypy failures before editing.
+exec
+/bin/bash -lc "sed -n '1,260p' tests/auth/test_phase1_auth_helpers.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+from datetime import UTC, datetime
+import json
+from pathlib import Path
+from typing import cast
+
+import httpx
+import pytest
+
+from api_tests.auth import AuthConfigurationError, load_auth_context
+from api_tests.auth0 import (
+    Auth0CreatedUser,
+    Auth0ManagementClient,
+    Auth0ManagementSettings,
+    Auth0ScopeError,
+)
+from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
+from api_tests.browser_login import read_session_cookie
+from api_tests.client import GatewayClient
+from api_tests.config import load_environment
+from api_tests.identities import create_run_identities
+from api_tests.run_state import RUN_ID_PATTERN, RunState, generate_run_id, session_run_state
+
+
+def test_generate_run_id_uses_required_format() -> None:
+    run_id = generate_run_id(
+        now=datetime(2026, 6, 5, 12, 34, 56, tzinfo=UTC),
+        random_suffix="1a2b3c4d",
+    )
+
+    assert run_id == "ba-api-test-20260605T123456Z-1a2b3c4d"
+    assert RUN_ID_PATTERN.fullmatch(run_id)
+
+
+def test_session_run_state_is_stable_for_process_session() -> None:
+    session_run_state.cache_clear()
+
+    first = session_run_state()
+    second = session_run_state()
+
+    assert first is second
+    assert RUN_ID_PATTERN.fullmatch(first.run_id)
+
+
+def test_auth0_client_requests_management_token_and_creates_verified_user() -> None:
+    settings = Auth0ManagementSettings(
+        domain="tenant.example.auth0.com",
+        client_id="client-id",
+        client_secret="client-secret",
+        connection="Username-Password-Authentication",
+        test_email_domain="api-tests.example.invalid",
+    )
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/oauth/token":
+            assert request.url.scheme == "https"
+            assert request.url.host == "tenant.example.auth0.com"
+            return httpx.Response(200, json={"access_token": "management-token"})
+
+        if request.url.path == "/api/v2/users":
+            payload = json.loads(request.content.decode("utf-8"))
+            assert request.headers["Authorization"] == "Bearer management-token"
+            assert payload["connection"] == "Username-Password-Authentication"
+            assert payload["email_verified"] is True
+            assert payload["verify_email"] is False
+            assert payload["email"].endswith("@api-tests.example.invalid")
+            assert "password" in payload
+            return httpx.Response(201, json={"user_id": "auth0|generated-user"})
+
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as http_client:
+        client = Auth0ManagementClient(settings, client=http_client)
+        user = client.create_database_user(
+            run_state=RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+            label="Primary User",
+        )
+
+    assert len(requests) == 2
+    assert user.user_id == "auth0|generated-user"
+    assert user.email.startswith("ba-api-test-20260605T123456Z-1a2b3c4d-primary-user-")
+    assert user.password
+
+
+def test_auth0_scope_errors_are_clear() -> None:
+    settings = Auth0ManagementSettings(
+        domain="https://tenant.example.auth0.com",
+        client_id="client-id",
+        client_secret="client-secret",
+        connection="Username-Password-Authentication",
+        test_email_domain="api-tests.example.invalid",
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            json={
+                "error": "insufficient_scope",
+                "error_description": "Insufficient scope, expected any of: create:users",
+            },
+            request=request,
+        )
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as http_client:
+        client = Auth0ManagementClient(settings, client=http_client)
+        with pytest.raises(Auth0ScopeError, match="create:users"):
+            client.request_management_api_token()
+
+
+def test_read_session_cookie_extracts_http_only_cookie_metadata() -> None:
+    class FakeContext:
+        def cookies(self) -> list[dict[str, object]]:
+            return [
+                {"name": "unrelated", "value": "x", "domain": "example.test", "path": "/"},
+                {
+                    "name": "BA_SESSION",
+                    "value": "session-value",
+                    "domain": "app.budgetanalyzer.localhost",
+                    "path": "/",
+                    "httpOnly": True,
+                },
+            ]
+
+    cookie = read_session_cookie(cast(BrowserContext, FakeContext()), "BA_SESSION")
+
+    assert cookie == SessionCookie(
+        name="BA_SESSION",
+        value="session-value",
+        domain="app.budgetanalyzer.localhost",
+        path="/",
+    )
+
+
+def test_create_run_identities_provisions_and_logs_in_primary_and_secondary_users() -> None:
+    config = load_environment("local")
+    created_labels: list[str] = []
+    login_credentials: list[BrowserLoginCredentials] = []
+
+    class FakeAuth0Client:
+        def create_database_user(self, *, run_state: RunState, label: str) -> Auth0CreatedUser:
+            created_labels.append(label)
+            return Auth0CreatedUser(
+                email=f"{label}@api-tests.example.invalid",
+                password=f"{label}-password",
+                user_id=f"auth0|{label}",
+            )
+
+    def fake_login(
+        environment_config: object,
+        credentials: BrowserLoginCredentials,
+    ) -> SessionCookie:
+        assert environment_config is config
+        login_credentials.append(credentials)
+        return SessionCookie(
+            name="BA_SESSION",
+            value=f"{credentials.email}-cookie",
+            domain="app.budgetanalyzer.localhost",
+            path="/",
+        )
+
+    identities = create_run_identities(
+        config,
+        RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+        auth0_client=cast(Auth0ManagementClient, FakeAuth0Client()),
+        login=fake_login,
+    )
+
+    assert created_labels == ["primary-user", "secondary-user"]
+    assert [credentials.email for credentials in login_credentials] == [
+        "primary-user@api-tests.example.invalid",
+        "secondary-user@api-tests.example.invalid",
+    ]
+    assert identities.primary_user.email == "primary-user@api-tests.example.invalid"
+    assert identities.secondary_user.email == "secondary-user@api-tests.example.invalid"
+
+
+def test_env_cookie_auth_mode_reads_local_debug_cookie() -> None:
+    config = load_environment("local")
+    config = config.model_copy(update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})})
+
+    auth_context = load_auth_context(
+        config,
+        RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+        environ={"BA_SESSION": "debug-cookie"},
+    )
+
+    assert auth_context.mode == "env_cookie"
+    assert auth_context.identities is None
+    assert auth_context.session_cookie == SessionCookie(
+        name="BA_SESSION",
+        value="debug-cookie",
+        domain="",
+        path="/",
+    )
+
+
+def test_env_cookie_auth_mode_is_local_only() -> None:
+    config = load_environment("staging")
+    config = config.model_copy(update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})})
+
+    with pytest.raises(AuthConfigurationError, match="only allowed for local"):
+        load_auth_context(
+            config,
+            RunState("ba-api-test-20260605T123456Z-1a2b3c4d"),
+            environ={"BA_SESSION": "debug-cookie"},
+        )
+
+
+def test_browser_auth0_mode_fails_before_network_when_management_env_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_environment("local")
+    for env_var in (
+        config.auth.auth0.management_domain_env,
+        config.auth.auth0.management_client_id_env,
+        config.auth.auth0.management_client_secret_env,
+        config.auth.auth0.connection_env,
+    ):
+        monkeypatch.delenv(env_var, raising=False)
+
+    with pytest.raises(RuntimeError, match="AUTH0_MGMT_DOMAIN"):
+        load_auth_context(config, RunState("ba-api-test-20260605T123456Z-1a2b3c4d"))
+
+
+def test_gateway_client_uses_origin_api_prefix_cookie_and_request_log(
+    tmp_path: Path,
+) -> None:
+    config = load_environment("local")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            headers={
+                "content-type": "application/json",
+                "set-cookie": "BA_SESSION=secret",
+            },
+            json={
+                "ok": True,
+                "password": "secret-password",
+                "access_token": "secret-token",
+            },
+        )
+
+    artifact_path = tmp_path / "request-log.jsonl"
+    with GatewayClient(
+        config,
+        artifact_path=artifact_path,
+        session_cookie=SessionCookie(
+            name="BA_SESSION",
+            value="debug-cookie",
+            domain="",
+            path="/",
+        ),
+
+exec
+/bin/bash -lc "sed -n '1,260p' api_tests/browser_login.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+import httpx
+from playwright.sync_api import BrowserContext, Page, sync_playwright
+
+from api_tests.config import EnvironmentConfig
+
+
+class BrowserLoginError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True, repr=False)
+class BrowserLoginCredentials:
+    email: str
+    password: str = field(repr=False)
+
+
+@dataclass(frozen=True, repr=False)
+class SessionCookie:
+    name: str
+    value: str = field(repr=False)
+    domain: str
+    path: str
+
+
+def login_with_browser(
+    config: EnvironmentConfig,
+    credentials: BrowserLoginCredentials,
+) -> SessionCookie:
+    timeout_ms = int(config.timeouts.eventually_seconds * 1000)
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=config.auth.browser.headless)
+        try:
+            context = browser.new_context(ignore_https_errors=not config.verify_tls)
+            try:
+                page = context.new_page()
+                page.goto(
+                    f"{config.origin}/oauth2/authorization/idp",
+                    wait_until="domcontentloaded",
+                    timeout=timeout_ms,
+                )
+                fill_auth0_login_form(page, credentials, timeout_ms=timeout_ms)
+                page.wait_for_url(f"{config.origin}/**", wait_until="networkidle", timeout=timeout_ms)
+                cookie = read_session_cookie(context, config.session_cookie_name)
+            finally:
+                context.close()
+        finally:
+            browser.close()
+
+    verify_session_cookie(config, cookie)
+    return cookie
+
+
+def fill_auth0_login_form(
+    page: Page,
+    credentials: BrowserLoginCredentials,
+    *,
+    timeout_ms: int,
+) -> None:
+    email_field = page.locator(
+        'input[name="username"], input[name="email"], input[type="email"]'
+    ).first
+    password_field = page.locator('input[name="password"], input[type="password"]').first
+    submit_button = page.locator(
+        'button[type="submit"], button[name="action"], input[type="submit"]'
+    ).first
+
+    email_field.fill(credentials.email, timeout=timeout_ms)
+    password_field.fill(credentials.password, timeout=timeout_ms)
+    submit_button.click(timeout=timeout_ms)
+
+
+def read_session_cookie(context: BrowserContext, cookie_name: str) -> SessionCookie:
+    cookies = context.cookies()
+    for cookie in cookies:
+        if cookie.get("name") == cookie_name:
+            value = cookie.get("value")
+            domain = cookie.get("domain")
+            path = cookie.get("path")
+            if not isinstance(value, str) or not value:
+                raise BrowserLoginError(f"{cookie_name} cookie was present but empty")
+            if not isinstance(domain, str) or not isinstance(path, str):
+                raise BrowserLoginError(f"{cookie_name} cookie was missing domain or path metadata")
+            return SessionCookie(name=cookie_name, value=value, domain=domain, path=path)
+
+    raise BrowserLoginError(f"{cookie_name} cookie was not set after Auth0 login")
+
+
+def verify_session_cookie(config: EnvironmentConfig, cookie: SessionCookie) -> None:
+    with httpx.Client(
+        base_url=config.origin,
+        verify=config.verify_tls,
+        timeout=config.timeouts.request_seconds,
+        cookies={cookie.name: cookie.value},
+    ) as client:
+        response = client.get("/auth/v1/user")
+
+    if response.status_code != httpx.codes.OK:
+        raise BrowserLoginError(
+            f"GET /auth/v1/user failed after browser login: HTTP {response.status_code}"
+        )
+
+
+def cookie_value(cookie: SessionCookie) -> str:
+    return cookie.value
+
+
+def cookie_metadata(cookie: SessionCookie) -> dict[str, Any]:
+    return {"name": cookie.name, "domain": cookie.domain, "path": cookie.path}
+
+exec
+/bin/bash -lc "sed -n '1,260p' tests/conftest.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+import pytest
+
+from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+from api_tests.auth0 import Auth0ManagementError
+from api_tests.browser_login import BrowserLoginError
+from api_tests.client import GatewayClient
+from api_tests.config import EnvironmentConfig, load_environment
+from api_tests.run_state import RunState, session_run_state
+
+ENV_CONFIG_KEY: pytest.StashKey[EnvironmentConfig] = pytest.StashKey()
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    group = parser.getgroup("budget-analyzer-api-tests")
+    group.addoption(
+        "--env",
+        action="store",
+        default="local",
+        help="environment name to load from environments/<env>.yaml",
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    env_name = str(config.getoption("--env"))
+    try:
+        config.stash[ENV_CONFIG_KEY] = load_environment(env_name)
+    except Exception as exc:
+        raise pytest.UsageError(f"failed to load --env {env_name!r}: {exc}") from exc
+
+
+@pytest.fixture(scope="session")
+def env_config(pytestconfig: pytest.Config) -> EnvironmentConfig:
+    return pytestconfig.stash[ENV_CONFIG_KEY]
+
+
+@pytest.fixture(scope="session")
+def run_state() -> RunState:
+    return session_run_state()
+
+
+@pytest.fixture(scope="session")
+def auth_context(env_config: EnvironmentConfig, run_state: RunState) -> AuthContext:
+    try:
+        return load_auth_context(env_config, run_state)
+    except (AuthConfigurationError, Auth0ManagementError, BrowserLoginError) as exc:
+        pytest.fail(f"authentication prerequisite failed: {exc}", pytrace=False)
+
+
+@pytest.fixture(scope="session")
+def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
+    with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+        yield client
+
+exec
+/bin/bash -lc "sed -n '1,220p' pyproject.toml && sed -n '1,220p' pytest.ini" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "budget-analyzer-api-tests"
+version = "0.1.0"
+description = "Black-box API tests for the Budget Analyzer public gateway API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "httpx",
+  "jsonschema",
+  "playwright",
+  "pydantic",
+  "PyYAML",
+  "pytest",
+  "referencing",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy",
+  "respx",
+  "ruff",
+  "types-PyYAML",
+]
+
+[tool.setuptools.packages.find]
+include = ["api_tests*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["api_tests"]
+[pytest]
+markers =
+    openapi(operation_id): associate a test with an OpenAPI operation id
+    placeholder: marker-only placeholder for planned endpoint coverage
+    mutation: test may create or update API resources
+    destructive: test may delete, hide, import, or otherwise destructively alter API resources
+    readonly: test only reads API resources
+    authorization: test verifies authorization or resource isolation behavior
+    production_safe: test is allowed to run against production defaults
+
+exec
+/bin/bash -lc "sed -n '1,260p' api_tests/client.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+from pathlib import Path
+from types import TracebackType
+from typing import Any, Self
+
+import httpx
+
+from api_tests.browser_login import SessionCookie
+from api_tests.config import EnvironmentConfig
+from api_tests.logging import request_response_hooks
+
+
+class GatewayClient:
+    def __init__(
+        self,
+        config: EnvironmentConfig,
+        *,
+        artifact_path: Path | None = None,
+        session_cookie: SessionCookie | None = None,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        cookies = None
+        if session_cookie is not None:
+            cookies = {session_cookie.name: session_cookie.value}
+
+        self.config = config
+        self._client = httpx.Client(
+            base_url=config.origin,
+            cookies=cookies,
+            event_hooks=request_response_hooks(artifact_path=artifact_path),
+            timeout=config.timeouts.request_seconds,
+            transport=transport,
+            verify=config.verify_tls,
+        )
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self._client.close()
+
+    def api_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        return self.raw_request(method, _join_paths(self.config.api_base_path, path), **kwargs)
+
+    def raw_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        return self._client.request(method, _absolute_path(path), **kwargs)
+
+
+def _join_paths(prefix: str, path: str) -> str:
+    return f"{prefix.rstrip('/')}/{path.lstrip('/')}"
+
+
+def _absolute_path(path: str) -> str:
+    if not path.startswith("/"):
+        return f"/{path}"
+    return path
+
+codex
+The fixture issue is exactly the yielded `GatewayClient` being annotated as a plain return. The `BrowserContext` issue is also local to the test import, so the planned fix can stay narrow.
+exec
+/bin/bash -lc "sed -n '260,520p' tests/auth/test_phase1_auth_helpers.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+        ),
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.api_request("GET", "/transactions")
+
+    assert response.status_code == 200
+    assert str(requests[0].url) == "https://app.budgetanalyzer.localhost/api/transactions"
+    assert requests[0].headers["cookie"] == "BA_SESSION=debug-cookie"
+
+    log_entry = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert log_entry["method"] == "GET"
+    assert log_entry["status"] == 200
+    assert log_entry["response_headers"]["set-cookie"] == "[REDACTED]"
+    assert "secret-password" not in log_entry["response_body_prefix"]
+    assert "secret-token" not in log_entry["response_body_prefix"]
+
+exec
+/bin/bash -lc "sed -n '1,240p' api_tests/auth0.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+import os
+import secrets
+import string
+from typing import Any
+from urllib.parse import urlparse
+
+import httpx
+
+from api_tests.config import EnvironmentConfig
+from api_tests.run_state import RunState
+
+REQUIRED_MANAGEMENT_SCOPES = "create:users"
+
+
+class Auth0ManagementError(RuntimeError):
+    pass
+
+
+class Auth0ScopeError(Auth0ManagementError):
+    pass
+
+
+@dataclass(frozen=True)
+class Auth0ManagementSettings:
+    domain: str
+    client_id: str
+    client_secret: str = field(repr=False)
+    connection: str
+    test_email_domain: str
+
+    @property
+    def tenant_origin(self) -> str:
+        return normalize_auth0_origin(self.domain)
+
+    @property
+    def management_audience(self) -> str:
+        return f"{self.tenant_origin}/api/v2/"
+
+
+@dataclass(frozen=True, repr=False)
+class Auth0CreatedUser:
+    email: str
+    password: str = field(repr=False)
+    user_id: str
+
+
+class Auth0ManagementClient:
+    def __init__(
+        self,
+        settings: Auth0ManagementSettings,
+        *,
+        client: httpx.Client | None = None,
+        timeout_seconds: float = 15,
+    ) -> None:
+        self.settings = settings
+        self._owns_client = client is None
+        self._client = client or httpx.Client(timeout=timeout_seconds)
+        self._management_token: str | None = None
+
+    def __enter__(self) -> Auth0ManagementClient:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if self._owns_client:
+            self._client.close()
+
+    def request_management_api_token(self) -> str:
+        response = self._client.post(
+            f"{self.settings.tenant_origin}/oauth/token",
+            json={
+                "grant_type": "client_credentials",
+                "client_id": self.settings.client_id,
+                "client_secret": self.settings.client_secret,
+                "audience": self.settings.management_audience,
+            },
+        )
+        if response.status_code >= 400:
+            _raise_auth0_error(
+                response,
+                action="request Auth0 Management API token",
+                required_scope=REQUIRED_MANAGEMENT_SCOPES,
+            )
+
+        body = _json_object(response, action="request Auth0 Management API token")
+        token = body.get("access_token")
+        if not isinstance(token, str) or not token:
+            raise Auth0ManagementError("Auth0 token response did not include access_token")
+
+        self._management_token = token
+        return token
+
+    def create_database_user(
+        self,
+        *,
+        run_state: RunState,
+        label: str,
+        email_verified: bool = True,
+    ) -> Auth0CreatedUser:
+        token = self._management_token or self.request_management_api_token()
+        email = generate_test_email(
+            run_id=run_state.run_id,
+            label=label,
+            email_domain=self.settings.test_email_domain,
+        )
+        password = generate_password()
+
+        response = self._client.post(
+            f"{self.settings.management_audience}users",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "connection": self.settings.connection,
+                "email": email,
+                "password": password,
+                "email_verified": email_verified,
+                "verify_email": not email_verified,
+            },
+        )
+        if response.status_code >= 400:
+            _raise_auth0_error(
+                response,
+                action="create Auth0 database user",
+                required_scope=REQUIRED_MANAGEMENT_SCOPES,
+            )
+
+        body = _json_object(response, action="create Auth0 database user")
+        user_id = body.get("user_id")
+        if not isinstance(user_id, str) or not user_id:
+            raise Auth0ManagementError("Auth0 create-user response did not include user_id")
+
+        return Auth0CreatedUser(email=email, password=password, user_id=user_id)
+
+
+def settings_from_environment(
+    config: EnvironmentConfig,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> Auth0ManagementSettings:
+    source = environ or os.environ
+    auth0_config = config.auth.auth0
+
+    return Auth0ManagementSettings(
+        domain=_required_env(source, auth0_config.management_domain_env),
+        client_id=_required_env(source, auth0_config.management_client_id_env),
+        client_secret=_required_env(source, auth0_config.management_client_secret_env),
+        connection=_required_env(source, auth0_config.connection_env),
+        test_email_domain=auth0_config.test_email_domain,
+    )
+
+
+def normalize_auth0_origin(domain: str) -> str:
+    raw_value = domain.strip().rstrip("/")
+    if not raw_value:
+        raise ValueError("Auth0 domain must not be empty")
+
+    candidate = raw_value if "://" in raw_value else f"https://{raw_value}"
+    parsed = urlparse(candidate)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError("Auth0 domain must be a host name or HTTPS origin")
+    if parsed.path or parsed.params or parsed.query or parsed.fragment:
+        raise ValueError("Auth0 domain must not include a path, query, or fragment")
+
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def generate_test_email(*, run_id: str, label: str, email_domain: str) -> str:
+    normalized_label = _email_safe_token(label)
+    random_part = secrets.token_hex(3)
+    return f"{run_id}-{normalized_label}-{random_part}@{email_domain}"
+
+
+def generate_password() -> str:
+    alphabet = string.ascii_letters + string.digits
+    random_part = "".join(secrets.choice(alphabet) for _ in range(28))
+    return f"Ba1!{random_part}"
+
+
+def _required_env(source: Mapping[str, str], name: str) -> str:
+    value = source.get(name, "").strip()
+    if not value:
+        raise Auth0ManagementError(f"required Auth0 environment variable is missing: {name}")
+    return value
+
+
+def _email_safe_token(value: str) -> str:
+    token = "".join(character.lower() if character.isalnum() else "-" for character in value)
+    token = "-".join(part for part in token.split("-") if part)
+    if not token:
+        raise ValueError("email label must contain at least one letter or digit")
+    return token
+
+
+def _json_object(response: httpx.Response, *, action: str) -> dict[str, Any]:
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise Auth0ManagementError(f"Auth0 response for {action} was not JSON") from exc
+
+    if not isinstance(body, dict):
+        raise Auth0ManagementError(f"Auth0 response for {action} was not a JSON object")
+
+    return body
+
+
+def _raise_auth0_error(
+    response: httpx.Response,
+    *,
+    action: str,
+    required_scope: str,
+) -> None:
+    body_text = response.text
+    message = f"failed to {action}: HTTP {response.status_code}"
+    if body_text:
+        message = f"{message}: {body_text}"
+
+    if response.status_code in {401, 403} and "scope" in body_text.lower():
+        raise Auth0ScopeError(
+            f"{message}. Confirm the Auth0 Management API application has scope "
+            f"{required_scope!r}."
+        )
+
+    raise Auth0ManagementError(message)
+
+exec
+/bin/bash -lc "sed -n '1,300p' api_tests/config.py" in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Literal, Self
+from urllib.parse import urlparse
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+EnvironmentType = Literal["local", "staging", "production"]
+AuthMode = Literal["browser_auth0", "env_cookie"]
+CleanupMode = Literal["none"]
+
+
+class StrictConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class BrowserConfig(StrictConfigModel):
+    headless: bool
+
+
+class Auth0Config(StrictConfigModel):
+    management_domain_env: str
+    management_client_id_env: str
+    management_client_secret_env: str
+    connection_env: str
+    test_email_domain: str
+
+    @field_validator(
+        "management_domain_env",
+        "management_client_id_env",
+        "management_client_secret_env",
+        "connection_env",
+    )
+    @classmethod
+    def validate_env_var_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("environment variable name must not be empty")
+        if not value.replace("_", "").isalnum() or not value[0].isalpha():
+            raise ValueError(f"invalid environment variable name: {value}")
+        return value
+
+    @field_validator("test_email_domain")
+    @classmethod
+    def validate_test_email_domain(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not value or "@" in value or "/" in value or "." not in value:
+            raise ValueError("test_email_domain must be a DNS-style domain")
+        return value
+
+
+class AuthConfig(StrictConfigModel):
+    mode: AuthMode
+    cookie_env: str
+    browser: BrowserConfig
+    auth0: Auth0Config
+
+    @field_validator("cookie_env")
+    @classmethod
+    def validate_cookie_env(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("cookie_env must not be empty")
+        if not value.replace("_", "").isalnum() or not value[0].isalpha():
+            raise ValueError(f"invalid cookie_env environment variable name: {value}")
+        return value
+
+
+class DataConfig(StrictConfigModel):
+    namespace_prefix: str
+    cleanup: CleanupMode
+    per_run_user_boundary: bool
+
+    @field_validator("namespace_prefix")
+    @classmethod
+    def validate_namespace_prefix(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("namespace_prefix must not be empty")
+        return value
+
+
+class TimeoutConfig(StrictConfigModel):
+    request_seconds: float = Field(gt=0)
+    eventually_seconds: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_timeout_order(self) -> Self:
+        if self.eventually_seconds < self.request_seconds:
+            raise ValueError("eventually_seconds must be greater than or equal to request_seconds")
+        return self
+
+
+class EnvironmentConfig(StrictConfigModel):
+    name: str
+    origin: str
+    api_base_path: str
+    openapi_path: str
+    verify_tls: bool
+    environment_type: EnvironmentType
+    allow_mutation: bool
+    allow_destructive: bool
+    session_cookie_name: str
+    auth: AuthConfig
+    data: DataConfig
+    timeouts: TimeoutConfig
+
+    @field_validator("name", "session_cookie_name")
+    @classmethod
+    def validate_non_empty_string(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("value must not be empty")
+        return value
+
+    @field_validator("origin")
+    @classmethod
+    def validate_origin(cls, value: str) -> str:
+        value = value.strip().rstrip("/")
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("origin must be an absolute HTTP(S) URL")
+        if parsed.path or parsed.params or parsed.query or parsed.fragment:
+            raise ValueError("origin must not include a path, query, or fragment")
+        return value
+
+    @field_validator("api_base_path", "openapi_path")
+    @classmethod
+    def validate_absolute_path(cls, value: str) -> str:
+        value = value.strip()
+        if not value.startswith("/"):
+            raise ValueError("path must start with /")
+        if "//" in value:
+            raise ValueError("path must not contain duplicate slashes")
+        return value.rstrip("/") if value != "/" else value
+
+    @model_validator(mode="after")
+    def validate_environment_policy(self) -> Self:
+        if self.environment_type == "production":
+            if self.allow_mutation:
+                raise ValueError("production environments must not allow mutation by default")
+            if self.allow_destructive:
+                raise ValueError("production environments must not allow destructive tests by default")
+        if self.allow_destructive and not self.allow_mutation:
+            raise ValueError("allow_destructive requires allow_mutation")
+        return self
+
+
+def repository_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def environments_dir() -> Path:
+    return repository_root() / "environments"
+
+
+def environment_path(name: str, base_dir: Path | None = None) -> Path:
+    if "/" in name or "\\" in name or name in {"", ".", ".."}:
+        raise ValueError(f"invalid environment name: {name}")
+
+    directory = base_dir or environments_dir()
+    path = directory / f"{name}.yaml"
+    if not path.is_file():
+        raise FileNotFoundError(f"environment file not found: {path}")
+    return path
+
+
+def load_environment(name: str, base_dir: Path | None = None) -> EnvironmentConfig:
+    return load_environment_file(environment_path(name, base_dir))
+
+
+def load_environment_file(path: Path) -> EnvironmentConfig:
+    with path.open("r", encoding="utf-8") as config_file:
+        raw_config = yaml.safe_load(config_file)
+
+    if not isinstance(raw_config, dict):
+        raise ValueError(f"environment file must contain a YAML mapping: {path}")
+
+    return EnvironmentConfig.model_validate(raw_config)
+
+
+def normalized_non_secret_settings(config: EnvironmentConfig) -> dict[str, Any]:
+    return {
+        "name": config.name,
+        "origin": config.origin,
+        "api_base_path": config.api_base_path,
+        "openapi_path": config.openapi_path,
+        "verify_tls": config.verify_tls,
+        "environment_type": config.environment_type,
+        "allow_mutation": config.allow_mutation,
+        "allow_destructive": config.allow_destructive,
+        "session_cookie_name": config.session_cookie_name,
+        "auth": {
+            "mode": config.auth.mode,
+            "cookie_env": config.auth.cookie_env,
+            "browser": config.auth.browser.model_dump(mode="json"),
+            "auth0": {
+                "management_domain_env": config.auth.auth0.management_domain_env,
+                "management_client_id_env": config.auth.auth0.management_client_id_env,
+                "management_client_secret_env": config.auth.auth0.management_client_secret_env,
+                "connection_env": config.auth.auth0.connection_env,
+                "test_email_domain": config.auth.auth0.test_email_domain,
+            },
+        },
+        "data": config.data.model_dump(mode="json"),
+        "timeouts": config.timeouts.model_dump(mode="json"),
+    }
+
+codex
+I’m going to run Ruff format now, because phase 1 explicitly includes the mechanical formatting pass. After that I’ll make the two type-only edits and run the four acceptance commands.
+exec
+/bin/bash -lc '.venv/bin/python -m ruff format .' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+4 files reformatted, 20 files left unchanged
+
+codex
+Ruff reformatted the known four files. I’m applying the narrow typing changes now: the fixture becomes an explicit generator, and the Playwright type is imported from Playwright in the test.
+apply patch
+patch: completed
+/workspace/budget-analyzer-api-tests/tests/auth/test_phase1_auth_helpers.py
+/workspace/budget-analyzer-api-tests/tests/conftest.py
+diff --git a/tests/auth/test_phase1_auth_helpers.py b/tests/auth/test_phase1_auth_helpers.py
+index eb36d838dc940bbb7463397a0ea27dfaa197cf2f..04df6f8e5b38e387adfa762da8fc4ff3e14642e9
+--- a/tests/auth/test_phase1_auth_helpers.py
++++ b/tests/auth/test_phase1_auth_helpers.py
+@@ -6,6 +6,7 @@
+ from typing import cast
+ 
+ import httpx
++from playwright.sync_api import BrowserContext
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, load_auth_context
+@@ -15,8 +16,7 @@
+     Auth0ManagementSettings,
+     Auth0ScopeError,
+ )
+-from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
+-from api_tests.browser_login import read_session_cookie
++from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+ from api_tests.client import GatewayClient
+ from api_tests.config import load_environment
+ from api_tests.identities import create_run_identities
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 1930400a2ca4de96afc1af1c99d719f2f8425f1f..737ce6831f5217180f772fe9e9cc406b8e7f93cf
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,5 +1,7 @@
+ from __future__ import annotations
+ 
++from collections.abc import Generator
++
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+@@ -49,6 +51,9 @@
+ 
+ 
+ @pytest.fixture(scope="session")
+-def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
++def gateway_client(
++    auth_context: AuthContext,
++    env_config: EnvironmentConfig,
++) -> Generator[GatewayClient, None, None]:
+     with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+         yield client
+
+diff --git a/tests/auth/test_phase1_auth_helpers.py b/tests/auth/test_phase1_auth_helpers.py
+index eb36d838dc940bbb7463397a0ea27dfaa197cf2f..04df6f8e5b38e387adfa762da8fc4ff3e14642e9
+--- a/tests/auth/test_phase1_auth_helpers.py
++++ b/tests/auth/test_phase1_auth_helpers.py
+@@ -6,6 +6,7 @@
+ from typing import cast
+ 
+ import httpx
++from playwright.sync_api import BrowserContext
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, load_auth_context
+@@ -15,8 +16,7 @@
+     Auth0ManagementSettings,
+     Auth0ScopeError,
+ )
+-from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
+-from api_tests.browser_login import read_session_cookie
++from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+ from api_tests.client import GatewayClient
+ from api_tests.config import load_environment
+ from api_tests.identities import create_run_identities
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 1930400a2ca4de96afc1af1c99d719f2f8425f1f..737ce6831f5217180f772fe9e9cc406b8e7f93cf
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,5 +1,7 @@
+ from __future__ import annotations
+ 
++from collections.abc import Generator
++
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+@@ -49,6 +51,9 @@
+ 
+ 
+ @pytest.fixture(scope="session")
+-def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
++def gateway_client(
++    auth_context: AuthContext,
++    env_config: EnvironmentConfig,
++) -> Generator[GatewayClient, None, None]:
+     with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+         yield client
+
+codex
+The planned edits are in place. I’m running the four phase acceptance checks exactly as listed; these are read-only validation commands.
+exec
+/bin/bash -lc '.venv/bin/python -m ruff format --check .' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+24 files already formatted
+
+exec
+/bin/bash -lc '.venv/bin/python -m ruff check .' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+All checks passed!
+
+exec
+/bin/bash -lc '.venv/bin/python -m mypy api_tests tests' in /workspace/budget-analyzer-api-tests
+exec
+/bin/bash -lc '.venv/bin/python -m pytest --env local --collect-only' in /workspace/budget-analyzer-api-tests
+diff --git a/tests/auth/test_phase1_auth_helpers.py b/tests/auth/test_phase1_auth_helpers.py
+index eb36d838dc940bbb7463397a0ea27dfaa197cf2f..04df6f8e5b38e387adfa762da8fc4ff3e14642e9
+--- a/tests/auth/test_phase1_auth_helpers.py
++++ b/tests/auth/test_phase1_auth_helpers.py
+@@ -6,6 +6,7 @@
+ from typing import cast
+ 
+ import httpx
++from playwright.sync_api import BrowserContext
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, load_auth_context
+@@ -15,8 +16,7 @@
+     Auth0ManagementSettings,
+     Auth0ScopeError,
+ )
+-from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
+-from api_tests.browser_login import read_session_cookie
++from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+ from api_tests.client import GatewayClient
+ from api_tests.config import load_environment
+ from api_tests.identities import create_run_identities
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 1930400a2ca4de96afc1af1c99d719f2f8425f1f..737ce6831f5217180f772fe9e9cc406b8e7f93cf
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,5 +1,7 @@
+ from __future__ import annotations
+ 
++from collections.abc import Generator
++
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+@@ -49,6 +51,9 @@
+ 
+ 
+ @pytest.fixture(scope="session")
+-def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
++def gateway_client(
++    auth_context: AuthContext,
++    env_config: EnvironmentConfig,
++) -> Generator[GatewayClient, None, None]:
+     with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+         yield client
+
+ succeeded in 301ms:
+Success: no issues found in 20 source files
+
+ succeeded in 379ms:
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /workspace/budget-analyzer-api-tests
+configfile: pytest.ini
+plugins: respx-0.23.1, anyio-4.13.0
+collected 15 items
+
+<Dir budget-analyzer-api-tests>
+  <Dir tests>
+    <Dir api_docs>
+      <Module test_openapi_docs.py>
+        <Function test_openapi_docs_returns_json_contract>
+    <Dir auth>
+      <Module test_phase1_auth_helpers.py>
+        <Function test_generate_run_id_uses_required_format>
+        <Function test_session_run_state_is_stable_for_process_session>
+        <Function test_auth0_client_requests_management_token_and_creates_verified_user>
+        <Function test_auth0_scope_errors_are_clear>
+        <Function test_read_session_cookie_extracts_http_only_cookie_metadata>
+        <Function test_create_run_identities_provisions_and_logs_in_primary_and_secondary_users>
+        <Function test_env_cookie_auth_mode_reads_local_debug_cookie>
+        <Function test_env_cookie_auth_mode_is_local_only>
+        <Function test_browser_auth0_mode_fails_before_network_when_management_env_is_missing>
+        <Function test_gateway_client_uses_origin_api_prefix_cookie_and_request_log>
+    <Dir contract>
+      <Module test_environment_config.py>
+        <Function test_committed_environment_config_loads[local]>
+        <Function test_committed_environment_config_loads[staging]>
+        <Function test_committed_environment_config_loads[production]>
+        <Function test_env_config_fixture_exposes_selected_environment>
+
+========================= 15 tests collected in 0.03s ==========================
+
+codex
+All four acceptance checks passed. I’m doing a final diff/status review to make sure the changed set matches phase 1 and doesn’t include unrelated files.
+exec
+/bin/bash -lc 'git status --short' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+ M api_tests/auth0.py
+ M api_tests/browser_login.py
+ M api_tests/config.py
+ M tests/auth/test_phase1_auth_helpers.py
+ M tests/conftest.py
+?? .ai-session-handler/
+?? AGENTS.md
+?? docs/
+
+exec
+/bin/bash -lc 'git diff -- tests/conftest.py tests/auth/test_phase1_auth_helpers.py api_tests/auth0.py api_tests/browser_login.py api_tests/config.py' in /workspace/budget-analyzer-api-tests
+ succeeded in 0ms:
+diff --git a/api_tests/auth0.py b/api_tests/auth0.py
+index 252a223..3afad2e 100644
+--- a/api_tests/auth0.py
++++ b/api_tests/auth0.py
+@@ -221,8 +221,7 @@ def _raise_auth0_error(
+ 
+     if response.status_code in {401, 403} and "scope" in body_text.lower():
+         raise Auth0ScopeError(
+-            f"{message}. Confirm the Auth0 Management API application has scope "
+-            f"{required_scope!r}."
++            f"{message}. Confirm the Auth0 Management API application has scope {required_scope!r}."
+         )
+ 
+     raise Auth0ManagementError(message)
+diff --git a/api_tests/browser_login.py b/api_tests/browser_login.py
+index 8469b91..2d0d84a 100644
+--- a/api_tests/browser_login.py
++++ b/api_tests/browser_login.py
+@@ -45,7 +45,9 @@ def login_with_browser(
+                     timeout=timeout_ms,
+                 )
+                 fill_auth0_login_form(page, credentials, timeout_ms=timeout_ms)
+-                page.wait_for_url(f"{config.origin}/**", wait_until="networkidle", timeout=timeout_ms)
++                page.wait_for_url(
++                    f"{config.origin}/**", wait_until="networkidle", timeout=timeout_ms
++                )
+                 cookie = read_session_cookie(context, config.session_cookie_name)
+             finally:
+                 context.close()
+diff --git a/api_tests/config.py b/api_tests/config.py
+index f6232e0..8ac36fe 100644
+--- a/api_tests/config.py
++++ b/api_tests/config.py
+@@ -142,7 +142,9 @@ class EnvironmentConfig(StrictConfigModel):
+             if self.allow_mutation:
+                 raise ValueError("production environments must not allow mutation by default")
+             if self.allow_destructive:
+-                raise ValueError("production environments must not allow destructive tests by default")
++                raise ValueError(
++                    "production environments must not allow destructive tests by default"
++                )
+         if self.allow_destructive and not self.allow_mutation:
+             raise ValueError("allow_destructive requires allow_mutation")
+         return self
+diff --git a/tests/auth/test_phase1_auth_helpers.py b/tests/auth/test_phase1_auth_helpers.py
+index b95c82e..04df6f8 100644
+--- a/tests/auth/test_phase1_auth_helpers.py
++++ b/tests/auth/test_phase1_auth_helpers.py
+@@ -6,6 +6,7 @@ from pathlib import Path
+ from typing import cast
+ 
+ import httpx
++from playwright.sync_api import BrowserContext
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, load_auth_context
+@@ -15,8 +16,7 @@ from api_tests.auth0 import (
+     Auth0ManagementSettings,
+     Auth0ScopeError,
+ )
+-from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
+-from api_tests.browser_login import read_session_cookie
++from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+ from api_tests.client import GatewayClient
+ from api_tests.config import load_environment
+ from api_tests.identities import create_run_identities
+@@ -181,7 +181,9 @@ def test_create_run_identities_provisions_and_logs_in_primary_and_secondary_user
+ 
+ def test_env_cookie_auth_mode_reads_local_debug_cookie() -> None:
+     config = load_environment("local")
+-    config = config.model_copy(update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})})
++    config = config.model_copy(
++        update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})}
++    )
+ 
+     auth_context = load_auth_context(
+         config,
+@@ -201,7 +203,9 @@ def test_env_cookie_auth_mode_reads_local_debug_cookie() -> None:
+ 
+ def test_env_cookie_auth_mode_is_local_only() -> None:
+     config = load_environment("staging")
+-    config = config.model_copy(update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})})
++    config = config.model_copy(
++        update={"auth": config.auth.model_copy(update={"mode": "env_cookie"})}
++    )
+ 
+     with pytest.raises(AuthConfigurationError, match="only allowed for local"):
+         load_auth_context(
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 1930400..737ce68 100644
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,5 +1,7 @@
+ from __future__ import annotations
+ 
++from collections.abc import Generator
++
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+@@ -49,6 +51,9 @@ def auth_context(env_config: EnvironmentConfig, run_state: RunState) -> AuthCont
+ 
+ 
+ @pytest.fixture(scope="session")
+-def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
++def gateway_client(
++    auth_context: AuthContext,
++    env_config: EnvironmentConfig,
++) -> Generator[GatewayClient, None, None]:
+     with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+         yield client
+
+diff --git a/tests/auth/test_phase1_auth_helpers.py b/tests/auth/test_phase1_auth_helpers.py
+index eb36d838dc940bbb7463397a0ea27dfaa197cf2f..04df6f8e5b38e387adfa762da8fc4ff3e14642e9
+--- a/tests/auth/test_phase1_auth_helpers.py
++++ b/tests/auth/test_phase1_auth_helpers.py
+@@ -6,6 +6,7 @@
+ from typing import cast
+ 
+ import httpx
++from playwright.sync_api import BrowserContext
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, load_auth_context
+@@ -15,8 +16,7 @@
+     Auth0ManagementSettings,
+     Auth0ScopeError,
+ )
+-from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
+-from api_tests.browser_login import read_session_cookie
++from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+ from api_tests.client import GatewayClient
+ from api_tests.config import load_environment
+ from api_tests.identities import create_run_identities
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 1930400a2ca4de96afc1af1c99d719f2f8425f1f..737ce6831f5217180f772fe9e9cc406b8e7f93cf
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,5 +1,7 @@
+ from __future__ import annotations
+ 
++from collections.abc import Generator
++
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+@@ -49,6 +51,9 @@
+ 
+ 
+ @pytest.fixture(scope="session")
+-def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
++def gateway_client(
++    auth_context: AuthContext,
++    env_config: EnvironmentConfig,
++) -> Generator[GatewayClient, None, None]:
+     with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+         yield client
+
+codex
+<phase-complete>Phase 1 complete. Ran Ruff formatting, fixed the `gateway_client` fixture generator annotation, and imported `BrowserContext` directly from `playwright.sync_api` in the test. Validation passed: `ruff format --check`, `ruff check`, `mypy api_tests tests`, and `pytest --env local --collect-only` collected 15 tests successfully.</phase-complete>
+diff --git a/tests/auth/test_phase1_auth_helpers.py b/tests/auth/test_phase1_auth_helpers.py
+index eb36d838dc940bbb7463397a0ea27dfaa197cf2f..04df6f8e5b38e387adfa762da8fc4ff3e14642e9
+--- a/tests/auth/test_phase1_auth_helpers.py
++++ b/tests/auth/test_phase1_auth_helpers.py
+@@ -6,6 +6,7 @@
+ from typing import cast
+ 
+ import httpx
++from playwright.sync_api import BrowserContext
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, load_auth_context
+@@ -15,8 +16,7 @@
+     Auth0ManagementSettings,
+     Auth0ScopeError,
+ )
+-from api_tests.browser_login import BrowserContext, BrowserLoginCredentials, SessionCookie
+-from api_tests.browser_login import read_session_cookie
++from api_tests.browser_login import BrowserLoginCredentials, SessionCookie, read_session_cookie
+ from api_tests.client import GatewayClient
+ from api_tests.config import load_environment
+ from api_tests.identities import create_run_identities
+diff --git a/tests/conftest.py b/tests/conftest.py
+index 1930400a2ca4de96afc1af1c99d719f2f8425f1f..737ce6831f5217180f772fe9e9cc406b8e7f93cf
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,5 +1,7 @@
+ from __future__ import annotations
+ 
++from collections.abc import Generator
++
+ import pytest
+ 
+ from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_context
+@@ -49,6 +51,9 @@
+ 
+ 
+ @pytest.fixture(scope="session")
+-def gateway_client(auth_context: AuthContext, env_config: EnvironmentConfig) -> GatewayClient:
++def gateway_client(
++    auth_context: AuthContext,
++    env_config: EnvironmentConfig,
++) -> Generator[GatewayClient, None, None]:
+     with GatewayClient(env_config, session_cookie=auth_context.session_cookie) as client:
+         yield client
+
+tokens used
+54,432
+<phase-complete>Phase 1 complete. Ran Ruff formatting, fixed the `gateway_client` fixture generator annotation, and imported `BrowserContext` directly from `playwright.sync_api` in the test. Validation passed: `ruff format --check`, `ruff check`, `mypy api_tests tests`, and `pytest --env local --collect-only` collected 15 tests successfully.</phase-complete>
