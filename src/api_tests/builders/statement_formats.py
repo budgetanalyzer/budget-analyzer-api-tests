@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from api_tests.run_state import RunState
+
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+_STATEMENT_FIXTURE_DIR = _REPOSITORY_ROOT / "fixtures" / "statements"
 
 StatementFormatType = Literal["CSV", "PDF", "XLSX"]
 StatementFormatScope = Literal["SYSTEM", "USER"]
@@ -132,6 +136,10 @@ def csv_sample_bytes(run_state: RunState, label: str) -> bytes:
     ).encode()
 
 
+def basic_csv_sample_bytes() -> bytes:
+    return (_STATEMENT_FIXTURE_DIR / "basic.csv").read_bytes()
+
+
 def csv_wizard_mapping() -> CsvWizardColumnMappingRequest:
     return {
         "dateColumn": "Date",
@@ -170,7 +178,7 @@ def csv_save_request(run_state: RunState, label: str) -> CsvWizardSaveRequest:
 
 
 def pdf_sample_bytes() -> bytes:
-    return b"%PDF-1.4\n% budget-analyzer-api-tests intentionally minimal sample\n"
+    return (_STATEMENT_FIXTURE_DIR / "basic.pdf").read_bytes()
 
 
 def pdf_wizard_mapping() -> PdfWizardColumnMappingRequest:

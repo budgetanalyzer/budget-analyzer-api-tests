@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "path": "/workspace/budget-analyzer-api-tests/docs/plans/openapi-behavioral-coverage-remediation-plan.md",
+    "sha256": "16f75ce363402349d5f7bd746d5c87af33f538e2f2ab45ccf85dd94cf6f1e5eb",
+    "accepted_at": "2026-07-07T08:42:13Z"
+  },
+  "completed_phase_ids": [
+    "phase-1"
+  ],
+  "current_phase": {
+    "id": "phase-2",
+    "title": "Deterministic Statement Fixtures"
+  },
+  "stop": {
+    "reason": "blocked",
+    "phase_id": "phase-2",
+    "message": "Implemented phase 2 fixture/test changes, but live acceptance is blocked by missing Auth0 prerequisite `AUTH0_MGMT_DOMAIN`.\n\nChanged:\n- Added `fixtures/statements/basic.csv`\n- Added valid checked-in `fixtures/statements/basic.pdf`\n- Updated statement-format helpers to read fixture bytes via repository-relative `Path.read_bytes()`\n- Switched statement-format CSV wizard tests to the checked-in CSV fixture\n- Replaced PDF happy-path parse-error tolerance with required `200`/`201` success assertions\n- Added separate invalid-PDF negative tests for documented `400`/`422`\n\nPassed:\n- Ruff format/check on changed Python files\n- `.venv/bin/python -m pytest --env local --collect-only`\n- `.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder`\n- `.venv/bin/python -m mypy src tests`\n\nBlocked:\n- `.venv/bin/python -m pytest --env local tests/statement_formats -m mutation`\n- Fails during setup for all selected mutation tests with: `authentication prerequisite failed: required Auth0 environment variable is missing: AUTH0_MGMT_DOMAIN`",
+    "clarification_request": null
+  },
+  "last_run": {
+    "run_id": "20260707T085325Z-phase-2",
+    "phase_id": "phase-2",
+    "status": "blocked",
+    "started_at": "2026-07-07T08:53:25Z",
+    "finished_at": "2026-07-07T08:58:25Z",
+    "exit_code": 2,
+    "transcript_path": "/workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260707T085325Z-phase-2.txt",
+    "summary": "Implemented phase 2 fixture/test changes, but live acceptance is blocked by missing Auth0 prerequisite `AUTH0_MGMT_DOMAIN`.\n\nChanged:\n- Added `fixtures/statements/basic.csv`\n- Added valid checked-in `fixtures/statements/basic.pdf`\n- Updated statement-format helpers to read fixture bytes via repository-relative `Path.read_bytes()`\n- Switched statement-format CSV wizard tests to the checked-in CSV fixture\n- Replaced PDF happy-path parse-error tolerance with required `200`/`201` success assertions\n- Added separate invalid-PDF negative tests for documented `400`/`422`\n\nPassed:\n- Ruff format/check on changed Python files\n- `.venv/bin/python -m pytest --env local --collect-only`\n- `.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder`\n- `.venv/bin/python -m mypy src tests`\n\nBlocked:\n- `.venv/bin/python -m pytest --env local tests/statement_formats -m mutation`\n- Fails during setup for all selected mutation tests with: `authentication prerequisite failed: required Auth0 environment variable is missing: AUTH0_MGMT_DOMAIN`"
+  }
+}

@@ -8,8 +8,9 @@ from api_tests.auth import AuthConfigurationError, AuthContext, load_auth_contex
 from api_tests.auth0 import Auth0ManagementError
 from api_tests.browser_login import BrowserLoginError
 from api_tests.client import GatewayClient
-from api_tests.config import EnvironmentConfig, load_environment
+from api_tests.config import EnvironmentConfig, load_environment, repository_root
 from api_tests.coverage import MarkerCounts, build_marker_counts
+from api_tests.openapi import OpenApiDocument, load_snapshot
 from api_tests.run_state import RunState, session_run_state
 
 ENV_CONFIG_KEY: pytest.StashKey[EnvironmentConfig] = pytest.StashKey()
@@ -92,6 +93,11 @@ def env_config(pytestconfig: pytest.Config) -> EnvironmentConfig:
 @pytest.fixture(scope="session")
 def run_state() -> RunState:
     return session_run_state()
+
+
+@pytest.fixture(scope="session")
+def openapi_snapshot() -> OpenApiDocument:
+    return load_snapshot(repository_root() / "schemas" / "openapi.json")
 
 
 @pytest.fixture(scope="session")
