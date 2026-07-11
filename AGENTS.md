@@ -234,8 +234,11 @@ Use pytest for tests.
 Update documentation in the same change as behavior, configuration, CLI,
 tooling, marker conventions, environment schema, or workflow changes.
 
-- When creating plans, break them into `## Phase ...` sections. Each phase
-  should be scoped so it can be completed in a single AI session.
+- When creating an implementation or execution plan intended for AI Session
+  Handler, follow the
+  [AI Session Handler plan format](../ai-session-handler/docs/plan-format.md),
+  use its canonical template, replace every placeholder, and retain the
+  numbered `## Phase N: Title` headings.
 - Update `README.md` when setup, commands, naming, usage, or examples change.
 - Update `docs/` when architecture, OpenAPI coverage, artifact schema, marker
   grammar, exit codes, CI workflow, or operational behavior changes.
