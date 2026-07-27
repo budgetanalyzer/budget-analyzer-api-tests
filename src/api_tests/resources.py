@@ -17,7 +17,9 @@ from api_tests.builders.transactions import (
 )
 from api_tests.builders.views import create_saved_view_request
 from api_tests.client import GatewayClient
+from api_tests.openapi import OpenApiDocument
 from api_tests.run_state import RunState
+from api_tests.schemas import assert_response_matches_openapi
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +45,8 @@ def save_csv_wizard_statement_format(
     client: GatewayClient,
     run_state: RunState,
     label: str,
+    *,
+    openapi_snapshot: OpenApiDocument | None = None,
 ) -> CreatedStatementFormat:
     response = client.api_request(
         "POST",
@@ -51,6 +55,12 @@ def save_csv_wizard_statement_format(
             "file": (f"{label}.csv", csv_sample_bytes(run_state, label), "text/csv"),
             "request": multipart_json(csv_save_request(run_state, label)),
         },
+    )
+    _assert_response_matches_snapshot(
+        response,
+        "saveCsvWizardFormat",
+        httpx.codes.CREATED,
+        openapi_snapshot,
     )
     body = json_object_response(response, httpx.codes.CREATED)
     return CreatedStatementFormat(id=int_field(body, "id"), body=body)
@@ -63,6 +73,7 @@ def preview_transactions(
     *,
     statement_format_id: int,
     account_id: str,
+    openapi_snapshot: OpenApiDocument | None = None,
 ) -> JsonObject:
     response = client.api_request(
         "POST",
@@ -75,6 +86,12 @@ def preview_transactions(
             "file": (f"{label}.csv", csv_sample_bytes(run_state, label), "text/csv"),
         },
     )
+    _assert_response_matches_snapshot(
+        response,
+        "previewTransactions",
+        httpx.codes.OK,
+        openapi_snapshot,
+    )
     return json_object_response(response, httpx.codes.OK)
 
 
@@ -82,18 +99,31 @@ def import_generated_transaction(
     client: GatewayClient,
     run_state: RunState,
     label: str,
+    *,
+    account_id: str | None = None,
+    openapi_snapshot: OpenApiDocument | None = None,
 ) -> CreatedTransaction:
-    statement_format = save_csv_wizard_statement_format(client, run_state, f"{label}-format")
-    account_id = generated_account_id(run_state, label)
+    statement_format = save_csv_wizard_statement_format(
+        client,
+        run_state,
+        f"{label}-format",
+        openapi_snapshot=openapi_snapshot,
+    )
+    transaction_account_id = account_id or generated_account_id(run_state, label)
     preview = preview_transactions(
         client,
         run_state,
         label,
         statement_format_id=statement_format.id,
-        account_id=account_id,
+        account_id=transaction_account_id,
+        openapi_snapshot=openapi_snapshot,
     )
     preview_import_token = string_field(preview, "previewImportToken")
-    transaction_request = import_transaction_request(run_state, label, account_id=account_id)
+    transaction_request = import_transaction_request(
+        run_state,
+        label,
+        account_id=transaction_account_id,
+    )
 
     response = client.api_request(
         "POST",
@@ -102,6 +132,12 @@ def import_generated_transaction(
             preview_import_token=preview_import_token,
             transactions=[transaction_request],
         ),
+    )
+    _assert_response_matches_snapshot(
+        response,
+        "batchImportTransactions",
+        httpx.codes.OK,
+        openapi_snapshot,
     )
     body = json_object_response(response, httpx.codes.OK)
     transactions = body.get("transactions")
@@ -115,7 +151,7 @@ def import_generated_transaction(
     }
     return CreatedTransaction(
         id=int_field(transaction_body, "id"),
-        account_id=account_id,
+        account_id=transaction_account_id,
         body=transaction_body,
     )
 
@@ -126,11 +162,24 @@ def create_saved_view(
     label: str,
     *,
     account_id: str | None = None,
+    openapi_snapshot: OpenApiDocument | None = None,
 ) -> CreatedSavedView:
     response = client.api_request(
         "POST",
         "/v1/views",
         json=create_saved_view_request(run_state, label, account_id=account_id),
     )
+    _assert_response_matches_snapshot(response, "createView", httpx.codes.CREATED, openapi_snapshot)
     body = json_object_response(response, httpx.codes.CREATED)
     return CreatedSavedView(id=string_field(body, "id"), body=body)
+
+
+def _assert_response_matches_snapshot(
+    response: httpx.Response,
+    operation_id: str,
+    expected_status: int,
+    openapi_snapshot: OpenApiDocument | None,
+) -> None:
+    if openapi_snapshot is None:
+        return
+    assert_response_matches_openapi(response, operation_id, expected_status, openapi_snapshot)

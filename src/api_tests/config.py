@@ -8,27 +8,27 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 EnvironmentType = Literal["local", "staging", "production"]
-AuthMode = Literal["browser_auth0", "env_cookie"]
+AuthMode = Literal["supplied_sessions", "browser_preprovisioned"]
 CleanupMode = Literal["none"]
+
+
+class SuppliedSessionNonSecretSettings(TypedDict):
+    primary_session_env: str
+    secondary_session_env: str | None
 
 
 class BrowserNonSecretSettings(TypedDict):
     headless: bool
-
-
-class Auth0NonSecretSettings(TypedDict):
-    management_domain_env: str
-    management_client_id_env: str
-    management_client_secret_env: str
-    connection_env: str
-    test_email_domain: str
+    primary_username_env: str
+    primary_password_env: str
+    secondary_username_env: str
+    secondary_password_env: str
 
 
 class AuthNonSecretSettings(TypedDict):
     mode: AuthMode
-    cookie_env: str
-    browser: BrowserNonSecretSettings
-    auth0: Auth0NonSecretSettings
+    supplied_sessions: SuppliedSessionNonSecretSettings
+    browser: BrowserNonSecretSettings | None
 
 
 class DataNonSecretSettings(TypedDict):
@@ -47,7 +47,6 @@ class EnvironmentNonSecretSettings(TypedDict):
     origin: str
     api_base_path: str
     openapi_path: str
-    verify_tls: bool
     environment_type: EnvironmentType
     allow_mutation: bool
     allow_destructive: bool
@@ -61,56 +60,54 @@ class StrictConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+def validate_env_var_name(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("environment variable name must not be empty")
+    if not value.replace("_", "").isalnum() or not value[0].isalpha():
+        raise ValueError(f"invalid environment variable name: {value}")
+    return value
+
+
+class SuppliedSessionConfig(StrictConfigModel):
+    primary_session_env: str
+    secondary_session_env: str | None = None
+
+    @field_validator("primary_session_env")
+    @classmethod
+    def validate_primary_session_env(cls, value: str) -> str:
+        return validate_env_var_name(value)
+
+    @field_validator("secondary_session_env")
+    @classmethod
+    def validate_secondary_session_env(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_env_var_name(value)
+
+
 class BrowserConfig(StrictConfigModel):
     headless: bool
-
-
-class Auth0Config(StrictConfigModel):
-    management_domain_env: str
-    management_client_id_env: str
-    management_client_secret_env: str
-    connection_env: str
-    test_email_domain: str
+    primary_username_env: str
+    primary_password_env: str
+    secondary_username_env: str
+    secondary_password_env: str
 
     @field_validator(
-        "management_domain_env",
-        "management_client_id_env",
-        "management_client_secret_env",
-        "connection_env",
+        "primary_username_env",
+        "primary_password_env",
+        "secondary_username_env",
+        "secondary_password_env",
     )
     @classmethod
-    def validate_env_var_name(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("environment variable name must not be empty")
-        if not value.replace("_", "").isalnum() or not value[0].isalpha():
-            raise ValueError(f"invalid environment variable name: {value}")
-        return value
-
-    @field_validator("test_email_domain")
-    @classmethod
-    def validate_test_email_domain(cls, value: str) -> str:
-        value = value.strip().lower()
-        if not value or "@" in value or "/" in value or "." not in value:
-            raise ValueError("test_email_domain must be a DNS-style domain")
-        return value
+    def validate_secret_env_name(cls, value: str) -> str:
+        return validate_env_var_name(value)
 
 
 class AuthConfig(StrictConfigModel):
     mode: AuthMode
-    cookie_env: str
-    browser: BrowserConfig
-    auth0: Auth0Config
-
-    @field_validator("cookie_env")
-    @classmethod
-    def validate_cookie_env(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("cookie_env must not be empty")
-        if not value.replace("_", "").isalnum() or not value[0].isalpha():
-            raise ValueError(f"invalid cookie_env environment variable name: {value}")
-        return value
+    supplied_sessions: SuppliedSessionConfig
+    browser: BrowserConfig | None = None
 
 
 class DataConfig(StrictConfigModel):
@@ -143,7 +140,6 @@ class EnvironmentConfig(StrictConfigModel):
     origin: str
     api_base_path: str
     openapi_path: str
-    verify_tls: bool
     environment_type: EnvironmentType
     allow_mutation: bool
     allow_destructive: bool
@@ -165,8 +161,8 @@ class EnvironmentConfig(StrictConfigModel):
     def validate_origin(cls, value: str) -> str:
         value = value.strip().rstrip("/")
         parsed = urlparse(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("origin must be an absolute HTTP(S) URL")
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("origin must be an absolute HTTPS URL")
         if parsed.path or parsed.params or parsed.query or parsed.fragment:
             raise ValueError("origin must not include a path, query, or fragment")
         return value
@@ -190,17 +186,25 @@ class EnvironmentConfig(StrictConfigModel):
                 raise ValueError(
                     "production environments must not allow destructive tests by default"
                 )
-            if self.auth.mode != "env_cookie":
-                raise ValueError(
-                    "production auth.mode must use env_cookie with a pre-provisioned "
-                    "read-only smoke session"
-                )
-            if self.auth.cookie_env != self.session_cookie_name:
-                raise ValueError(
-                    "production auth.cookie_env must match the configured session cookie name"
-                )
+            if self.auth.mode != "supplied_sessions":
+                raise ValueError("production auth.mode must use supplied_sessions")
+            if self.auth.browser is not None:
+                raise ValueError("production environments must not configure browser acquisition")
             if self.data.per_run_user_boundary:
                 raise ValueError("production environments must not create per-run users")
+        if self.environment_type == "staging":
+            if (
+                self.auth.mode == "supplied_sessions"
+                and self.auth.supplied_sessions.secondary_session_env is None
+            ):
+                raise ValueError("staging supplied_sessions requires secondary_session_env")
+            if self.auth.mode == "browser_preprovisioned" and self.auth.browser is None:
+                raise ValueError("staging browser_preprovisioned requires browser settings")
+        if self.auth.mode == "browser_preprovisioned":
+            if self.environment_type == "production":
+                raise ValueError("browser acquisition is forbidden for production")
+            if self.auth.browser is None:
+                raise ValueError("browser_preprovisioned requires browser settings")
         if self.allow_destructive and not self.allow_mutation:
             raise ValueError("allow_destructive requires allow_mutation")
         return self
@@ -239,30 +243,43 @@ def load_environment_file(path: Path) -> EnvironmentConfig:
     return EnvironmentConfig.model_validate(raw_config)
 
 
+def with_session_mode(config: EnvironmentConfig, mode: AuthMode | None) -> EnvironmentConfig:
+    if mode is None or mode == config.auth.mode:
+        return config
+
+    raw_config = config.model_dump()
+    auth_config = raw_config["auth"]
+    if not isinstance(auth_config, dict):
+        raise TypeError("normalized auth config was not a mapping")
+    auth_config["mode"] = mode
+    return EnvironmentConfig.model_validate(raw_config)
+
+
 def normalized_non_secret_settings(config: EnvironmentConfig) -> EnvironmentNonSecretSettings:
     return {
         "name": config.name,
         "origin": config.origin,
         "api_base_path": config.api_base_path,
         "openapi_path": config.openapi_path,
-        "verify_tls": config.verify_tls,
         "environment_type": config.environment_type,
         "allow_mutation": config.allow_mutation,
         "allow_destructive": config.allow_destructive,
         "session_cookie_name": config.session_cookie_name,
         "auth": {
             "mode": config.auth.mode,
-            "cookie_env": config.auth.cookie_env,
+            "supplied_sessions": {
+                "primary_session_env": config.auth.supplied_sessions.primary_session_env,
+                "secondary_session_env": config.auth.supplied_sessions.secondary_session_env,
+            },
             "browser": {
                 "headless": config.auth.browser.headless,
-            },
-            "auth0": {
-                "management_domain_env": config.auth.auth0.management_domain_env,
-                "management_client_id_env": config.auth.auth0.management_client_id_env,
-                "management_client_secret_env": config.auth.auth0.management_client_secret_env,
-                "connection_env": config.auth.auth0.connection_env,
-                "test_email_domain": config.auth.auth0.test_email_domain,
-            },
+                "primary_username_env": config.auth.browser.primary_username_env,
+                "primary_password_env": config.auth.browser.primary_password_env,
+                "secondary_username_env": config.auth.browser.secondary_username_env,
+                "secondary_password_env": config.auth.browser.secondary_password_env,
+            }
+            if config.auth.browser is not None
+            else None,
         },
         "data": {
             "namespace_prefix": config.data.namespace_prefix,

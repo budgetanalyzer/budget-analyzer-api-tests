@@ -7,12 +7,30 @@ keep external identity-provider behavior behind optional session-acquisition
 adapters, finish the pending behavioral coverage, and become ready for local,
 staging, and production-safe execution.
 
-Status: Ready for implementation
+Status: In progress — Phases 1 through 4 complete; Phase 5 blocked on the
+verified local TLS agent-runner prerequisite below.
 
 Supersedes:
 
 - `docs/plans/openapi-black-box-api-test-repository-plan.md`
 - `docs/plans/openapi-behavioral-coverage-remediation-plan.md`
+
+## Blocking Prerequisite
+
+Before resuming Phase 5, complete
+[`verified-local-tls-agent-runner-prerequisite-plan.md`](verified-local-tls-agent-runner-prerequisite-plan.md).
+That cross-repository plan is owned in sequence by `orchestration`, `workspace`,
+and this repository. It publishes only the host's public mkcert root CA,
+provides a workspace-owned lazy command that installs that CA into the agent
+container's normal system/Python/Chromium trust paths, removes configurable TLS
+verification from this harness, and makes the exact-local live bootstrap invoke
+the ensure command before its automatic prerequisite checks.
+
+This plan must not work around the prerequisite with `verify=False`,
+Playwright `ignore_https_errors`, an insecure pytest/workflow flag, HTTP, or
+agent-container certificate generation. Phases 1 through 4 remain completed
+and must not be rerun. Resume this plan at Phase 5 only after the prerequisite
+plan's cross-repository acceptance phase passes.
 
 ## Current Baseline
 
@@ -78,6 +96,12 @@ remediates.
    separately from endpoint behavior failures.
 10. Deferred admin/global operations remain deferred until a separate admin
     identity and global-state safety plan exists.
+11. Live requests always use verified HTTPS. Host CA publication and the lazy
+    runner trust installer belong to orchestration/workspace. For the exact
+    local origin, this repository's live prerequisite/bootstrap path invokes
+    the workspace ensure command when available, then performs its own typed
+    diagnostics. It owns no trust-anchor implementation and provides no
+    certificate-verification bypass.
 
 ## Phase 1: Provider-Neutral Session Contract
 
@@ -477,6 +501,10 @@ status codes alone.
 
 ### Required context
 
+- completed verified-local-TLS agent-runner prerequisite plan
+- `tools/check-live-prerequisites.py`
+- workspace `ensure-budget-analyzer-local-ca-trust` command for exact-local
+  live bootstrap
 - endpoint tests and public resource helpers
 - `src/api_tests/assertions.py`
 - `src/api_tests/client.py`
@@ -489,6 +517,11 @@ status codes alone.
 - If the public API is eventually consistent, use a bounded polling helper
   based on the configured eventual timeout; do not add arbitrary sleeps.
 - Keep request-log output redacted.
+- Treat `tools/check-live-prerequisites.py` as the live bootstrap entry point:
+  for `environment_type: local` and exactly
+  `https://app.budgetanalyzer.localhost`, it invokes the workspace ensure
+  command when available before verified network access. It never invokes that
+  command for staging, production, aliases, or origin overrides.
 
 ### Validation
 
@@ -502,9 +535,15 @@ status codes alone.
 Live acceptance:
 
 ```bash
+.venv/bin/python tools/check-live-prerequisites.py \
+  --env local \
+  --scope public
 .venv/bin/python -m pytest --env local \
   tests/auth/test_edge_auth.py \
   tests/contract/test_unknown_routes.py
+.venv/bin/python tools/check-live-prerequisites.py \
+  --env local \
+  --scope authenticated
 .venv/bin/python -m pytest --env local \
   tests/transactions tests/statement_formats tests/views
 ```
@@ -518,6 +557,9 @@ Live acceptance:
 - Controlled bulk operations use at least two resources and assert exact
   results.
 - Happy-path tests require successful behavior.
+- Live acceptance uses verified HTTPS from the trusted runner and passes the
+  automatic lazy-trust bootstrap and prerequisite check before
+  network-capable fixtures.
 
 ## Phase 6: Validation And Negative Paths
 
@@ -586,6 +628,9 @@ service implementation details.
 Live acceptance:
 
 ```bash
+.venv/bin/python tools/check-live-prerequisites.py \
+  --env local \
+  --scope authenticated
 .venv/bin/python -m pytest --env local -m "mutation or destructive"
 ```
 
@@ -595,6 +640,8 @@ Live acceptance:
 - Negative assertions use documented statuses and stable contract fields.
 - Happy-path operation markers remain present.
 - Production-safe selection contains no new mutating setup.
+- Live negative-path execution passes the verified-HTTPS prerequisite check
+  before sending requests.
 
 ## Phase 7: Non-Admin Authorization Coverage
 
@@ -656,6 +703,9 @@ sessions.
 Live acceptance with two pre-provisioned staging sessions:
 
 ```bash
+.venv/bin/python tools/check-live-prerequisites.py \
+  --env staging \
+  --scope authorization
 .venv/bin/python -m pytest --env staging -m authorization
 ```
 
@@ -667,6 +717,8 @@ Live acceptance with two pre-provisioned staging sessions:
 - Authorization tests make no admin/global requests.
 - Missing secondary credentials produce a precise prerequisite result.
 - No test creates or deletes identity-provider users.
+- Staging authorization runs use mandatory certificate verification and the
+  shared prerequisite diagnostics.
 
 ## Phase 8: Live OpenAPI Drift And Tool Reliability
 
@@ -737,6 +789,9 @@ snapshot while keeping ordinary development offline.
 Live acceptance:
 
 ```bash
+.venv/bin/python tools/check-live-prerequisites.py \
+  --env staging \
+  --scope public
 .venv/bin/python tools/check-openapi-coverage.py \
   --env staging \
   --source live \
@@ -752,6 +807,8 @@ Live acceptance:
 - Snapshot-only commands remain offline.
 - Expected network and configuration failures return concise tool errors.
 - Live OpenAPI checks require no identity-provider or session credentials.
+- Live drift checks use the public verified-HTTPS prerequisite path and never
+  expose a TLS bypass.
 
 ## Phase 9: Documentation And Operator Workflow
 
@@ -770,11 +827,16 @@ test identities, and the completed behavioral suite.
   - local and staging full-suite commands
   - production read-only command
   - snapshot and live OpenAPI coverage commands
-- Update `AGENTS.md` to remove Auth0 Management API requirements and describe
-  the new session boundary.
+  - verified host-CA trust prerequisites for agent-container live runs
+  - lazy exact-local trust installation through the workspace ensure command
+  - public, authenticated, and authorization preflight commands
+- Update `AGENTS.md` to remove Auth0 Management API requirements, describe the
+  new session boundary, and direct exact-local live work through the lazy
+  trust/bootstrap prerequisite path.
 - Add focused operational documentation under `docs/` when README would
   become too detailed:
   - session acquisition modes and prerequisites
+  - live target, TLS trust, gateway readiness, and credential preflight
   - stable-user data isolation
   - marker conventions for validation and authorization tests
   - live drift artifacts and exit behavior
@@ -809,6 +871,15 @@ test identities, and the completed behavioral suite.
   production selectors.
 - Document prerequisite failures as expected stop conditions, not harness
   defects.
+- Link to the orchestration-owned host CA publication and workspace-owned
+  lazy container trust command rather than duplicating their implementation
+  details.
+- State that the local preflight/bootstrap invokes
+  `ensure-budget-analyzer-local-ca-trust` only for the exact local origin when
+  that command is available, while non-local runners retain ordinary verified
+  TLS behavior.
+- State that certificate verification is mandatory and that the harness has no
+  insecure execution mode.
 
 ### Validation
 
@@ -817,14 +888,18 @@ test identities, and the completed behavioral suite.
 .venv/bin/python tools/validate-environment.py --env staging
 .venv/bin/python tools/validate-environment.py --env production
 .venv/bin/python tools/check-openapi-coverage.py --help
+.venv/bin/python tools/check-live-prerequisites.py --help
 .venv/bin/python -m pytest --help
 rg -n "AUTH0_MGMT|create:users|create fresh Auth0" \
   README.md AGENTS.md environments src tests docs \
   --glob '!docs/plans/**'
+rg -n "verify_tls|verify=False|ignore_https_errors" \
+  environments src tests
 ```
 
-The final `rg` command must return no active guidance or implementation
-references.
+Both final `rg` commands must return no active implementation references. The
+guardrail wording in `AGENTS.md` may name forbidden bypasses and is
+intentionally outside the second search.
 
 ### Completion criteria
 
@@ -833,6 +908,8 @@ references.
   offline coverage, live coverage, and production-safe execution.
 - Active documentation no longer requires Auth0 Management API access.
 - Historical plans are clearly deprecated and point here.
+- Operators can diagnose runner trust, target readiness, and authentication
+  prerequisites before live tests without weakening HTTPS.
 
 ## Phase 10: CI Workflows And Final Validation
 
@@ -851,8 +928,13 @@ without reintroducing identity-provider management credentials.
   - runs local collection
   - runs snapshot OpenAPI marker coverage
 - Add a manually dispatchable API test workflow with inputs for environment,
-  marker expression, target origin override, TLS policy, session acquisition
-  mode, and destructive policy where allowed.
+  marker expression, HTTPS target origin override, session acquisition mode,
+  and destructive policy where allowed.
+- Do not expose a TLS verification workflow input. Live workflows always
+  verify certificates and must configure runner trust before invoking this
+  repository.
+- Run `tools/check-live-prerequisites.py` with the scope required by each live
+  job before pytest or a live OpenAPI fetch.
 - Configure staging secrets for either:
   - primary and secondary supplied sessions; or
   - primary and secondary pre-provisioned browser credentials
@@ -881,10 +963,12 @@ without reintroducing identity-provider management credentials.
 - Do not modify orchestration workflows from this repository.
 - Do not upload cookies, passwords, authorization headers, or browser storage
   state as artifacts.
+- Do not add an insecure TLS workflow input, fallback, or retry.
 
 ### Required context
 
 - completed Phases 1 through 9
+- completed verified-local-TLS agent-runner prerequisite plan
 - `.github/workflows/`
 - repository secret and artifact policy
 - `README.md`
@@ -899,6 +983,11 @@ without reintroducing identity-provider management credentials.
 - Make mutation/destructive permissions explicit inputs and reject them for
   production regardless of workflow input.
 - Keep the quality workflow entirely non-live.
+- Keep CA publication and trust-installation implementation in their owning
+  orchestration/workspace or CI-runner configuration. This repository may
+  invoke the workspace ensure command from its exact-local live bootstrap, but
+  it does not implement trust-anchor installation or invoke the local command
+  for staging or production.
 
 ### Validation
 
@@ -917,10 +1006,19 @@ Final non-live gate:
 Required live validation:
 
 ```bash
+.venv/bin/python tools/check-live-prerequisites.py \
+  --env local \
+  --scope authenticated
 .venv/bin/python -m pytest --env local -m readonly
 .venv/bin/python -m pytest --env local -m "mutation or destructive"
+.venv/bin/python tools/check-live-prerequisites.py \
+  --env staging \
+  --scope authorization
 .venv/bin/python -m pytest --env staging -m authorization
 .venv/bin/python -m pytest --env staging -m auth_smoke
+.venv/bin/python tools/check-live-prerequisites.py \
+  --env staging \
+  --scope public
 .venv/bin/python tools/check-openapi-coverage.py \
   --env staging \
   --source live \
@@ -943,3 +1041,6 @@ Required live validation:
 - Deferred admin/global operations remain explicit.
 - Documentation and workflows describe the same provider-neutral session
   model.
+- Every live workflow proves target readiness and mandatory TLS verification
+  before test execution, with no insecure override. Exact-local execution
+  lazily ensures the published host CA before the network preflight.

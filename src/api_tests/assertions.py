@@ -18,6 +18,19 @@ def assert_status_in(response: httpx.Response, expected_statuses: set[int]) -> N
     assert response.status_code in expected_statuses, response.text
 
 
+def assert_non_html_response(response: httpx.Response) -> None:
+    content_type = response.headers.get("content-type", "").split(";", maxsplit=1)[0].lower()
+    assert content_type != "text/html", (
+        f"expected non-HTML response, got content-type {response.headers.get('content-type')!r}: "
+        f"{response.text[:500]}"
+    )
+
+    body_prefix = response.text.lstrip()[:200].lower()
+    assert not body_prefix.startswith(("<!doctype html", "<html")), (
+        f"expected non-HTML response body, got: {response.text[:500]!r}"
+    )
+
+
 def assert_no_content(response: httpx.Response) -> None:
     assert_status(response, httpx.codes.NO_CONTENT)
     assert response.content == b""

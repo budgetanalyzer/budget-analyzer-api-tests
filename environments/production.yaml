@@ -2,22 +2,16 @@ name: production
 origin: https://demo.budgetanalyzer.org
 api_base_path: /api
 openapi_path: /api-docs/openapi.json
-verify_tls: true
 environment_type: production
 allow_mutation: false
 allow_destructive: false
 session_cookie_name: BA_SESSION
 auth:
-  mode: env_cookie
-  cookie_env: BA_SESSION
+  mode: supplied_sessions
+  supplied_sessions:
+    primary_session_env: BA_PRIMARY_SESSION
+    secondary_session_env:
   browser:
-    headless: true
-  auth0:
-    management_domain_env: AUTH0_MGMT_DOMAIN
-    management_client_id_env: AUTH0_MGMT_CLIENT_ID
-    management_client_secret_env: AUTH0_MGMT_CLIENT_SECRET
-    connection_env: AUTH0_TEST_CONNECTION
-    test_email_domain: api-tests.example.invalid
 data:
   namespace_prefix: ba-api-test
   cleanup: none

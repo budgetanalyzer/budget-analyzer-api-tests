@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import NotRequired, TypedDict
 
 from api_tests.run_state import RunState
@@ -59,7 +60,10 @@ def create_saved_view_request(
 ) -> CreateSavedViewRequest:
     return {
         "name": f"{run_state.run_id} {label} view",
-        "criteria": view_criteria(account_id=account_id, search_text=search_text),
+        "criteria": view_criteria(
+            account_id=account_id,
+            search_text=search_text or f"{run_state.run_id} {label}",
+        ),
         "openEnded": False,
     }
 
@@ -69,13 +73,17 @@ def update_saved_view_request(
     label: str,
     *,
     account_id: str | None = None,
+    search_text: str | None = None,
 ) -> UpdateSavedViewRequest:
     return {
         "name": f"{run_state.run_id} {label} updated view",
-        "criteria": view_criteria(account_id=account_id),
+        "criteria": view_criteria(
+            account_id=account_id,
+            search_text=search_text or f"{run_state.run_id} {label}",
+        ),
         "openEnded": False,
     }
 
 
-def bulk_view_transaction_request(transaction_id: int) -> BulkViewTransactionRequest:
-    return {"ids": [transaction_id]}
+def bulk_view_transaction_request(transaction_ids: Sequence[int]) -> BulkViewTransactionRequest:
+    return {"ids": list(transaction_ids)}

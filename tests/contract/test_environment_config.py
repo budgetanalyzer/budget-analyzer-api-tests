@@ -14,7 +14,9 @@ def test_committed_environment_config_loads(environment_name: str) -> None:
     if config.environment_type == "production":
         assert config.allow_mutation is False
         assert config.allow_destructive is False
-        assert config.auth.mode == "env_cookie"
+        assert config.auth.mode == "supplied_sessions"
+        assert config.auth.supplied_sessions.secondary_session_env is None
+        assert config.auth.browser is None
         assert config.data.per_run_user_boundary is False
 
 
@@ -23,13 +25,13 @@ def test_env_config_fixture_exposes_selected_environment(env_config: Environment
     assert env_config.origin
 
 
-def test_production_rejects_auth_mode_that_creates_per_run_users() -> None:
+def test_production_rejects_browser_session_mode() -> None:
     config = load_environment("production").model_dump()
     auth_config = config["auth"]
     assert isinstance(auth_config, dict)
-    auth_config["mode"] = "browser_auth0"
+    auth_config["mode"] = "browser_preprovisioned"
 
-    with pytest.raises(ValidationError, match=r"production auth\.mode must use env_cookie"):
+    with pytest.raises(ValidationError, match=r"production auth\.mode must use supplied_sessions"):
         EnvironmentConfig.model_validate(config)
 
 
@@ -40,4 +42,20 @@ def test_production_rejects_per_run_user_boundary() -> None:
     data_config["per_run_user_boundary"] = True
 
     with pytest.raises(ValidationError, match="must not create per-run users"):
+        EnvironmentConfig.model_validate(config)
+
+
+def test_production_rejects_browser_settings() -> None:
+    config = load_environment("production").model_dump()
+    auth_config = config["auth"]
+    assert isinstance(auth_config, dict)
+    auth_config["browser"] = {
+        "headless": True,
+        "primary_username_env": "BA_PRIMARY_TEST_USERNAME",
+        "primary_password_env": "BA_PRIMARY_TEST_PASSWORD",
+        "secondary_username_env": "BA_SECONDARY_TEST_USERNAME",
+        "secondary_password_env": "BA_SECONDARY_TEST_PASSWORD",
+    }
+
+    with pytest.raises(ValidationError, match="must not configure browser acquisition"):
         EnvironmentConfig.model_validate(config)

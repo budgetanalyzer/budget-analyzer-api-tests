@@ -2,24 +2,30 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
 
-from api_tests.auth0 import Auth0ManagementClient, settings_from_environment
-from api_tests.browser_login import SessionCookie
 from api_tests.config import EnvironmentConfig
-from api_tests.identities import RunIdentities, create_run_identities
+from api_tests.identities import acquire_browser_preprovisioned_session_bundle
 from api_tests.run_state import RunState
+from api_tests.session import SessionBundle, SessionContext, SessionCookie, SessionIdentity
 
 
 class AuthConfigurationError(RuntimeError):
     pass
 
 
-@dataclass(frozen=True, repr=False)
-class AuthContext:
-    mode: str
-    session_cookie: SessionCookie
-    identities: RunIdentities | None = None
+def load_session_context(
+    config: EnvironmentConfig,
+    run_state: RunState,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> SessionContext:
+    if config.auth.mode == "browser_preprovisioned":
+        return _browser_preprovisioned_context(config, run_state, environ=environ)
+
+    if config.auth.mode == "supplied_sessions":
+        return _supplied_sessions_context(config, environ=environ)
+
+    raise AuthConfigurationError(f"unsupported auth mode: {config.auth.mode}")
 
 
 def load_auth_context(
@@ -27,67 +33,92 @@ def load_auth_context(
     run_state: RunState,
     *,
     environ: Mapping[str, str] | None = None,
-) -> AuthContext:
-    if config.auth.mode == "browser_auth0":
-        return _browser_auth0_context(config, run_state, environ=environ)
-
-    if config.auth.mode == "env_cookie":
-        return _env_cookie_context(config, environ=environ)
-
-    raise AuthConfigurationError(f"unsupported auth mode: {config.auth.mode}")
+) -> SessionContext:
+    return load_session_context(config, run_state, environ=environ)
 
 
-def _browser_auth0_context(
+def _browser_preprovisioned_context(
     config: EnvironmentConfig,
     run_state: RunState,
     *,
     environ: Mapping[str, str] | None,
-) -> AuthContext:
-    if environ is None:
-        identities = create_run_identities(config, run_state)
-    else:
-        settings = settings_from_environment(config, environ=environ)
-        with Auth0ManagementClient(
-            settings,
-            timeout_seconds=config.timeouts.request_seconds,
-        ) as auth0_client:
-            identities = create_run_identities(config, run_state, auth0_client=auth0_client)
+) -> SessionContext:
+    if config.environment_type == "production":
+        raise AuthConfigurationError("browser acquisition is forbidden for production")
 
-    return AuthContext(
-        mode="browser_auth0",
-        session_cookie=identities.primary_user.session_cookie,
-        identities=identities,
+    bundle = acquire_browser_preprovisioned_session_bundle(
+        config,
+        run_state,
+        environ=environ,
+    )
+
+    return SessionContext(
+        mode="browser_preprovisioned",
+        bundle=bundle,
     )
 
 
-def _env_cookie_context(
+def _supplied_sessions_context(
     config: EnvironmentConfig,
     *,
     environ: Mapping[str, str] | None,
-) -> AuthContext:
-    if config.environment_type == "production":
-        if config.allow_mutation or config.allow_destructive or config.data.per_run_user_boundary:
-            raise AuthConfigurationError(
-                "production env_cookie auth requires read-only policy and no per-run users"
-            )
-    elif config.environment_type != "local":
+) -> SessionContext:
+    if config.environment_type == "production" and (
+        config.allow_mutation or config.allow_destructive or config.data.per_run_user_boundary
+    ):
         raise AuthConfigurationError(
-            "auth.mode env_cookie is only allowed for local debugging or production smoke sessions"
+            "production supplied_sessions requires read-only policy and no per-run users"
         )
 
     source = environ or os.environ
-    cookie_value = source.get(config.auth.cookie_env, "").strip()
-    if not cookie_value:
-        raise AuthConfigurationError(
-            f"required session cookie environment variable is missing: {config.auth.cookie_env}"
+    supplied_config = config.auth.supplied_sessions
+    primary_cookie_value = _required_secret(
+        source,
+        supplied_config.primary_session_env,
+        purpose="primary supplied session",
+    )
+    secondary_cookie_value = _optional_secret(source, supplied_config.secondary_session_env)
+
+    secondary = None
+    if secondary_cookie_value is not None:
+        secondary = SessionIdentity(
+            label="secondary-session",
+            session_cookie=SessionCookie(
+                name=config.session_cookie_name,
+                value=secondary_cookie_value,
+                domain="",
+                path="/",
+            ),
         )
 
-    return AuthContext(
-        mode="env_cookie",
-        session_cookie=SessionCookie(
-            name=config.session_cookie_name,
-            value=cookie_value,
-            domain="",
-            path="/",
+    return SessionContext(
+        mode="supplied_sessions",
+        bundle=SessionBundle(
+            primary=SessionIdentity(
+                label="primary-session",
+                session_cookie=SessionCookie(
+                    name=config.session_cookie_name,
+                    value=primary_cookie_value,
+                    domain="",
+                    path="/",
+                ),
+            ),
+            secondary=secondary,
         ),
     )
+
+
+def _required_secret(source: Mapping[str, str], env_var_name: str, *, purpose: str) -> str:
+    value = source.get(env_var_name, "").strip()
+    if not value:
+        raise AuthConfigurationError(
+            f"required {purpose} environment variable is missing: {env_var_name}"
+        )
+    return value
+
+
+def _optional_secret(source: Mapping[str, str], env_var_name: str | None) -> str | None:
+    if env_var_name is None:
+        return None
+    value = source.get(env_var_name, "").strip()
+    return value or None

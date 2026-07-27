@@ -56,4 +56,5 @@ markers = [
   "readonly: test only reads API resources",
   "authorization: test verifies authorization or resource isolation behavior",
   "production_safe: test is allowed to run against production defaults",
+  "auth_smoke: optional live browser/session integration smoke test",
 ]

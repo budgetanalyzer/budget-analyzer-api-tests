@@ -6,9 +6,9 @@ from typing import Any, Self
 
 import httpx
 
-from api_tests.browser_login import SessionCookie
 from api_tests.config import EnvironmentConfig
 from api_tests.logging import request_response_hooks
+from api_tests.session import SessionBundle, SessionContext
 
 
 class GatewayClient:
@@ -17,11 +17,17 @@ class GatewayClient:
         config: EnvironmentConfig,
         *,
         artifact_path: Path | None = None,
-        session_cookie: SessionCookie | None = None,
+        session_context: SessionContext | None = None,
+        session_bundle: SessionBundle | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        if session_context is not None and session_bundle is not None:
+            raise ValueError("pass either session_context or session_bundle, not both")
+
+        bundle = session_context.bundle if session_context is not None else session_bundle
         cookies = None
-        if session_cookie is not None:
+        if bundle is not None:
+            session_cookie = bundle.primary.session_cookie
             cookies = {session_cookie.name: session_cookie.value}
 
         self.config = config
@@ -31,7 +37,6 @@ class GatewayClient:
             event_hooks=request_response_hooks(artifact_path=artifact_path),
             timeout=config.timeouts.request_seconds,
             transport=transport,
-            verify=config.verify_tls,
         )
 
     def __enter__(self) -> Self:

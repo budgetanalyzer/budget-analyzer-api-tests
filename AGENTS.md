@@ -35,11 +35,11 @@ implementation plan is
 - Treat the OpenAPI document as the executable coverage manifest.
 - Keep environment YAML declarative and non-secret. Read secrets only from
   environment variables or CI secret stores.
-- Do not write Auth0 Management API tokens, generated passwords, session
-  cookies, authorization headers, or other credentials to artifacts.
-- Use `browser_auth0` as the primary local and staging auth mode. `env_cookie`
-  is allowed for local debugging and for production read-only smoke runs with a
-  supplied, pre-provisioned `BA_SESSION`.
+- Do not write generated passwords, session cookies, authorization headers, or
+  other credentials to artifacts.
+- Use `browser_preprovisioned` as the primary local and staging auth mode.
+  `supplied_sessions` is allowed with opaque `BA_SESSION` values supplied
+  through environment variables.
 - Production defaults must remain read-only: `allow_mutation: false` and
   `allow_destructive: false`.
 - Do not broaden production permissions to reach coverage targets.
@@ -63,6 +63,13 @@ implementation plan is
   .venv/bin/python tools/validate-environment.py --env local
   ```
 
+- Bootstrap and preflight an exact-local live run with:
+
+  ```bash
+  .venv/bin/python tools/check-live-prerequisites.py \
+    --env local --scope public --require-local-target
+  ```
+
 - Run local collection without a live target with:
 
   ```bash
@@ -81,13 +88,15 @@ implementation plan is
   .venv/bin/python tools/export-openapi-coverage.py --env local
   ```
 
-- Live API tests require the selected environment, Auth0 prerequisites, browser
-  login, and network access to be available.
-- Production smoke execution requires a supplied read-only `BA_SESSION` and
+- Live API tests require the selected environment, verified HTTPS trust,
+  pre-provisioned browser users or supplied sessions, and network access to be
+  available. Pytest performs one inferred prerequisite check after collection
+  for selected network-capable tests.
+- Production smoke execution requires a supplied read-only primary session and
   must use:
 
   ```bash
-  pytest --env production -m "readonly and production_safe"
+  BA_PRIMARY_SESSION=... pytest --env production -m "readonly and production_safe"
   ```
 
 ## Python Baseline
@@ -171,8 +180,8 @@ Use pytest for tests.
 
 - Prefer `tmp_path`, `monkeypatch`, `capsys`, `httpx.MockTransport`, and
   `respx` for harness unit tests.
-- Do not call real Auth0, real providers, or live Budget Analyzer targets from
-  unit tests.
+- Do not call real identity providers or live Budget Analyzer targets from unit
+  tests.
 - Keep tests deterministic. Avoid sleeps except where timeout behavior is under
   test, and keep those durations short.
 - Use OpenAPI markers consistently:
@@ -197,10 +206,30 @@ Use pytest for tests.
 
 - Use `GatewayClient` for API requests so base origin, API prefix, TLS policy,
   timeout, cookies, and request logging stay centralized.
+- Preserve HTTPS certificate verification for live tests in every environment,
+  including local Tilt targets. Do not add insecure runner flags, environment
+  switches, `verify=False`, Playwright `ignore_https_errors`, or equivalent
+  bypasses for agent containers.
+- Treat a missing host CA in an agent container as a runner trust-store
+  prerequisite. Make the host-generated public mkcert CA certificate available
+  to the container and configure its Python and browser trust stores instead of
+  weakening TLS verification.
+- Do not generate or rotate browser-facing certificates from an agent
+  container. Host certificate setup remains owned by orchestration and must be
+  run from the host workstation.
+- For exact-local live work, use `tools/check-live-prerequisites.py` as the
+  bootstrap entry point. It may invoke the workspace-owned
+  `ensure-budget-analyzer-local-ca-trust` command only when the resolved target
+  is the declared local environment at exactly
+  `https://app.budgetanalyzer.localhost`.
+- If exact-local bootstrap reports that the public CA publication is missing,
+  invalid, expired, or stale, stop and ask the user to run orchestration
+  `./setup.sh` on the host. Agents must not run that host certificate setup or
+  replace it with in-container certificate generation.
 - Use `raw_request` only for `/api-docs`, auth edge checks, and other explicitly
   public non-API-prefix routes.
-- Never seed sessions in Redis, exchange Auth0 tokens directly for API access,
-  or bypass the Session Gateway.
+- Never seed sessions in Redis, exchange identity-provider tokens directly for
+  API access, or bypass the Session Gateway.
 - Stream or record enough request details for diagnostics, but redact secrets
   before writing artifacts.
 - Keep mutating tests guarded by environment policy before any mutating request
@@ -224,8 +253,8 @@ Use pytest for tests.
 - Convert validation, prerequisite, and configuration failures into clear
   messages naming the environment file, missing variable, path, operation id,
   marker, or command involved.
-- Treat missing Auth0 prerequisites as an expected stop condition for live
-  tests, not as a harness bug.
+- Treat missing authentication prerequisites as an expected stop condition for
+  live tests, not as a harness bug.
 - Do not guess through product, architecture, schema, API, or workflow
   decisions not present in durable documentation or the current user request.
 

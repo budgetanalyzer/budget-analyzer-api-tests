@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import ValidationError
 
 from api_tests.client import GatewayClient
-from api_tests.config import load_environment, repository_root
+from api_tests.config import EnvironmentConfig, load_environment, repository_root
 from api_tests.coverage import (
     OperationCoverage,
     build_operation_coverage,
@@ -21,6 +21,7 @@ from api_tests.coverage import (
     write_coverage_artifact,
 )
 from api_tests.openapi import fetch_live_openapi, iter_operations, load_snapshot
+from api_tests.prerequisites import PrerequisiteScope, run_live_preflight
 
 type CoverageDocumentSource = Literal["snapshot", "live"]
 
@@ -138,6 +139,7 @@ def build_coverage(
     markers = collect_openapi_markers_from_tests(root / "tests")
 
     if source == "live":
+        _require_public_preflight(config, environment_name=env_name)
         with GatewayClient(config) as client:
             openapi_doc = fetch_live_openapi(client, config.openapi_path)
     else:
@@ -167,6 +169,7 @@ def refresh_main(argv: Sequence[str] | None = None) -> int:
 
     try:
         config = load_environment(str(args.env))
+        _require_public_preflight(config, environment_name=str(args.env))
         with GatewayClient(config) as client:
             openapi_doc = fetch_live_openapi(client, config.openapi_path)
     except (FileNotFoundError, ValueError, ValidationError) as exc:
@@ -179,3 +182,13 @@ def refresh_main(argv: Sequence[str] | None = None) -> int:
     )
     print(f"wrote OpenAPI snapshot: {output_path}")
     return 0
+
+
+def _require_public_preflight(config: EnvironmentConfig, *, environment_name: str) -> None:
+    result = run_live_preflight(
+        config,
+        environment_name=environment_name,
+        scope=PrerequisiteScope.PUBLIC,
+    )
+    if not result.succeeded:
+        raise ValueError(f"live prerequisite failed [{result.category.value}]: {result.message}")

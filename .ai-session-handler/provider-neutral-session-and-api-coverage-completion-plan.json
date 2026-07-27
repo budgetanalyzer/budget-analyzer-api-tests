@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "path": "/workspace/budget-analyzer-api-tests/docs/plans/provider-neutral-session-and-api-coverage-completion-plan.md",
+    "sha256": "611b49f231e1112d7400ee17c6326af454aa8d1e54f740a151a6f659555e87fd",
+    "accepted_at": "2026-07-24T15:41:14Z"
+  },
+  "completed_phase_ids": [
+    "phase-1",
+    "phase-2",
+    "phase-3",
+    "phase-4"
+  ],
+  "current_phase": {
+    "id": "phase-5",
+    "title": "Gateway Safety And Behavioral Postconditions"
+  },
+  "stop": {
+    "reason": "blocked",
+    "phase_id": "phase-5",
+    "message": "Implemented phase 5 changes: added unauthenticated gateway edge and unknown-route tests, non-HTML response assertion, delete/hide/unhide/fetch postconditions, exact two-resource bulk checks, controlled preview/import assertions, and safe read-only unknown-id 404 checks. Non-live validation passed: local collect-only, OpenAPI coverage gate, production read-only production-safe collect-only, mypy, Ruff, and changed helper unit tests. Live acceptance is blocked by external local prerequisites: unauthenticated live tests fail TLS verification for app.budgetanalyzer.localhost, and authenticated endpoint live tests cannot start because BA_PRIMARY_TEST_USERNAME is unset for local browser_preprovisioned auth.",
+    "clarification_request": null
+  },
+  "last_run": {
+    "run_id": "20260724T160540Z-phase-5",
+    "phase_id": "phase-5",
+    "status": "blocked",
+    "started_at": "2026-07-24T16:05:40Z",
+    "finished_at": "2026-07-24T16:11:29Z",
+    "exit_code": 2,
+    "transcript_path": "/workspace/budget-analyzer-api-tests/.ai-session-handler/transcripts/20260724T160540Z-phase-5.txt",
+    "summary": "Implemented phase 5 changes: added unauthenticated gateway edge and unknown-route tests, non-HTML response assertion, delete/hide/unhide/fetch postconditions, exact two-resource bulk checks, controlled preview/import assertions, and safe read-only unknown-id 404 checks. Non-live validation passed: local collect-only, OpenAPI coverage gate, production read-only production-safe collect-only, mypy, Ruff, and changed helper unit tests. Live acceptance is blocked by external local prerequisites: unauthenticated live tests fail TLS verification for app.budgetanalyzer.localhost, and authenticated endpoint live tests cannot start because BA_PRIMARY_TEST_USERNAME is unset for local browser_preprovisioned auth."
+  }
+}

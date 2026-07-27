@@ -7,6 +7,7 @@ import httpx
 from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 from api_tests.config import EnvironmentConfig
+from api_tests.session import SessionCookie
 
 
 class BrowserLoginError(RuntimeError):
@@ -15,16 +16,8 @@ class BrowserLoginError(RuntimeError):
 
 @dataclass(frozen=True, repr=False)
 class BrowserLoginCredentials:
-    email: str
+    username: str
     password: str = field(repr=False)
-
-
-@dataclass(frozen=True, repr=False)
-class SessionCookie:
-    name: str
-    value: str = field(repr=False)
-    domain: str
-    path: str
 
 
 class CookieMetadata(TypedDict):
@@ -38,11 +31,14 @@ def login_with_browser(
     credentials: BrowserLoginCredentials,
 ) -> SessionCookie:
     timeout_ms = int(config.timeouts.eventually_seconds * 1000)
+    browser_config = config.auth.browser
+    if browser_config is None:
+        raise BrowserLoginError("browser login requires browser settings")
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=config.auth.browser.headless)
+        browser = playwright.chromium.launch(headless=browser_config.headless)
         try:
-            context = browser.new_context(ignore_https_errors=not config.verify_tls)
+            context = browser.new_context()
             try:
                 page = context.new_page()
                 page.goto(
@@ -50,7 +46,7 @@ def login_with_browser(
                     wait_until="domcontentloaded",
                     timeout=timeout_ms,
                 )
-                fill_auth0_login_form(page, credentials, timeout_ms=timeout_ms)
+                fill_hosted_login_form(page, credentials, timeout_ms=timeout_ms)
                 page.wait_for_url(
                     f"{config.origin}/**", wait_until="networkidle", timeout=timeout_ms
                 )
@@ -64,7 +60,7 @@ def login_with_browser(
     return cookie
 
 
-def fill_auth0_login_form(
+def fill_hosted_login_form(
     page: Page,
     credentials: BrowserLoginCredentials,
     *,
@@ -78,7 +74,7 @@ def fill_auth0_login_form(
         'button[type="submit"], button[name="action"], input[type="submit"]'
     ).first
 
-    email_field.fill(credentials.email, timeout=timeout_ms)
+    email_field.fill(credentials.username, timeout=timeout_ms)
     password_field.fill(credentials.password, timeout=timeout_ms)
     submit_button.click(timeout=timeout_ms)
 
@@ -96,13 +92,12 @@ def read_session_cookie(context: BrowserContext, cookie_name: str) -> SessionCoo
                 raise BrowserLoginError(f"{cookie_name} cookie was missing domain or path metadata")
             return SessionCookie(name=cookie_name, value=value, domain=domain, path=path)
 
-    raise BrowserLoginError(f"{cookie_name} cookie was not set after Auth0 login")
+    raise BrowserLoginError(f"{cookie_name} cookie was not set after hosted login")
 
 
 def verify_session_cookie(config: EnvironmentConfig, cookie: SessionCookie) -> None:
     with httpx.Client(
         base_url=config.origin,
-        verify=config.verify_tls,
         timeout=config.timeouts.request_seconds,
         cookies={cookie.name: cookie.value},
     ) as client:
