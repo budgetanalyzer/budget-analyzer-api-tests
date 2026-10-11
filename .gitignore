@@ -38,10 +38,6 @@ artifacts/*
 !artifacts/.gitkeep
 *.har
 
-# Generated AI session handler logs
-.ai-session-handler/prompts/*.txt
-.ai-session-handler/transcripts/*.txt
-
 # Logs
 *.log
 logs/
@@ -73,3 +69,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.code-workspace
+
+# AI Session Handler configuration
+.ai-session-handler/
+
