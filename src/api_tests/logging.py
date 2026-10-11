@@ -4,7 +4,9 @@ import json
 import re
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 
@@ -21,6 +23,13 @@ SENSITIVE_KEY_RE = re.compile(
 GENERATED_ACCOUNT_RE = re.compile(r"ba-api-test-[A-Za-z0-9_-]+@test\.com", re.IGNORECASE)
 PREVIEW_TOKEN_RE = re.compile(r"\bv2\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
 HttpxEventHook = Callable[..., object]
+DEFAULT_REQUEST_LOG_PATH = (
+    repository_root()
+    / "artifacts"
+    / "runs"
+    / f"direct-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    / "request-log.jsonl"
+)
 
 
 def redacted_response_context(response: httpx.Response, *, limit: int = 500) -> str:
@@ -43,7 +52,7 @@ def request_response_hooks(
     *,
     artifact_path: Path | None = None,
 ) -> dict[str, list[HttpxEventHook]]:
-    path = artifact_path or repository_root() / "artifacts" / "request-log.jsonl"
+    path = artifact_path or DEFAULT_REQUEST_LOG_PATH
     return {
         "request": [_record_request_start],
         "response": [_make_response_logger(path)],

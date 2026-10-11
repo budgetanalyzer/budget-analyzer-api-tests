@@ -34,6 +34,11 @@ they are superseded.
   Redis, RabbitMQ, Kubernetes, service-DNS, or service-internal setup paths.
 - Compose API requests as `{origin}{api_base_path}{openapi path}` through
   `GatewayClient`.
+- Treat the public NGINX rate policy as fixed: rate-limited API routes share
+  one per-client-IP bucket at 10 requests/second with `burst=50` and `nodelay`.
+  All `GatewayClient` instances in a process must share deterministic,
+  monotonic pacing capped at 8 requests/second. Same-origin gateway requests
+  made during browser authentication must reserve slots from the same pacer.
 - Treat the OpenAPI document as the executable coverage manifest.
 - Keep environment YAML declarative and non-secret. Read secrets only from
   environment variables or CI secret stores.
@@ -56,8 +61,10 @@ they are superseded.
 
 - Bootstrap and run the full local suite with `./run-tests`. It creates and
   reuses `.venv`, installs dependencies and Chromium when needed, fixes the
-  target to the declared local environment, and lazily provisions browser
-  accounts. Pass ordinary pytest selectors through this command.
+  target to the declared local environment, lazily provisions browser
+  accounts, checks snapshot coverage and live contract drift, and writes an
+  isolated ignored run report. Pass ordinary pytest selectors through this
+  command, and treat any run with selectors as partial validation.
 
 - Validate environment configuration with:
 
@@ -81,7 +88,9 @@ they are superseded.
   This command also writes `artifacts/openapi-coverage.json` and fails for
   unrecognized markers, missing or placeholder-only non-deferred coverage, or
   stale deferred method/path entries. Keep snapshot refresh as the separate,
-  intentional `tools/refresh-openapi.py` operation.
+  intentional `tools/refresh-openapi.py` operation. The normal no-argument
+  `./run-tests` workflow performs coverage and live structural drift checks
+  itself; do not require operators to invoke either tool first.
 
 - Live API tests require the selected environment, runtime-provided HTTPS
   trust, Playwright system dependencies, and network access. Exact-local tests
@@ -161,6 +170,7 @@ Run the repository quality gates with:
 .venv/bin/python -m ruff format --check .
 .venv/bin/python -m ruff check .
 .venv/bin/python -m mypy src tests
+./run-tests
 ```
 
 Ruff should use `line-length = 100`, `target-version = "py312"`,
@@ -177,8 +187,10 @@ Use pytest for tests.
   `respx` for harness unit tests.
 - Do not call real identity providers or live Budget Analyzer targets from unit
   tests.
-- Keep tests deterministic. Avoid sleeps except where timeout behavior is under
-  test, and keep those durations short.
+- Keep tests deterministic. Do not add sleeps to individual API tests; public
+  gateway rate compliance belongs in the shared `GatewayClient` pacer. Use
+  injected fake timing to unit-test pacing. Keep sleeps for timeout-specific
+  unit tests short.
 - Use OpenAPI markers consistently:
 
   ```python
@@ -190,7 +202,7 @@ Use pytest for tests.
   secondary account. They run in the full local suite and remain directly
   selectable with ordinary pytest marker expressions.
 - Use `placeholder` only while a phase is under construction. Placeholder
-  coverage is not an acceptable staging-gate completion state.
+  coverage is not an acceptable local regression baseline.
 - Mark mutating tests with `mutation`, destructive tests with `destructive`,
   read-only tests with `readonly`, authorization tests with `authorization`,
   and production-safe tests with `production_safe`.
@@ -204,7 +216,11 @@ Use pytest for tests.
 ## API Execution Safety
 
 - Use `GatewayClient` for API requests so base origin, API prefix, TLS policy,
-  timeout, cookies, and request logging stay centralized.
+  timeout, cookies, request logging, and public-gateway pacing stay centralized.
+- Preserve the shared 8-requests/second client-side pace as deliberate
+  compliance with the public gateway contract. Do not retry HTTP 429 responses,
+  add test-level sleeps, bypass NGINX, forge client identity headers, or add
+  environment-specific rate-limit exceptions.
 - Preserve HTTPS certificate verification for live tests in every environment,
   including local Tilt targets. Do not add insecure runner flags, environment
   switches, `verify=False`, Playwright `ignore_https_errors`, or equivalent
@@ -227,7 +243,9 @@ Use pytest for tests.
 - Keep environment files under `environments/` non-secret.
 - Keep `.env.local` gitignored and owner-only. Preserve complete credential
   pairs and provisioning state across runs; never source it as shell code.
-- Keep generated logs and coverage files under `artifacts/`.
+- Keep generated logs and coverage files under `artifacts/`. Each local runner
+  invocation must use a distinct directory under `artifacts/runs/`; never mix
+  new request diagnostics into an earlier run.
 - Keep checked-in OpenAPI snapshots under `schemas/`.
 - Keep deferred admin/global operations explicit in
   `schemas/deferred-admin-operations.yaml` once the coverage phase is active.

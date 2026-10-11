@@ -4,9 +4,10 @@ import re
 from dataclasses import dataclass, field
 
 import httpx
-from playwright.sync_api import BrowserContext, Page, sync_playwright
+from playwright.sync_api import BrowserContext, Page, Route, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
 
+from api_tests.client import GatewayClient
 from api_tests.config import EnvironmentConfig
 from api_tests.session import Session
 
@@ -40,6 +41,7 @@ def login_with_browser(
             try:
                 context = browser.new_context()
                 try:
+                    _pace_public_gateway_requests(context, config)
                     page = context.new_page()
                     _open_public_login(page, config, timeout_ms=timeout_ms)
                     fill_hosted_login_form(page, credentials, timeout_ms=timeout_ms)
@@ -73,6 +75,7 @@ def signup_with_browser(
             try:
                 context = browser.new_context()
                 try:
+                    _pace_public_gateway_requests(context, config)
                     page = context.new_page()
                     _open_public_login(page, config, timeout_ms=timeout_ms)
                     page.get_by_role("link", name=re.compile("sign up", re.IGNORECASE)).first.click(
@@ -160,12 +163,8 @@ def read_session_cookie(context: BrowserContext, cookie_name: str) -> Session:
 
 def verify_session(config: EnvironmentConfig, session: Session) -> None:
     try:
-        with httpx.Client(
-            base_url=config.origin,
-            timeout=config.timeouts.request_seconds,
-            cookies={session.cookie_name: session.cookie_value},
-        ) as client:
-            response = client.get("/auth/v1/user")
+        with GatewayClient(config, session=session) as client:
+            response = client.raw_request("GET", "/auth/v1/user")
     except httpx.RequestError as exc:
         raise BrowserLoginError(f"session verification request failed: {exc}") from exc
 
@@ -175,12 +174,26 @@ def verify_session(config: EnvironmentConfig, session: Session) -> None:
         )
 
 
+def _pace_public_gateway_requests(
+    context: BrowserContext,
+    config: EnvironmentConfig,
+) -> None:
+    context.route(f"{config.origin}/**", _continue_paced_gateway_request)
+
+
+def _continue_paced_gateway_request(route: Route) -> None:
+    GatewayClient.pace_shared_request()
+    route.continue_()
+
+
 def _open_public_login(page: Page, config: EnvironmentConfig, *, timeout_ms: int) -> None:
-    page.goto(
+    response = page.goto(
         f"{config.origin}/oauth2/authorization/idp",
         wait_until="domcontentloaded",
         timeout=timeout_ms,
     )
+    if response is not None and response.status >= httpx.codes.BAD_REQUEST:
+        raise BrowserLoginError(f"public login entry failed: HTTP {response.status}")
 
 
 def _wait_for_application(page: Page, config: EnvironmentConfig, *, timeout_ms: int) -> None:

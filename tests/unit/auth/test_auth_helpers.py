@@ -3,19 +3,26 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TypedDict, cast
+from types import TracebackType
+from typing import Self, TypedDict, cast
 
 import httpx
 import pytest
 from playwright.sync_api import BrowserContext
 
+import api_tests.browser_login as browser_login_module
 from api_tests.assertions import assert_status
 from api_tests.auth import AuthConfigurationError, acquire_browser_session, load_supplied_session
-from api_tests.browser_login import BrowserLoginCredentials, read_session_cookie
+from api_tests.browser_login import BrowserLoginCredentials, read_session_cookie, verify_session
 from api_tests.client import GatewayClient
 from api_tests.config import load_environment
 from api_tests.run_state import RUN_ID_PATTERN, generate_run_id
-from api_tests.session import MissingSecondarySessionError, Session
+from api_tests.session import (
+    IndistinctSessionsError,
+    MissingSecondarySessionError,
+    Session,
+    ensure_distinct_sessions,
+)
 
 
 class FakeBrowserCookie(TypedDict, total=False):
@@ -53,6 +60,40 @@ def test_read_session_cookie_extracts_session_value() -> None:
     session = read_session_cookie(cast(BrowserContext, FakeContext()), "BA_SESSION")
 
     assert session == Session(cookie_name="BA_SESSION", cookie_value="session-value")
+
+
+def test_session_verification_uses_gateway_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_environment("local")
+    session = Session(cookie_name="BA_SESSION", cookie_value="session-value")
+    calls: list[tuple[object, Session, str, str]] = []
+
+    class FakeGatewayClient:
+        def __init__(self, environment_config: object, *, session: Session) -> None:
+            self._config = environment_config
+            self._session = session
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            return None
+
+        def raw_request(self, method: str, path: str) -> httpx.Response:
+            calls.append((self._config, self._session, method, path))
+            return httpx.Response(httpx.codes.OK)
+
+    monkeypatch.setattr(browser_login_module, "GatewayClient", FakeGatewayClient)
+
+    verify_session(config, session)
+
+    assert calls == [(config, session, "GET", "/auth/v1/user")]
 
 
 def test_browser_acquisition_logs_in_only_requested_user() -> None:
@@ -125,6 +166,18 @@ def test_supplied_sessions_load_primary_and_secondary_independently() -> None:
 
     assert primary == Session(cookie_name="BA_SESSION", cookie_value="primary-cookie")
     assert secondary == Session(cookie_name="BA_SESSION", cookie_value="secondary-cookie")
+
+
+def test_authorization_sessions_must_be_distinct() -> None:
+    session = Session(cookie_name="BA_SESSION", cookie_value="reused-cookie")
+
+    with pytest.raises(IndistinctSessionsError, match="same authenticated session"):
+        ensure_distinct_sessions(session, session)
+
+    ensure_distinct_sessions(
+        Session(cookie_name="BA_SESSION", cookie_value="primary-cookie"),
+        Session(cookie_name="BA_SESSION", cookie_value="secondary-cookie"),
+    )
 
 
 def test_production_allows_primary_without_configuring_secondary() -> None:

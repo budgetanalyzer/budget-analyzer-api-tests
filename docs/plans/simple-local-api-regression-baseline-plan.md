@@ -6,8 +6,9 @@ the current API. A developer or agent with a working local deployment must be
 able to clone this repository and run `./run-tests` without manually creating
 test accounts, entering credentials, or running separate bootstrap commands.
 
-Status: Ready for implementation. This document plans the work; it does not
-claim that the current suite passes against the current services.
+Status: Implemented and accepted locally on 2026-10-11. Both final full runs
+succeeded with retained credentials and data; the evidence and current limits
+are recorded in `docs/local-regression-baseline.md`.
 
 This plan supersedes the provider-neutral session and API coverage completion
 plan and the verified-local-TLS prerequisite plan in this directory. Their
@@ -30,6 +31,16 @@ including successful signup through the normal Auth0 flow.
   `GatewayClient` as `{origin}{api_base_path}{openapi path}`. Use public browser
   authentication; never use Auth0 Management API provisioning, direct token
   grants, session-store writes, service DNS, or internal data setup.
+- Treat the public NGINX policy as a fixed part of that contract. All
+  rate-limited API routes share one per-client-IP bucket at 10 requests/second
+  with `burst=50` and `nodelay`. Pace every `GatewayClient` instance through one
+  process-wide monotonic scheduler at a conservative maximum of 8
+  requests/second. Same-origin public-gateway requests made during browser
+  authentication reserve slots from that scheduler as well; external identity-
+  provider traffic does not. Keep pacing centralized and deterministically
+  unit-test it with injected timing. HTTP 429 responses remain failures and are
+  never retried. Do not add arbitrary test sleeps, gateway bypasses, forged
+  identity headers, or environment-specific rate-limit exceptions.
 - HTTPS trust and browser system prerequisites are provided by the runtime.
   Remove harness trust installation and its automatic prerequisite probes.
   Preserve certificate verification. Do not generate certificates, install
@@ -369,8 +380,9 @@ Focused positive and negative scenarios using controlled public-API data.
 
 ### Non-goals
 
-No exhaustive generated input matrix, database assertions, arbitrary sleeps,
-performance benchmarks, or generic cleanup framework.
+No exhaustive generated input matrix, database assertions, arbitrary test
+sleeps, performance benchmarks, or generic cleanup framework. The centralized
+public-gateway pacer is contract compliance, not test-specific timing.
 
 ### Required context
 
@@ -543,42 +555,49 @@ bots, custom report dashboard, or Spring Boot implementation upgrade.
 
 ### Execution steps
 
-1. Make `./run-tests` with no arguments run the complete local unit and API
+1. Add deterministic request pacing to `GatewayClient` for the public NGINX
+   contract: all client instances in the process share one monotonic scheduler
+   capped at 8 requests/second. Inject clock and sleep functions for unit tests,
+   reserve slots from that scheduler for browser authentication's same-origin
+   public-gateway traffic, keep pacing out of endpoint tests, and return HTTP
+   429 responses without retry. Do not use NGINX bypasses, forged client-IP
+   headers, or per-environment exceptions.
+2. Make `./run-tests` with no arguments run the complete local unit and API
    suite, check non-deferred operation coverage, and report failures with a
    nonzero exit. Keep focused pytest selection available, but identify focused
    runs as partial validation. No separate preflight, credential-editing, or
    coverage-export command may be required for a normal full run.
-2. Compare the live public OpenAPI document with the checked-in baseline.
+3. Compare the live public OpenAPI document with the checked-in baseline.
    Report additions/removals and method/path changes plus changed parameters,
    request bodies, response definitions, and component schemas. A small
    normalized structural comparison with readable changed locations is enough;
    do not build a semantic compatibility engine. Ignore irrelevant document
    metadata such as server URLs and key order. Report contract differences
    explicitly and fail the full gate pending intentional review/refresh.
-3. Keep snapshot refresh an explicit developer action and ordinary collection
+4. Keep snapshot refresh an explicit developer action and ordinary collection
    offline. Ensure a clone can run using its own checked-in files and public
    target alone; the orchestration aggregator is not required at execution.
-4. Write minimal local artifacts: pytest results, coverage/drift details, and
+5. Write minimal local artifacts: pytest results, coverage/drift details, and
    redacted request diagnostics under `artifacts/`. Keep runs distinguishable
    without mixing old log entries. Do not store browser state, credentials,
    unredacted token fields, or provisioning form captures.
-5. Document `./run-tests` as the primary README command, including first-run
+6. Document `./run-tests` as the primary README command, including first-run
    setup, lazy signup, `.env.local` reuse, namespaced residue, and focused
    execution. Explain that deployment reset is external and optional, and that
    the suite performs no general cleanup. Align AGENTS and remove obsolete
    active commands, prerequisite blockers, and staging/CI completion promises.
-6. Run the full command manually from this container against the working
+7. Run the full command manually from this container against the working
    local deployment, then repeat it with the same credentials and retained
    test data. Use the original first-run acceptance from Phase 2 as evidence of
    automatic account creation; never delete credentials to simulate a clean
    checkout and generate unnecessary additional users.
-7. Record the accepted baseline in `docs/local-regression-baseline.md`: test
+8. Record the accepted baseline in `docs/local-regression-baseline.md`: test
    revision/worktree state, snapshot identity, Python/dependency versions,
    target, run results, deferred scope, and externally supplied service
    revision identifiers where available. State any unavailable service version
    evidence honestly. Keep exact installed dependency versions in an ignored
    run artifact for replay; no dependency-automation project is required.
-8. Explain the upgrade workflow: rerun the accepted tests and snapshot against
+9. Explain the upgrade workflow: rerun the accepted tests and snapshot against
    upgraded services; investigate failures before changing expectations.
    Intentional public contract changes require a separate explicit review.
    If acceptance exposes a product defect, record the failing public scenario
@@ -606,6 +625,8 @@ git status --short
 
 Also use unit tests with synthetic document changes to prove the drift check
 detects same-operation request/response changes and leaves the snapshot intact.
+Use injected fake monotonic time to prove that separate `GatewayClient`
+instances share 125 ms request-start spacing and that HTTP 429 is not retried.
 Verify credential files and generated reports remain ignored and no secrets
 appear in captured failure diagnostics.
 

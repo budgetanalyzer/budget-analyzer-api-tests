@@ -68,6 +68,13 @@ def load_or_create_local_credentials(
             f"{password_name}, or unset both"
         )
     if supplied_username and supplied_password:
+        _ensure_distinct_role_username(
+            config,
+            role,
+            supplied_username,
+            source=source,
+            path=path,
+        )
         return LocalCredentialRecord(
             credentials=BrowserLoginCredentials(supplied_username, supplied_password),
             state="external",
@@ -89,10 +96,19 @@ def load_or_create_local_credentials(
             raise LocalCredentialError(
                 f"{credential_path} has invalid {role} account state in {state_name}"
             )
-        return LocalCredentialRecord(
+        record = LocalCredentialRecord(
             credentials=BrowserLoginCredentials(stored_username, stored_password),
             state=cast(CredentialState, raw_state),
         )
+        _ensure_distinct_role_username(
+            config,
+            role,
+            record.credentials.username,
+            source=source,
+            path=credential_path,
+            values=values,
+        )
+        return record
 
     if values.get(state_name, "").strip():
         raise LocalCredentialError(
@@ -100,6 +116,14 @@ def load_or_create_local_credentials(
         )
 
     credentials = (generator or generate_local_credentials)()
+    _ensure_distinct_role_username(
+        config,
+        role,
+        credentials.username,
+        source=source,
+        path=credential_path,
+        values=values,
+    )
     _update_credential_file(
         credential_path,
         {
@@ -158,6 +182,40 @@ def _variable_names(
         browser_config.secondary_password_env,
         "BA_SECONDARY_TEST_ACCOUNT_STATE",
     )
+
+
+def _ensure_distinct_role_username(
+    config: EnvironmentConfig,
+    role: SessionRole,
+    username: str,
+    *,
+    source: Mapping[str, str],
+    path: Path | None,
+    values: Mapping[str, str] | None = None,
+) -> None:
+    other_role: SessionRole = "secondary" if role == "primary" else "primary"
+    other_username_name, other_password_name, _ = _variable_names(config, other_role)
+    external_username = source.get(other_username_name, "").strip()
+    external_password = source.get(other_password_name, "").strip()
+    if external_username and external_password:
+        other_username = external_username
+    elif external_username or external_password:
+        # The other role will report its own partial-pair error if it is requested.
+        return
+    else:
+        credential_path = path or repository_root() / ".env.local"
+        saved_values = values if values is not None else _read_credential_file(credential_path)
+        saved_username = saved_values.get(other_username_name, "").strip()
+        saved_password = saved_values.get(other_password_name, "").strip()
+        if not saved_username or not saved_password:
+            return
+        other_username = saved_username
+
+    if username == other_username:
+        raise LocalCredentialError(
+            "primary and secondary local credentials resolve to the same username; "
+            "configure two distinct normal users"
+        )
 
 
 def _read_credential_file(path: Path) -> dict[str, str]:

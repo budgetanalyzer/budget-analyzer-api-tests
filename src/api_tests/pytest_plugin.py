@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator, Iterable
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -18,7 +19,12 @@ from api_tests.config import (
 from api_tests.coverage import MarkerCounts, build_marker_counts
 from api_tests.openapi import OpenApiDocument, load_snapshot
 from api_tests.run_state import RunState, new_run_state
-from api_tests.session import MissingSecondarySessionError, Session
+from api_tests.session import (
+    IndistinctSessionsError,
+    MissingSecondarySessionError,
+    Session,
+    ensure_distinct_sessions,
+)
 
 ENV_CONFIG_KEY: pytest.StashKey[EnvironmentConfig] = pytest.StashKey()
 OPENAPI_MARKER_COUNTS_KEY: pytest.StashKey[dict[str, MarkerCounts]] = pytest.StashKey()
@@ -38,6 +44,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         choices=("supplied_sessions", "browser_preprovisioned"),
         default=None,
         help="override auth.mode from the environment file for this pytest run",
+    )
+    group.addoption(
+        "--request-log",
+        action="store",
+        default=None,
+        help="write redacted public request diagnostics to this JSONL path",
     )
 
 
@@ -135,17 +147,35 @@ def secondary_session(env_config: EnvironmentConfig) -> Session:
     try:
         return acquire_session(env_config, "secondary")
     except MissingSecondarySessionError as exc:
+        if env_config.environment_type == "local":
+            pytest.fail(f"authorization prerequisite failed: {exc}", pytrace=False)
         pytest.skip(str(exc))
     except (AuthConfigurationError, BrowserLoginError) as exc:
         pytest.fail(f"authentication prerequisite failed: {exc}", pytrace=False)
 
 
 @pytest.fixture(scope="session")
+def distinct_user_sessions(
+    primary_session: Session,
+    secondary_session: Session,
+) -> None:
+    try:
+        ensure_distinct_sessions(primary_session, secondary_session)
+    except IndistinctSessionsError as exc:
+        pytest.fail(f"authorization prerequisite failed: {exc}", pytrace=False)
+
+
+@pytest.fixture(scope="session")
 def gateway_client(
     primary_session: Session,
     env_config: EnvironmentConfig,
+    pytestconfig: pytest.Config,
 ) -> Generator[GatewayClient, None, None]:
-    with GatewayClient(env_config, session=primary_session) as client:
+    with GatewayClient(
+        env_config,
+        artifact_path=_request_log_path(pytestconfig),
+        session=primary_session,
+    ) as client:
         yield client
 
 
@@ -153,14 +183,25 @@ def gateway_client(
 def secondary_gateway_client(
     secondary_session: Session,
     env_config: EnvironmentConfig,
+    pytestconfig: pytest.Config,
 ) -> Generator[GatewayClient, None, None]:
-    with GatewayClient(env_config, session=secondary_session) as client:
+    with GatewayClient(
+        env_config,
+        artifact_path=_request_log_path(pytestconfig),
+        session=secondary_session,
+    ) as client:
         yield client
 
 
 @pytest.fixture(scope="session")
 def unauthenticated_gateway_client(
     env_config: EnvironmentConfig,
+    pytestconfig: pytest.Config,
 ) -> Generator[GatewayClient, None, None]:
-    with GatewayClient(env_config) as client:
+    with GatewayClient(env_config, artifact_path=_request_log_path(pytestconfig)) as client:
         yield client
+
+
+def _request_log_path(config: pytest.Config) -> Path | None:
+    raw_path = config.getoption("--request-log")
+    return Path(raw_path) if isinstance(raw_path, str) and raw_path else None

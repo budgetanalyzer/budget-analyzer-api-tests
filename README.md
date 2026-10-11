@@ -19,8 +19,15 @@ From a checkout, run:
 This is the single supported local entrypoint. It requires a `python3.12`
 command, creates `.venv`, installs development dependencies, and downloads
 Playwright Chromium only when each is missing or stale. Later runs reuse them.
-It always selects `environments/local.yaml` and rejects `--env`; ordinary
-pytest selectors pass through, for example:
+With no arguments it runs the complete unit and public API suite, checks
+non-deferred OpenAPI marker coverage, and compares the live public contract to
+the checked-in snapshot. Any failed test, incomplete coverage, or contract
+drift makes the command fail. It always selects `environments/local.yaml` and
+rejects `--env`.
+
+Ordinary pytest selectors pass through. The command labels these runs as
+partial validation because they do not include the coverage and live-contract
+gates, for example:
 
 ```bash
 ./run-tests -m auth_smoke
@@ -33,6 +40,22 @@ The local deployment must already be running at
 network access, and Playwright system libraries. The repository reports missing
 runtime prerequisites but does not administer the deployment, install trust
 anchors, or weaken certificate verification.
+
+The public gateway contract has one per-client-IP NGINX bucket shared by all
+rate-limited API routes: 10 requests/second with `burst=50` and `nodelay`.
+Every `GatewayClient` in a test process deliberately shares a monotonic,
+fixed-interval pacer capped at 8 requests/second. This conservative client-side
+pacing applies centrally to API and raw gateway requests, including requests
+made by different authenticated clients. Same-origin public-gateway requests
+during browser authentication reserve slots from that same pacer; external
+identity-provider traffic does not. Individual tests do not sleep or implement
+their own throttling. An HTTP 429 is returned directly to the test and remains
+a failure signal rather than being retried.
+
+The first test that needs each normal user generates its credentials and signs
+up through the public hosted flow; no credential editing or separate bootstrap
+command is needed. Preserve the resulting gitignored `.env.local` so later runs
+log in as the same users.
 
 Environment files under `environments/` are validated, declarative, and
 non-secret. They contain only public target settings and names of environment
@@ -55,7 +78,8 @@ reported by the request or browser login that encounters them.
 - `tests/api/` contains tests that exercise deployed public HTTP routes through
   `GatewayClient`.
 
-Collection is offline and does not create credentials or accounts:
+Collection is offline and does not create credentials or accounts. Because a
+selector is supplied, this is a partial validation run:
 
 ```bash
 ./run-tests --collect-only
@@ -103,6 +127,24 @@ A focused primary-only selection does not request the secondary identity. The
 full suite includes both smokes and therefore provisions or logs in both
 reusable identities.
 
+Authorization scenarios request both users lazily and reject reused local
+usernames or session values before relying on cross-user results. Each
+browser-backed session is verified through the public `/auth/v1/user` route
+during acquisition. Run the scenarios twice to exercise first-use provisioning
+followed by reuse of the same two identities:
+
+```bash
+./run-tests -m authorization
+./run-tests -m authorization
+```
+
+These scenarios assert non-disclosing `404` responses for direct foreign
+resources, owner-scoped saved-view membership and clone behavior, and preview
+token ownership. Rejected operations are followed by owner-visible reads to
+prove that records and memberships did not change and imports created no rows.
+A missing or indistinct secondary identity fails local authorization execution;
+production-safe collection does not request it.
+
 Automatic credential-file access and signup are restricted to the exact local
 target. Staging remains pre-provisioned, and production remains
 supplied-session-only and read-only.
@@ -140,9 +182,14 @@ method and path of deferred admin operations, and writes
 .venv/bin/python tools/check-openapi-coverage.py --env local
 ```
 
-Live coverage and snapshot refresh modes connect directly to the configured
-public OpenAPI route; they do not perform separate gateway behavior checks.
-Snapshot refresh remains a distinct, intentional operation:
+The full `./run-tests` gate fetches the public OpenAPI document and reports
+added or removed operations, method/path moves, and changed parameters, request
+bodies, responses, or component schemas. Server URLs, mapping key order, and
+other irrelevant metadata do not cause drift. Differences are review failures;
+the gate never updates the checked-in baseline.
+
+Snapshot refresh remains a distinct, intentional developer action after a
+public contract change has been reviewed:
 
 ```bash
 .venv/bin/python tools/refresh-openapi.py --env local
@@ -178,10 +225,15 @@ independent from the statement import wizard.
 There is no generic cleanup registry, janitor, or environment reset path;
 leftover user-owned local data is accepted.
 
+Resetting or redeploying the local environment is external and optional. The
+suite does not require a clean database, and it never resets deployment state
+or broadly removes prior test data.
+
 Related create/read/update/delete assertions are grouped into lifecycle
 scenarios, and transaction import scenarios share one run-owned statement
-format. This keeps the full suite below the local ingress mutation budget
-without retries, pacing sleeps, or weakened assertions.
+format. Together with centralized 8-requests/second gateway pacing, this keeps
+the full suite within the public ingress contract without retries,
+environment-specific exceptions, or weakened assertions.
 
 ## Markers And Focused Regression Runs
 
@@ -206,6 +258,26 @@ Focused phase-4 scenarios can be run with:
 Run the same focused selector again with the retained `.env.local` identities
 to exercise it against accounts containing data from earlier runs.
 
+## Run Artifacts
+
+Every `./run-tests` invocation writes to a distinct ignored directory under
+`artifacts/runs/`. Full runs contain exact installed dependency versions,
+Python runtime details, OpenAPI coverage and drift reports, JUnit pytest
+results, and redacted public request diagnostics. Focused runs contain their
+JUnit result and any request diagnostics. Artifacts never contain browser
+storage, provisioning form captures, passwords, authorization headers, or
+session-cookie values.
+
+## Spring Upgrade Workflow
+
+The accepted baseline and its limits are recorded in
+`docs/local-regression-baseline.md`. During the Spring Boot upgrade, run the
+same checked-in tests and snapshot against the upgraded local services. Treat a
+failure as a regression to investigate before changing an assertion. Refresh
+`schemas/openapi.json` only through a separate explicit review when the public
+contract change is intentional; do not make the suite accept an unexplained
+service change.
+
 ## Quality Gates
 
 ```bash
@@ -216,4 +288,5 @@ to exercise it against accounts containing data from earlier runs.
 .venv/bin/python -m ruff format --check .
 .venv/bin/python -m ruff check .
 .venv/bin/python -m mypy src tests
+./run-tests
 ```

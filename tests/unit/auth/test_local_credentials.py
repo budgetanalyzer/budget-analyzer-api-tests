@@ -261,6 +261,26 @@ def test_primary_creation_does_not_create_secondary_credentials(tmp_path: Path) 
     assert "BA_SECONDARY_TEST_PASSWORD" not in saved
 
 
+def test_local_roles_cannot_reuse_the_same_saved_username(tmp_path: Path) -> None:
+    config = load_environment("local")
+    credential_path = tmp_path / ".env.local"
+    credential_path.write_text(
+        "BA_PRIMARY_TEST_USERNAME=reused@test.com\n"
+        "BA_PRIMARY_TEST_PASSWORD=primary-password\n"
+        "BA_SECONDARY_TEST_USERNAME=reused@test.com\n"
+        "BA_SECONDARY_TEST_PASSWORD=secondary-password\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(LocalCredentialError, match="two distinct normal users"):
+        load_or_create_local_credentials(
+            config,
+            "secondary",
+            environ={},
+            path=credential_path,
+        )
+
+
 def _unexpected_flow(name: str) -> Callable[[EnvironmentConfig, BrowserLoginCredentials], Session]:
     def fail(
         environment_config: EnvironmentConfig,
