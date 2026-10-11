@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import httpx
-from jsonschema import Draft202012Validator  # type: ignore[import-untyped]  # missing stubs
+from jsonschema import (  # type: ignore[import-untyped]  # missing stubs
+    Draft202012Validator,
+    FormatChecker,
+)
 from jsonschema.exceptions import ValidationError  # type: ignore[import-untyped]  # missing stubs
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
@@ -78,6 +81,7 @@ def assert_response_matches_openapi(
     validator = Draft202012Validator(
         {"$ref": f"{_OPENAPI_DOCUMENT_URI}{schema_path}"},
         registry=registry,
+        format_checker=FormatChecker(),
     )
     errors = sorted(validator.iter_errors(cast(Any, response_body)), key=str)
     if errors:

@@ -39,10 +39,10 @@ class RequestPacer:
         with self._lock:
             now = self._monotonic()
             request_at = now if self._next_request_at is None else max(now, self._next_request_at)
-            self._next_request_at = request_at + self._minimum_interval
             delay = request_at - now
             if delay > 0:
                 self._sleep(delay)
+            self._next_request_at = self._monotonic() + self._minimum_interval
 
 
 _SHARED_GATEWAY_REQUEST_PACER = RequestPacer(requests_per_second=MAX_GATEWAY_REQUESTS_PER_SECOND)

@@ -16,6 +16,7 @@ from api_tests.auth import AuthConfigurationError, acquire_browser_session, load
 from api_tests.browser_login import BrowserLoginCredentials, read_session_cookie, verify_session
 from api_tests.client import GatewayClient
 from api_tests.config import load_environment
+from api_tests.logging import MAX_BODY_BYTES
 from api_tests.run_state import RUN_ID_PATTERN, generate_run_id
 from api_tests.session import (
     IndistinctSessionsError,
@@ -298,3 +299,50 @@ def test_status_failure_context_redacts_sensitive_response_values() -> None:
     assert "secret-payload" not in message
     assert "ba-api-test-sensitive@test.com" not in message
     assert "[REDACTED]" in message
+
+
+def test_oversized_json_is_redacted_before_artifact_and_failure_context_truncation(
+    tmp_path: Path,
+) -> None:
+    cookie_secret = "oversized-cookie-secret"
+    preview_token = "v2.preview-payload.preview-signature"
+    leaked_token_prefix = "v2.previ"
+    body_before_filler = f'{{"cookie":{json.dumps(cookie_secret)},"zz_filler":"'
+    body_before_token = '","preview":"'
+    token_offset = MAX_BODY_BYTES - len(leaked_token_prefix)
+    filler_length = token_offset - len((body_before_filler + body_before_token).encode("utf-8"))
+    body = body_before_filler + ("x" * filler_length) + body_before_token + preview_token + '"}'
+
+    encoded_body = body.encode("utf-8")
+    assert encoded_body[token_offset : token_offset + len(preview_token)] == preview_token.encode()
+    assert token_offset < MAX_BODY_BYTES < token_offset + len(preview_token)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            500,
+            headers={"content-type": "application/json"},
+            content=encoded_body,
+        )
+
+    artifact_path = tmp_path / "request-log.jsonl"
+    with GatewayClient(
+        load_environment("local"),
+        artifact_path=artifact_path,
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.api_request("GET", "/oversized-response")
+
+    log_entry = json.loads(artifact_path.read_text(encoding="utf-8"))
+    logged_body = log_entry["response_body_prefix"]
+    assert len(logged_body.encode("utf-8")) <= MAX_BODY_BYTES
+    assert cookie_secret not in logged_body
+    assert leaked_token_prefix not in logged_body
+    assert logged_body.count("[REDACTED]") == 2
+
+    with pytest.raises(AssertionError) as exc_info:
+        assert_status(response, httpx.codes.OK)
+
+    failure_context = str(exc_info.value)
+    assert cookie_secret not in failure_context
+    assert leaked_token_prefix not in failure_context
+    assert "[REDACTED]" in failure_context

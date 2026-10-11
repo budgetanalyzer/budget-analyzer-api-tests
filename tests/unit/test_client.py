@@ -13,6 +13,7 @@ from api_tests.config import load_environment
 @dataclass
 class FakeTiming:
     now: float = 100.0
+    sleep_overshoot: float = 0.0
     sleeps: list[float] = field(default_factory=list)
 
     def monotonic(self) -> float:
@@ -20,7 +21,7 @@ class FakeTiming:
 
     def sleep(self, seconds: float) -> None:
         self.sleeps.append(seconds)
-        self.now += seconds
+        self.now += seconds + self.sleep_overshoot
 
 
 def test_request_pacer_uses_monotonic_fixed_intervals() -> None:
@@ -36,6 +37,23 @@ def test_request_pacer_uses_monotonic_fixed_intervals() -> None:
     pacer.wait()
 
     assert timing.now == pytest.approx(100.25)
+    assert timing.sleeps == pytest.approx([0.125, 0.125])
+
+
+def test_request_pacer_preserves_interval_after_sleep_overshoots() -> None:
+    timing = FakeTiming(now=0.0, sleep_overshoot=0.2)
+    pacer = RequestPacer(
+        requests_per_second=8,
+        monotonic=timing.monotonic,
+        sleep=timing.sleep,
+    )
+    released_at: list[float] = []
+
+    for _ in range(3):
+        pacer.wait()
+        released_at.append(timing.monotonic())
+
+    assert released_at == pytest.approx([0.0, 0.325, 0.650])
     assert timing.sleeps == pytest.approx([0.125, 0.125])
 
 

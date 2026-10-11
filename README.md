@@ -125,7 +125,9 @@ remain directly selectable:
 
 A focused primary-only selection does not request the secondary identity. The
 full suite includes both smokes and therefore provisions or logs in both
-reusable identities.
+reusable identities. In both browser and supplied-session modes, each smoke
+verifies its own session with an explicit public `GET /auth/v1/user` request
+and requires HTTP 200; invalid or redirected sessions fail the smoke.
 
 Authorization scenarios request both users lazily and reject reused local
 usernames or session values before relying on cross-user results. Each

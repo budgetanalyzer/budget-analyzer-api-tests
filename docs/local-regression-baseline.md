@@ -40,7 +40,39 @@ complied with the fixed public NGINX policy: one per-client-IP bucket at 10
 requests/second with `burst=50` and `nodelay`, with the harness conservatively
 pacing public-gateway request starts at no more than 8 requests/second. This
 includes `GatewayClient` requests and same-origin browser-authentication
-traffic. HTTP 429 responses are not retried and remain failures.
+traffic. Pacer deadlines advance from the actual release time, so late wake-ups
+do not permit catch-up bursts. HTTP 429 responses are not retried and remain
+failures.
+
+Request artifacts and assertion failure contexts sanitize response bodies before
+limiting their diagnostic prefixes. Valid JSON is parsed in full and recursively
+redacted by field and value; malformed JSON and non-JSON text use the text
+redactor. Only then is output bounded to 4,096 UTF-8 bytes, so credentials after
+or across the former raw-response boundary cannot leak into diagnostics.
+
+Response schema validation enforces documented string formats. In particular,
+`date` values must be real calendar dates and `date-time` values must be
+timezone-aware timestamps.
+
+## Review Regression Verification
+
+Review-regression verification completed on 2026-10-11. Both live authentication
+smokes passed after independently checking their primary or secondary session
+with `GET /auth/v1/user`. Six deterministic supplied-session cases also passed,
+covering each smoke's exact endpoint and account cookie, HTTP 200 acceptance,
+and rejection of HTTP 401 and redirect responses.
+
+The required offline gates passed with 97 unit tests, 35 local API tests
+collected, and 9 production-safe read-only tests selected from 35. Ruff reported
+all 60 files formatted and no lint findings; strict mypy reported no issues in
+50 source files.
+
+The no-argument `./run-tests` gate wrote
+`artifacts/runs/20261011T191859Z-6d742b08/` and passed all 132 tests in 58.20
+seconds. OpenAPI coverage remained 40 operations with 8 deferred admin
+operations, and the live public contract matched the checked-in snapshot. The
+run emitted one non-failing pytest assertion-rewrite warning for the already
+imported `anyio` plugin; there were no failed, skipped, or xfailed tests.
 
 ## Deferred Scope And Limits
 

@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
   "httpx",
-  "jsonschema",
+  "jsonschema[format-nongpl]",
   "playwright",
   "pydantic",
   "PyYAML",

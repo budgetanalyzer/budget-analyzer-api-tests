@@ -99,19 +99,27 @@ def _redact_headers(headers: httpx.Headers) -> dict[str, str]:
 
 
 def _redact_body_prefix(response: httpx.Response) -> str:
-    body_prefix = response.content[:MAX_BODY_BYTES]
-    text = body_prefix.decode(response.encoding or "utf-8", errors="replace")
+    text = response.content.decode(response.encoding or "utf-8", errors="replace")
 
     content_type = response.headers.get("content-type", "")
     if "json" not in content_type.lower():
-        return _redact_sensitive_text(text)
+        return _utf8_prefix(_redact_sensitive_text(text), MAX_BODY_BYTES)
 
     try:
         payload = json.loads(text)
     except json.JSONDecodeError:
-        return _redact_sensitive_text(text)
+        sanitized = _redact_sensitive_text(text)
+    else:
+        sanitized = json.dumps(_redact_json(payload), sort_keys=True)
 
-    return json.dumps(_redact_json(payload), sort_keys=True)
+    return _utf8_prefix(sanitized, MAX_BODY_BYTES)
+
+
+def _utf8_prefix(value: str, byte_limit: int) -> str:
+    encoded = value.encode("utf-8")
+    if len(encoded) <= byte_limit:
+        return value
+    return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
 def _redact_json(value: object) -> object:

@@ -66,6 +66,58 @@ def test_assert_response_matches_openapi_accepts_matching_scalar_response() -> N
     assert_response_matches_openapi(response, "countWidgets", 200, openapi_doc)
 
 
+@pytest.mark.parametrize(
+    ("date", "created_at", "updated_at"),
+    [
+        ("2024-02-29", "2025-10-14T10:30:00Z", "2025-10-14T17:30:00+07:00"),
+        ("2025-10-14", "2025-10-14T10:30:00-04:00", "2025-10-14T10:30:00.123Z"),
+    ],
+)
+def test_get_transactions_accepts_valid_date_and_timezone_aware_timestamps(
+    openapi_snapshot: OpenApiDocument,
+    date: str,
+    created_at: str,
+    updated_at: str,
+) -> None:
+    transaction = _valid_transaction_response()
+    transaction.update(
+        {
+            "date": date,
+            "createdAt": created_at,
+            "updatedAt": updated_at,
+        }
+    )
+    response = httpx.Response(200, json=[transaction])
+
+    assert_response_matches_openapi(response, "getTransactions", 200, openapi_snapshot)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value", "documented_format"),
+    [
+        ("date", "2025-02-29", "date"),
+        ("createdAt", "not-a-timestamp", "date-time"),
+        ("updatedAt", "2025-10-14T10:30:00", "date-time"),
+    ],
+)
+def test_get_transactions_rejects_invalid_date_and_timestamp_formats(
+    openapi_snapshot: OpenApiDocument,
+    field: str,
+    invalid_value: str,
+    documented_format: str,
+) -> None:
+    transaction = _valid_transaction_response()
+    transaction[field] = invalid_value
+    response = httpx.Response(200, json=[transaction])
+
+    with pytest.raises(AssertionError) as exc_info:
+        assert_response_matches_openapi(response, "getTransactions", 200, openapi_snapshot)
+
+    message = str(exc_info.value)
+    assert f"{invalid_value!r} is not a {documented_format!r}" in message
+    assert f"response path: $.0.{field}" in message
+
+
 def test_assert_response_matches_openapi_fails_for_missing_operation_id() -> None:
     openapi_doc = _openapi_doc(
         operation_id="getWidget",
@@ -195,4 +247,18 @@ def _openapi_doc_without_content(*, operation_id: str, status: int) -> OpenApiDo
                 },
             },
         },
+    }
+
+
+def _valid_transaction_response() -> dict[str, JsonValue]:
+    return {
+        "amount": 100.5,
+        "createdAt": "2025-10-14T10:30:00Z",
+        "currencyIsoCode": "USD",
+        "date": "2025-10-14",
+        "description": "Grocery shopping",
+        "id": 1,
+        "ownerId": "usr_test123",
+        "type": "DEBIT",
+        "updatedAt": "2025-10-14T10:30:00Z",
     }
