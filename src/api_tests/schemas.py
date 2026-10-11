@@ -11,6 +11,7 @@ from jsonschema.exceptions import ValidationError  # type: ignore[import-untyped
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
+from api_tests.logging import redact_sensitive_text, redacted_response_context
 from api_tests.openapi import HTTP_METHODS, JsonValue, OpenApiDocument, operation_response_schema
 
 _OPENAPI_DOCUMENT_URI = "urn:budget-analyzer-api-tests:openapi-document"
@@ -24,7 +25,7 @@ def assert_response_matches_openapi(
 ) -> None:
     assert response.status_code == expected_status, (
         f"{operation_id} expected HTTP {expected_status}, got HTTP {response.status_code}: "
-        f"{response.text}"
+        f"{redacted_response_context(response)}"
     )
 
     documented_response = _documented_response(openapi_doc, operation_id, expected_status)
@@ -178,7 +179,8 @@ def _json_content(
 def _format_validation_error(error: ValidationError) -> str:
     response_path = _format_path(error.path)
     schema_error_path = _format_path(error.schema_path)
-    return f"{error.message} (response path: {response_path}, schema path: {schema_error_path})"
+    message = redact_sensitive_text(error.message)
+    return f"{message} (response path: {response_path}, schema path: {schema_error_path})"
 
 
 def _format_path(path: Iterable[object]) -> str:

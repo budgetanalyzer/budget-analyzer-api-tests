@@ -4,7 +4,6 @@ import re
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from functools import cache
 
 RUN_ID_PATTERN = re.compile(r"^ba-api-test-\d{8}T\d{6}Z-[a-z0-9]{8}$")
 
@@ -29,8 +28,3 @@ def generate_run_id(
 
 def new_run_state() -> RunState:
     return RunState(run_id=generate_run_id())
-
-
-@cache
-def session_run_state() -> RunState:
-    return new_run_state()

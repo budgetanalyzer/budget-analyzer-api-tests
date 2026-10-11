@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Self, TypedDict
+from typing import Literal, Self
 from urllib.parse import urlparse
 
 import yaml
@@ -9,51 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 EnvironmentType = Literal["local", "staging", "production"]
 AuthMode = Literal["supplied_sessions", "browser_preprovisioned"]
-CleanupMode = Literal["none"]
-
-
-class SuppliedSessionNonSecretSettings(TypedDict):
-    primary_session_env: str
-    secondary_session_env: str | None
-
-
-class BrowserNonSecretSettings(TypedDict):
-    headless: bool
-    primary_username_env: str
-    primary_password_env: str
-    secondary_username_env: str
-    secondary_password_env: str
-
-
-class AuthNonSecretSettings(TypedDict):
-    mode: AuthMode
-    supplied_sessions: SuppliedSessionNonSecretSettings
-    browser: BrowserNonSecretSettings | None
-
-
-class DataNonSecretSettings(TypedDict):
-    namespace_prefix: str
-    cleanup: CleanupMode
-    per_run_user_boundary: bool
-
-
-class TimeoutNonSecretSettings(TypedDict):
-    request_seconds: float
-    eventually_seconds: float
-
-
-class EnvironmentNonSecretSettings(TypedDict):
-    name: str
-    origin: str
-    api_base_path: str
-    openapi_path: str
-    environment_type: EnvironmentType
-    allow_mutation: bool
-    allow_destructive: bool
-    session_cookie_name: str
-    auth: AuthNonSecretSettings
-    data: DataNonSecretSettings
-    timeouts: TimeoutNonSecretSettings
 
 
 class StrictConfigModel(BaseModel):
@@ -110,20 +65,6 @@ class AuthConfig(StrictConfigModel):
     browser: BrowserConfig | None = None
 
 
-class DataConfig(StrictConfigModel):
-    namespace_prefix: str
-    cleanup: CleanupMode
-    per_run_user_boundary: bool
-
-    @field_validator("namespace_prefix")
-    @classmethod
-    def validate_namespace_prefix(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("namespace_prefix must not be empty")
-        return value
-
-
 class TimeoutConfig(StrictConfigModel):
     request_seconds: float = Field(gt=0)
     eventually_seconds: float = Field(gt=0)
@@ -145,7 +86,6 @@ class EnvironmentConfig(StrictConfigModel):
     allow_destructive: bool
     session_cookie_name: str
     auth: AuthConfig
-    data: DataConfig
     timeouts: TimeoutConfig
 
     @field_validator("name", "session_cookie_name")
@@ -190,8 +130,6 @@ class EnvironmentConfig(StrictConfigModel):
                 raise ValueError("production auth.mode must use supplied_sessions")
             if self.auth.browser is not None:
                 raise ValueError("production environments must not configure browser acquisition")
-            if self.data.per_run_user_boundary:
-                raise ValueError("production environments must not create per-run users")
         if self.environment_type == "staging":
             if (
                 self.auth.mode == "supplied_sessions"
@@ -253,41 +191,3 @@ def with_session_mode(config: EnvironmentConfig, mode: AuthMode | None) -> Envir
         raise TypeError("normalized auth config was not a mapping")
     auth_config["mode"] = mode
     return EnvironmentConfig.model_validate(raw_config)
-
-
-def normalized_non_secret_settings(config: EnvironmentConfig) -> EnvironmentNonSecretSettings:
-    return {
-        "name": config.name,
-        "origin": config.origin,
-        "api_base_path": config.api_base_path,
-        "openapi_path": config.openapi_path,
-        "environment_type": config.environment_type,
-        "allow_mutation": config.allow_mutation,
-        "allow_destructive": config.allow_destructive,
-        "session_cookie_name": config.session_cookie_name,
-        "auth": {
-            "mode": config.auth.mode,
-            "supplied_sessions": {
-                "primary_session_env": config.auth.supplied_sessions.primary_session_env,
-                "secondary_session_env": config.auth.supplied_sessions.secondary_session_env,
-            },
-            "browser": {
-                "headless": config.auth.browser.headless,
-                "primary_username_env": config.auth.browser.primary_username_env,
-                "primary_password_env": config.auth.browser.primary_password_env,
-                "secondary_username_env": config.auth.browser.secondary_username_env,
-                "secondary_password_env": config.auth.browser.secondary_password_env,
-            }
-            if config.auth.browser is not None
-            else None,
-        },
-        "data": {
-            "namespace_prefix": config.data.namespace_prefix,
-            "cleanup": config.data.cleanup,
-            "per_run_user_boundary": config.data.per_run_user_boundary,
-        },
-        "timeouts": {
-            "request_seconds": config.timeouts.request_seconds,
-            "eventually_seconds": config.timeouts.eventually_seconds,
-        },
-    }

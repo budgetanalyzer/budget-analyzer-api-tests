@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+
+REPOSITORY_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$REPOSITORY_ROOT"
+
+PYTHON_BIN=${BA_API_TEST_PYTHON:-python3.12}
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+    echo "run-tests requires Python 3.12 (command not found: $PYTHON_BIN)" >&2
+    exit 2
+fi
+if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)'; then
+    echo "run-tests requires Python 3.12 exactly (selected: $PYTHON_BIN)" >&2
+    exit 2
+fi
+
+if [ ! -x .venv/bin/python ]; then
+    echo "Creating repository virtual environment..."
+    "$PYTHON_BIN" -m venv .venv
+fi
+
+INSTALL_MARKER=.venv/.budget-analyzer-api-tests-dev-ready
+if [ ! -f "$INSTALL_MARKER" ] || [ pyproject.toml -nt "$INSTALL_MARKER" ] || \
+   ! .venv/bin/python -c 'import api_tests, httpx, mypy, playwright, pydantic, pytest, respx, ruff, yaml' >/dev/null 2>&1; then
+    echo "Installing repository development dependencies..."
+    .venv/bin/python -m pip install -e '.[dev]'
+    : > "$INSTALL_MARKER"
+fi
+
+if ! CHROMIUM_PATH=$(
+    .venv/bin/python -c \
+        'from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(p.chromium.executable_path); p.stop()'
+); then
+    echo "run-tests could not inspect the Playwright Chromium installation" >&2
+    exit 2
+fi
+if [ ! -x "$CHROMIUM_PATH" ]; then
+    echo "Installing Playwright Chromium..."
+    .venv/bin/python -m playwright install chromium
+fi
+if [ ! -x "$CHROMIUM_PATH" ]; then
+    echo "run-tests could not make the Playwright Chromium executable available" >&2
+    exit 2
+fi
+
+exec .venv/bin/python -m api_tests.local_runner "$@"

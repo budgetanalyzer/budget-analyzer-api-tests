@@ -8,6 +8,10 @@ command-line and browser clients, and the standalone API test repository will
 invoke that command for exact-local bootstrap before its typed prerequisite
 check performs live traffic.
 
+> **Superseded:** `simple-local-api-regression-baseline-plan.md` now treats
+> HTTPS trust as runtime-provided and removes harness trust bootstrap. Preserve
+> this document as historical context; do not resume its pending phase.
+
 Status: In progress — Phases 1 through 3 complete; Phase 4 pending
 
 This work must complete before resuming Phase 5 of

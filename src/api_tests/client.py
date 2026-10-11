@@ -8,7 +8,7 @@ import httpx
 
 from api_tests.config import EnvironmentConfig
 from api_tests.logging import request_response_hooks
-from api_tests.session import SessionBundle, SessionContext
+from api_tests.session import Session
 
 
 class GatewayClient:
@@ -17,18 +17,10 @@ class GatewayClient:
         config: EnvironmentConfig,
         *,
         artifact_path: Path | None = None,
-        session_context: SessionContext | None = None,
-        session_bundle: SessionBundle | None = None,
+        session: Session | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        if session_context is not None and session_bundle is not None:
-            raise ValueError("pass either session_context or session_bundle, not both")
-
-        bundle = session_context.bundle if session_context is not None else session_bundle
-        cookies = None
-        if bundle is not None:
-            session_cookie = bundle.primary.session_cookie
-            cookies = {session_cookie.name: session_cookie.value}
+        cookies = {session.cookie_name: session.cookie_value} if session is not None else None
 
         self.config = config
         self._client = httpx.Client(

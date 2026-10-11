@@ -7,6 +7,10 @@ keep external identity-provider behavior behind optional session-acquisition
 adapters, finish the pending behavioral coverage, and become ready for local,
 staging, and production-safe execution.
 
+> **Superseded:** `simple-local-api-regression-baseline-plan.md` is the active
+> implementation plan. Preserve this document as historical context; do not
+> resume its outstanding phases or blockers.
+
 Status: In progress — Phases 1 through 4 complete; Phase 5 blocked on the
 verified local TLS agent-runner prerequisite below.
 

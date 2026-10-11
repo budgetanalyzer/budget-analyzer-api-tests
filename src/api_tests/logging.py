@@ -14,10 +14,29 @@ MAX_BODY_BYTES = 4096
 REQUEST_STARTED_AT = "budget_analyzer_request_started_at"
 SENSITIVE_HEADER_NAMES = {"authorization", "cookie", "set-cookie"}
 SENSITIVE_KEY_RE = re.compile(
-    r"(authorization|cookie|password|client_secret|access_token|refresh_token|id_token|token)",
+    r"(authorization|cookie|email|username|password|client_secret|access_token|refresh_token|"
+    r"id_token|token)",
     re.IGNORECASE,
 )
+GENERATED_ACCOUNT_RE = re.compile(r"ba-api-test-[A-Za-z0-9_-]+@test\.com", re.IGNORECASE)
+PREVIEW_TOKEN_RE = re.compile(r"\bv2\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
 HttpxEventHook = Callable[..., object]
+
+
+def redacted_response_context(response: httpx.Response, *, limit: int = 500) -> str:
+    """Return concise response diagnostics that are safe to include in failures."""
+    body = _redact_body_prefix(response)
+    if len(body) > limit:
+        body = f"{body[:limit]}..."
+    return (
+        f"HTTP {response.status_code}; content-type="
+        f"{response.headers.get('content-type', '<missing>')!r}; body={body!r}"
+    )
+
+
+def redact_sensitive_text(value: str) -> str:
+    """Redact credential-like values from diagnostics outside artifact logging."""
+    return _redact_sensitive_text(value)
 
 
 def request_response_hooks(
@@ -100,13 +119,15 @@ def _redact_json(value: object) -> object:
 
 
 def _redact_sensitive_text(value: str) -> str:
+    redacted = GENERATED_ACCOUNT_RE.sub("[REDACTED]", value)
+    redacted = PREVIEW_TOKEN_RE.sub("[REDACTED]", redacted)
     redacted = re.sub(
         r"(?i)(authorization:\s*bearer\s+)[^\s,;]+",
         r"\1[REDACTED]",
-        value,
+        redacted,
     )
     redacted = re.sub(
-        r"(?i)((?:access_token|refresh_token|id_token|password|client_secret)"
+        r"(?i)((?:access_token|refresh_token|id_token|password|client_secret|email|username)"
         r'["\']?\s*[:=]\s*["\']?)[^"\'\s,;}]+',
         r"\1[REDACTED]",
         redacted,

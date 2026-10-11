@@ -105,10 +105,13 @@ def build_operation_coverage(
     *,
     source: CoverageSource,
 ) -> tuple[OperationCoverage, ...]:
-    deferred_by_id = {deferred.operation_id: deferred for deferred in deferred_admin_operations}
+    operation_list = tuple(operations)
+    deferred_list = tuple(deferred_admin_operations)
+    _validate_inventory(operation_list, deferred_list, marker_counts)
+    deferred_by_id = {deferred.operation_id: deferred for deferred in deferred_list}
     coverage: list[OperationCoverage] = []
     for operation in sorted(
-        operations, key=lambda item: (item.path, item.method, item.operation_id)
+        operation_list, key=lambda item: (item.path, item.method, item.operation_id)
     ):
         counts = marker_counts.get(operation.operation_id, MarkerCounts())
         deferred_admin = operation.operation_id in deferred_by_id
@@ -125,6 +128,47 @@ def build_operation_coverage(
             )
         )
     return tuple(coverage)
+
+
+def _validate_inventory(
+    operations: Sequence[OpenApiOperation],
+    deferred_admin_operations: Sequence[DeferredAdminOperation],
+    marker_counts: Mapping[str, MarkerCounts],
+) -> None:
+    operations_by_id: dict[str, OpenApiOperation] = {}
+    for operation in operations:
+        previous = operations_by_id.get(operation.operation_id)
+        if previous is not None:
+            raise ValueError(
+                "duplicate OpenAPI operationId "
+                f"{operation.operation_id!r}: {previous.method} {previous.path} and "
+                f"{operation.method} {operation.path}"
+            )
+        operations_by_id[operation.operation_id] = operation
+
+    unrecognized_markers = sorted(set(marker_counts) - operations_by_id.keys())
+    if unrecognized_markers:
+        raise ValueError(
+            "unrecognized pytest.mark.openapi operation ids: " + ", ".join(unrecognized_markers)
+        )
+
+    seen_deferred_ids: set[str] = set()
+    for deferred in deferred_admin_operations:
+        if deferred.operation_id in seen_deferred_ids:
+            raise ValueError(f"duplicate deferred admin operationId: {deferred.operation_id}")
+        seen_deferred_ids.add(deferred.operation_id)
+        matching_operation = operations_by_id.get(deferred.operation_id)
+        if matching_operation is None:
+            raise ValueError(
+                "stale deferred admin operation is absent from OpenAPI: "
+                f"{deferred.operation_id} ({deferred.method} {deferred.path})"
+            )
+        if matching_operation.method != deferred.method or matching_operation.path != deferred.path:
+            raise ValueError(
+                f"stale deferred admin method/path for {deferred.operation_id}: manifest has "
+                f"{deferred.method} {deferred.path}, OpenAPI has "
+                f"{matching_operation.method} {matching_operation.path}"
+            )
 
 
 def missing_operation_ids(coverage: Iterable[OperationCoverage]) -> tuple[str, ...]:

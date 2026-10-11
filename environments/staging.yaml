@@ -17,10 +17,6 @@ auth:
     primary_password_env: BA_PRIMARY_TEST_PASSWORD
     secondary_username_env: BA_SECONDARY_TEST_USERNAME
     secondary_password_env: BA_SECONDARY_TEST_PASSWORD
-data:
-  namespace_prefix: ba-api-test
-  cleanup: none
-  per_run_user_boundary: true
 timeouts:
   request_seconds: 15
   eventually_seconds: 30

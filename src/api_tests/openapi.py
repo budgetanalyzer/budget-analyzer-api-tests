@@ -10,7 +10,7 @@ import httpx
 
 from api_tests.client import GatewayClient
 
-type JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+type JsonValue = bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"] | None
 type OpenApiDocument = Mapping[str, JsonValue]
 
 HTTP_METHODS: frozenset[str] = frozenset({"get", "post", "put", "patch", "delete"})

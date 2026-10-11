@@ -22,9 +22,11 @@ At the start of work:
 3. Read the nearest relevant modules, tests, environment files, and plan
    documents before changing them.
 
-Keep changes scoped to the requested plan phase or user request. The source
+Keep changes scoped to the requested plan phase or user request. The active
 implementation plan is
-`../orchestration/docs/plans/openapi-black-box-api-test-repository-plan.md`.
+`docs/plans/simple-local-api-regression-baseline-plan.md`. Treat the other
+plans in `docs/plans/` as historical context when their successor notices say
+they are superseded.
 
 ## Core Product Constraints
 
@@ -38,6 +40,8 @@ implementation plan is
 - Do not write generated passwords, session cookies, authorization headers, or
   other credentials to artifacts.
 - Use `browser_preprovisioned` as the primary local and staging auth mode.
+  Local identities are generated lazily through public hosted signup and saved
+  only in gitignored `.env.local`; staging identities remain pre-provisioned.
   `supplied_sessions` is allowed with opaque `BA_SESSION` values supplied
   through environment variables.
 - Production defaults must remain read-only: `allow_mutation: false` and
@@ -45,17 +49,15 @@ implementation plan is
 - Do not broaden production permissions to reach coverage targets.
 - Keep admin/global operations deferred until a separate admin identity,
   cleanup, and global-state safety plan exists.
-- Do not add generic cleanup callbacks or janitors in the initial suite.
-  Per-run generated users are the boundary for user-owned test data.
+- Do not add generic cleanup callbacks or janitors. Use the pytest session's
+  run id and resources created by the current test as the user-data boundary.
 
 ## Implemented Workflow
 
-- Install the local development environment with:
-
-  ```bash
-  python -m pip install -e ".[dev]"
-  python -m playwright install chromium
-  ```
+- Bootstrap and run the full local suite with `./run-tests`. It creates and
+  reuses `.venv`, installs dependencies and Chromium when needed, fixes the
+  target to the declared local environment, and lazily provisions browser
+  accounts. Pass ordinary pytest selectors through this command.
 
 - Validate environment configuration with:
 
@@ -63,40 +65,36 @@ implementation plan is
   .venv/bin/python tools/validate-environment.py --env local
   ```
 
-- Bootstrap and preflight an exact-local live run with:
+- Run deterministic unit tests and offline API collection with:
 
   ```bash
-  .venv/bin/python tools/check-live-prerequisites.py \
-    --env local --scope public --require-local-target
-  ```
-
-- Run local collection without a live target with:
-
-  ```bash
-  .venv/bin/python -m pytest --env local --collect-only
+  .venv/bin/python -m pytest tests/unit --env local
+  .venv/bin/python -m pytest tests/api --env local --collect-only
   ```
 
 - Check OpenAPI marker coverage against the checked-in snapshot with:
 
   ```bash
-  .venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder
+  .venv/bin/python tools/check-openapi-coverage.py --env local
   ```
 
-- Export the OpenAPI coverage artifact with:
+  This command also writes `artifacts/openapi-coverage.json` and fails for
+  unrecognized markers, missing or placeholder-only non-deferred coverage, or
+  stale deferred method/path entries. Keep snapshot refresh as the separate,
+  intentional `tools/refresh-openapi.py` operation.
 
-  ```bash
-  .venv/bin/python tools/export-openapi-coverage.py --env local
-  ```
-
-- Live API tests require the selected environment, verified HTTPS trust,
-  pre-provisioned browser users or supplied sessions, and network access to be
-  available. Pytest performs one inferred prerequisite check after collection
-  for selected network-capable tests.
+- Live API tests require the selected environment, runtime-provided HTTPS
+  trust, Playwright system dependencies, and network access. Exact-local tests
+  create and reuse at most one primary and one secondary normal browser account
+  in `.env.local`; other environments require pre-provisioned users or supplied
+  sessions. Pytest does not run inferred prerequisite probes; failures occur at
+  the request, signup, or login that needs the missing prerequisite.
 - Production smoke execution requires a supplied read-only primary session and
   must use:
 
   ```bash
-  BA_PRIMARY_SESSION=... pytest --env production -m "readonly and production_safe"
+  BA_PRIMARY_SESSION=... .venv/bin/python -m pytest tests/api \
+    --env production -m "readonly and production_safe"
   ```
 
 ## Python Baseline
@@ -137,10 +135,10 @@ system, not loose scripting glue.
   isolate it and validate into typed dataclasses or Pydantic models quickly.
 - Avoid broad `dict[str, object]` plumbing across modules.
 - Use dataclasses or Pydantic models for durable value objects such as
-  environment config, identities, run state, operation coverage, and process or
-  request results.
+  environment config, sessions, run state, operation coverage, and request
+  results.
 - Use literals or enums for constrained status values, auth modes, environment
-  types, cleanup modes, and coverage states.
+  types, and coverage states.
 - Do not silence mypy with broad ignore comments. A narrow ignore must include
   the error code and a short reason.
 
@@ -154,19 +152,14 @@ Expected commands in this workspace use the repository-local virtualenv. If
 `.venv/` is missing, create or install the dev environment first rather than
 falling back to global tooling.
 
-Current transitional commands:
+Run the repository quality gates with:
 
 ```bash
-.venv/bin/python -m ruff format .
-.venv/bin/python -m ruff check . --fix
-.venv/bin/python -m mypy src tests
-.venv/bin/python -m pytest --env local --collect-only
-.venv/bin/python tools/check-openapi-coverage.py --env local --fail-missing --fail-placeholder
-```
-
-After the `src/` migration, the mypy command should be:
-
-```bash
+.venv/bin/python -m pytest tests/unit --env local
+.venv/bin/python -m pytest tests/api --env local --collect-only
+.venv/bin/python -m pytest tests/api --env production -m "readonly and production_safe" --collect-only
+.venv/bin/python -m ruff format --check .
+.venv/bin/python -m ruff check .
 .venv/bin/python -m mypy src tests
 ```
 
@@ -178,6 +171,8 @@ Ruff should use `line-length = 100`, `target-version = "py312"`,
 
 Use pytest for tests.
 
+- Keep deterministic tests under `tests/unit/` and deployed public HTTP tests
+  under `tests/api/`. Keep `pytester` enabled only in the unit subtree.
 - Prefer `tmp_path`, `monkeypatch`, `capsys`, `httpx.MockTransport`, and
   `respx` for harness unit tests.
 - Do not call real identity providers or live Budget Analyzer targets from unit
@@ -190,6 +185,10 @@ Use pytest for tests.
   @pytest.mark.openapi("operationId")
   ```
 
+- Keep browser/session smoke outcomes identifiable. Use `auth_smoke` for the
+  primary account and `secondary_auth_smoke` for the independently lazy
+  secondary account. They run in the full local suite and remain directly
+  selectable with ordinary pytest marker expressions.
 - Use `placeholder` only while a phase is under construction. Placeholder
   coverage is not an acceptable staging-gate completion state.
 - Mark mutating tests with `mutation`, destructive tests with `destructive`,
@@ -210,22 +209,10 @@ Use pytest for tests.
   including local Tilt targets. Do not add insecure runner flags, environment
   switches, `verify=False`, Playwright `ignore_https_errors`, or equivalent
   bypasses for agent containers.
-- Treat a missing host CA in an agent container as a runner trust-store
-  prerequisite. Make the host-generated public mkcert CA certificate available
-  to the container and configure its Python and browser trust stores instead of
-  weakening TLS verification.
-- Do not generate or rotate browser-facing certificates from an agent
-  container. Host certificate setup remains owned by orchestration and must be
-  run from the host workstation.
-- For exact-local live work, use `tools/check-live-prerequisites.py` as the
-  bootstrap entry point. It may invoke the workspace-owned
-  `ensure-budget-analyzer-local-ca-trust` command only when the resolved target
-  is the declared local environment at exactly
-  `https://app.budgetanalyzer.localhost`.
-- If exact-local bootstrap reports that the public CA publication is missing,
-  invalid, expired, or stale, stop and ask the user to run orchestration
-  `./setup.sh` on the host. Agents must not run that host certificate setup or
-  replace it with in-container certificate generation.
+- Treat HTTPS trust and browser system dependencies as runtime prerequisites.
+  Do not install trust anchors, invoke external trust helpers, generate or
+  rotate certificates, or modify the runtime from this repository. Report a
+  request or login failure if the runtime prerequisite is absent.
 - Use `raw_request` only for `/api-docs`, auth edge checks, and other explicitly
   public non-API-prefix routes.
 - Never seed sessions in Redis, exchange identity-provider tokens directly for
@@ -238,6 +225,8 @@ Use pytest for tests.
 ## State, Files, And Schemas
 
 - Keep environment files under `environments/` non-secret.
+- Keep `.env.local` gitignored and owner-only. Preserve complete credential
+  pairs and provisioning state across runs; never source it as shell code.
 - Keep generated logs and coverage files under `artifacts/`.
 - Keep checked-in OpenAPI snapshots under `schemas/`.
 - Keep deferred admin/global operations explicit in
@@ -250,7 +239,7 @@ Use pytest for tests.
 
 - Return documented exit codes from tools instead of raising tracebacks for
   expected user errors.
-- Convert validation, prerequisite, and configuration failures into clear
+- Convert validation, connection, authentication, and configuration failures into clear
   messages naming the environment file, missing variable, path, operation id,
   marker, or command involved.
 - Treat missing authentication prerequisites as an expected stop condition for

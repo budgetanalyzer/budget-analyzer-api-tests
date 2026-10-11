@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import httpx
 
@@ -11,9 +13,9 @@ from api_tests.builders.statement_formats import (
     multipart_json,
 )
 from api_tests.builders.transactions import (
-    batch_import_request,
     generated_account_id,
-    import_transaction_request,
+    generated_bank_name,
+    manual_transaction_request,
 )
 from api_tests.builders.views import create_saved_view_request
 from api_tests.client import GatewayClient
@@ -66,10 +68,10 @@ def save_csv_wizard_statement_format(
     return CreatedStatementFormat(id=int_field(body, "id"), body=body)
 
 
-def preview_transactions(
+def preview_transaction_files(
     client: GatewayClient,
     run_state: RunState,
-    label: str,
+    labels: Sequence[str],
     *,
     statement_format_id: int,
     account_id: str,
@@ -82,9 +84,13 @@ def preview_transactions(
             "statementFormatId": statement_format_id,
             "accountId": account_id,
         },
-        files={
-            "file": (f"{label}.csv", csv_sample_bytes(run_state, label), "text/csv"),
-        },
+        files=[
+            (
+                "files",
+                (f"{label}.csv", csv_sample_bytes(run_state, label), "text/csv"),
+            )
+            for label in labels
+        ],
     )
     _assert_response_matches_snapshot(
         response,
@@ -95,64 +101,43 @@ def preview_transactions(
     return json_object_response(response, httpx.codes.OK)
 
 
-def import_generated_transaction(
+def create_manual_transaction(
     client: GatewayClient,
     run_state: RunState,
     label: str,
     *,
     account_id: str | None = None,
+    include_bank_name: bool = True,
+    amount: float = 12.34,
+    transaction_type: Literal["CREDIT", "DEBIT"] = "DEBIT",
+    date: str = "2026-01-15",
     openapi_snapshot: OpenApiDocument | None = None,
 ) -> CreatedTransaction:
-    statement_format = save_csv_wizard_statement_format(
-        client,
-        run_state,
-        f"{label}-format",
-        openapi_snapshot=openapi_snapshot,
-    )
     transaction_account_id = account_id or generated_account_id(run_state, label)
-    preview = preview_transactions(
-        client,
-        run_state,
-        label,
-        statement_format_id=statement_format.id,
-        account_id=transaction_account_id,
-        openapi_snapshot=openapi_snapshot,
-    )
-    preview_import_token = string_field(preview, "previewImportToken")
-    transaction_request = import_transaction_request(
-        run_state,
-        label,
-        account_id=transaction_account_id,
-    )
-
     response = client.api_request(
         "POST",
-        "/v1/transactions/batch",
-        json=batch_import_request(
-            preview_import_token=preview_import_token,
-            transactions=[transaction_request],
+        "/v1/transactions",
+        json=manual_transaction_request(
+            run_state,
+            label,
+            account_id=transaction_account_id,
+            bank_name=generated_bank_name(run_state, label) if include_bank_name else None,
+            amount=amount,
+            transaction_type=transaction_type,
+            date=date,
         ),
     )
     _assert_response_matches_snapshot(
         response,
-        "batchImportTransactions",
-        httpx.codes.OK,
+        "createTransaction",
+        httpx.codes.CREATED,
         openapi_snapshot,
     )
-    body = json_object_response(response, httpx.codes.OK)
-    transactions = body.get("transactions")
-    if not isinstance(transactions, list) or not transactions:
-        raise AssertionError(f"expected imported transactions in response, got: {body!r}")
-    first_transaction = transactions[0]
-    if not isinstance(first_transaction, dict):
-        raise AssertionError(f"expected transaction object, got: {first_transaction!r}")
-    transaction_body = {
-        key: value for key, value in first_transaction.items() if isinstance(key, str)
-    }
+    body = json_object_response(response, httpx.codes.CREATED)
     return CreatedTransaction(
-        id=int_field(transaction_body, "id"),
+        id=int_field(body, "id"),
         account_id=transaction_account_id,
-        body=transaction_body,
+        body=body,
     )
 
 
@@ -161,13 +146,13 @@ def create_saved_view(
     run_state: RunState,
     label: str,
     *,
-    account_id: str | None = None,
+    transaction_ids: Sequence[int] = (),
     openapi_snapshot: OpenApiDocument | None = None,
 ) -> CreatedSavedView:
     response = client.api_request(
         "POST",
         "/v1/views",
-        json=create_saved_view_request(run_state, label, account_id=account_id),
+        json=create_saved_view_request(run_state, label, transaction_ids=transaction_ids),
     )
     _assert_response_matches_snapshot(response, "createView", httpx.codes.CREATED, openapi_snapshot)
     body = json_object_response(response, httpx.codes.CREATED)

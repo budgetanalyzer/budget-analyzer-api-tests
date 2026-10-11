@@ -7,7 +7,7 @@ from collections.abc import Sequence
 import yaml
 from pydantic import ValidationError
 
-from api_tests.config import load_environment, normalized_non_secret_settings
+from api_tests.config import load_environment
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -28,5 +28,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"environment validation failed: {exc}", file=sys.stderr)
         return 1
 
-    print(yaml.safe_dump(normalized_non_secret_settings(config), sort_keys=False).strip())
+    print(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False).strip())
     return 0

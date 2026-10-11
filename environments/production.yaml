@@ -12,10 +12,6 @@ auth:
     primary_session_env: BA_PRIMARY_SESSION
     secondary_session_env:
   browser:
-data:
-  namespace_prefix: ba-api-test
-  cleanup: none
-  per_run_user_boundary: false
 timeouts:
   request_seconds: 15
   eventually_seconds: 30
