@@ -1,0 +1,17 @@
+name: production
+origin: https://demo.budgetanalyzer.org
+api_base_path: /api
+openapi_path: /api-docs/openapi.json
+environment_type: production
+allow_mutation: false
+allow_destructive: false
+session_cookie_name: BA_SESSION
+auth:
+  mode: supplied_sessions
+  supplied_sessions:
+    primary_session_env: BA_PRIMARY_SESSION
+    secondary_session_env:
+  browser:
+timeouts:
+  request_seconds: 15
+  eventually_seconds: 30

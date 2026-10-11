@@ -1,0 +1,22 @@
+name: staging
+origin: https://staging.budgetanalyzer.localhost
+api_base_path: /api
+openapi_path: /api-docs/openapi.json
+environment_type: staging
+allow_mutation: true
+allow_destructive: true
+session_cookie_name: BA_SESSION
+auth:
+  mode: browser_preprovisioned
+  supplied_sessions:
+    primary_session_env: BA_PRIMARY_SESSION
+    secondary_session_env: BA_SECONDARY_SESSION
+  browser:
+    headless: true
+    primary_username_env: BA_PRIMARY_TEST_USERNAME
+    primary_password_env: BA_PRIMARY_TEST_PASSWORD
+    secondary_username_env: BA_SECONDARY_TEST_USERNAME
+    secondary_password_env: BA_SECONDARY_TEST_PASSWORD
+timeouts:
+  request_seconds: 15
+  eventually_seconds: 30
