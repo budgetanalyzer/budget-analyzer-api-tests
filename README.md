@@ -274,13 +274,11 @@ session-cookie values.
 
 ## Spring Upgrade Workflow
 
-The accepted baseline and its limits are recorded in
-`docs/local-regression-baseline.md`. During the Spring Boot upgrade, run the
-same checked-in tests and snapshot against the upgraded local services. Treat a
-failure as a regression to investigate before changing an assertion. Refresh
-`schemas/openapi.json` only through a separate explicit review when the public
-contract change is intentional; do not make the suite accept an unexplained
-service change.
+During the Spring Boot upgrade, run the same checked-in tests and snapshot
+against the upgraded local services. Treat a failure as a regression to
+investigate before changing an assertion. Refresh `schemas/openapi.json` only
+through a separate explicit review when the public contract change is
+intentional; do not make the suite accept an unexplained service change.
 
 ## Quality Gates
 
