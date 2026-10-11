@@ -188,7 +188,9 @@ The full `./run-tests` gate fetches the public OpenAPI document and reports
 added or removed operations, method/path moves, and changed parameters, request
 bodies, responses, or component schemas. Server URLs, mapping key order, and
 other irrelevant metadata do not cause drift. Differences are review failures;
-the gate never updates the checked-in baseline.
+the gate never updates the checked-in baseline. After these preflight checks,
+the runner starts pytest in a fresh Python process so pytest plugins initialize
+independently from libraries imported while checking the live contract.
 
 Snapshot refresh remains a distinct, intentional developer action after a
 public contract change has been reviewed:

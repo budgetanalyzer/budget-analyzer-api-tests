@@ -9,7 +9,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import httpx
-import pytest
 from pydantic import ValidationError
 
 from api_tests.client import GatewayClient
@@ -122,21 +121,24 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
 
 
 def _run_pytest(arguments: Sequence[str], artifact_dir: Path) -> int:
-    return int(
-        pytest.main(
-            [
-                "-p",
-                "api_tests.pytest_plugin",
-                "--env",
-                "local",
-                "--request-log",
-                str(artifact_dir / "request-log.jsonl"),
-                "--junitxml",
-                str(artifact_dir / "pytest.xml"),
-                *arguments,
-            ]
-        )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-p",
+            "api_tests.pytest_plugin",
+            "--env",
+            "local",
+            "--request-log",
+            str(artifact_dir / "request-log.jsonl"),
+            "--junitxml",
+            str(artifact_dir / "pytest.xml"),
+            *arguments,
+        ],
+        check=False,
     )
+    return result.returncode
 
 
 def _new_artifact_dir(parent: Path) -> Path:

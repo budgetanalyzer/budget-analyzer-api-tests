@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,31 +26,37 @@ def test_runner_passes_pytest_selectors_after_fixed_local_environment(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    observed: list[list[str]] = []
+    observed: list[tuple[list[str], bool]] = []
 
-    def fake_pytest_main(arguments: list[str]) -> int:
-        observed.append(arguments)
-        return 7
+    def fake_run(arguments: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        observed.append((arguments, check))
+        return subprocess.CompletedProcess(arguments, 7)
 
-    monkeypatch.setattr("api_tests.local_runner.pytest.main", fake_pytest_main)
+    monkeypatch.setattr("api_tests.local_runner.subprocess.run", fake_run)
     artifact_dir = tmp_path / "run"
     artifact_dir.mkdir()
     monkeypatch.setattr(local_runner, "_new_artifact_dir", lambda parent: artifact_dir)
 
     assert local_runner.main(["-m", "auth_smoke"]) == 7
     assert observed == [
-        [
-            "-p",
-            "api_tests.pytest_plugin",
-            "--env",
-            "local",
-            "--request-log",
-            str(artifact_dir / "request-log.jsonl"),
-            "--junitxml",
-            str(artifact_dir / "pytest.xml"),
-            "-m",
-            "auth_smoke",
-        ]
+        (
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-p",
+                "api_tests.pytest_plugin",
+                "--env",
+                "local",
+                "--request-log",
+                str(artifact_dir / "request-log.jsonl"),
+                "--junitxml",
+                str(artifact_dir / "pytest.xml"),
+                "-m",
+                "auth_smoke",
+            ],
+            False,
+        )
     ]
     assert "PARTIAL VALIDATION" in capsys.readouterr().out
 
