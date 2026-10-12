@@ -21,18 +21,20 @@ def test_first_sync_writes_marker_and_unchanged_environment_is_reused(
 
     assert not local_bootstrap.bootstrap_environment(
         root,
-        python_executable=Path("/runtime/python3.12"),
-        runtime_version="3.12.15",
+        bootstrap_python_executable=Path("/runtime/python3.12"),
+        bootstrap_runtime_version="3.12.3",
     )
     assert [command[1] for command in commands] == ["lock", "sync", "sync"]
     assert "--check" not in commands[1]
     assert "--check" in commands[2]
+    assert all("--managed-python" in command for command in commands)
+    assert all("--no-python-downloads" in command for command in commands)
 
     commands.clear()
     assert local_bootstrap.bootstrap_environment(
         root,
-        python_executable=Path("/runtime/python3.12"),
-        runtime_version="3.12.15",
+        bootstrap_python_executable=Path("/runtime/python3.12"),
+        bootstrap_runtime_version="3.12.3",
     )
     assert [command[1] for command in commands] == ["lock", "sync"]
     assert "--check" in commands[1]
@@ -49,20 +51,22 @@ def test_contract_input_change_invalidates_reuse_marker(
     _mock_uv(monkeypatch, commands)
     python_path = Path("/runtime/python3.12")
     assert not local_bootstrap.bootstrap_environment(
-        root, python_executable=python_path, runtime_version="3.12.15"
+        root,
+        bootstrap_python_executable=python_path,
+        bootstrap_runtime_version="3.12.3",
     )
 
     path = root / changed_file
-    runtime_version = "3.12.15"
     if changed_file == ".python-version":
         path.write_text("3.12.14\n", encoding="utf-8")
-        runtime_version = "3.12.14"
     else:
         path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
     commands.clear()
 
     assert not local_bootstrap.bootstrap_environment(
-        root, python_executable=python_path, runtime_version=runtime_version
+        root,
+        bootstrap_python_executable=python_path,
+        bootstrap_runtime_version="3.12.3",
     )
     assert [command[1] for command in commands] == ["lock", "sync", "sync"]
 
@@ -85,13 +89,16 @@ def test_tool_pin_change_invalidates_tool_and_environment(
         return Path(f"/tools/uv-{contract.uv_version}/bin/uv")
 
     monkeypatch.setattr(local_bootstrap, "ensure_pinned_uv", fake_ensure)
+    _mock_managed_python(monkeypatch)
     monkeypatch.setattr(local_bootstrap, "_run_command", _successful_runner(commands))
     monkeypatch.setattr(
         local_bootstrap, "_environment_has_only_locked_packages", lambda root, contract, uv: True
     )
     python_path = Path("/runtime/python3.12")
     assert not local_bootstrap.bootstrap_environment(
-        root, python_executable=python_path, runtime_version="3.12.15"
+        root,
+        bootstrap_python_executable=python_path,
+        bootstrap_runtime_version="3.12.3",
     )
 
     pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
@@ -101,7 +108,9 @@ def test_tool_pin_change_invalidates_tool_and_environment(
     )
     commands.clear()
     assert not local_bootstrap.bootstrap_environment(
-        root, python_executable=python_path, runtime_version="3.12.15"
+        root,
+        bootstrap_python_executable=python_path,
+        bootstrap_runtime_version="3.12.3",
     )
 
     assert tool_versions == ["0.13.0", "0.13.1"]
@@ -118,6 +127,7 @@ def test_stale_lock_fails_before_synchronization(
         "ensure_pinned_uv",
         lambda selected_root, contract, python_executable: Path("/tools/uv"),
     )
+    _mock_managed_python(monkeypatch)
     commands: list[tuple[str, ...]] = []
 
     def fake_run(command: Sequence[str], selected_root: Path) -> subprocess.CompletedProcess[str]:
@@ -130,8 +140,8 @@ def test_stale_lock_fails_before_synchronization(
     with pytest.raises(local_bootstrap.BootstrapError, match=r"uv\.lock is stale"):
         local_bootstrap.bootstrap_environment(
             root,
-            python_executable=Path("/runtime/python3.12"),
-            runtime_version="3.12.15",
+            bootstrap_python_executable=Path("/runtime/python3.12"),
+            bootstrap_runtime_version="3.12.3",
         )
 
     assert [command[1] for command in commands] == ["lock"]
@@ -147,6 +157,7 @@ def test_failed_synchronization_does_not_write_readiness_marker(
         "ensure_pinned_uv",
         lambda selected_root, contract, python_executable: Path("/tools/uv"),
     )
+    _mock_managed_python(monkeypatch)
 
     def fake_run(command: Sequence[str], selected_root: Path) -> subprocess.CompletedProcess[str]:
         del selected_root
@@ -159,8 +170,8 @@ def test_failed_synchronization_does_not_write_readiness_marker(
     with pytest.raises(local_bootstrap.BootstrapError, match="synchronization failed"):
         local_bootstrap.bootstrap_environment(
             root,
-            python_executable=Path("/runtime/python3.12"),
-            runtime_version="3.12.15",
+            bootstrap_python_executable=Path("/runtime/python3.12"),
+            bootstrap_runtime_version="3.12.3",
         )
 
     assert not (root / ".venv" / local_bootstrap.BOOTSTRAP_MARKER_NAME).exists()
@@ -175,7 +186,9 @@ def test_environment_mismatch_is_resynchronized_instead_of_reused(
     _mock_uv(monkeypatch, commands)
     python_path = Path("/runtime/python3.12")
     assert not local_bootstrap.bootstrap_environment(
-        root, python_executable=python_path, runtime_version="3.12.15"
+        root,
+        bootstrap_python_executable=python_path,
+        bootstrap_runtime_version="3.12.3",
     )
     commands.clear()
     sync_checks = 0
@@ -193,7 +206,9 @@ def test_environment_mismatch_is_resynchronized_instead_of_reused(
     monkeypatch.setattr(local_bootstrap, "_run_command", fake_run)
 
     assert not local_bootstrap.bootstrap_environment(
-        root, python_executable=python_path, runtime_version="3.12.15"
+        root,
+        bootstrap_python_executable=python_path,
+        bootstrap_runtime_version="3.12.3",
     )
     assert [command[1] for command in commands] == ["lock", "sync", "sync", "sync"]
     assert "--check" not in commands[2]
@@ -208,7 +223,9 @@ def test_extra_installed_package_prevents_reuse_even_when_uv_check_succeeds(
     _mock_uv(monkeypatch, commands)
     python_path = Path("/runtime/python3.12")
     assert not local_bootstrap.bootstrap_environment(
-        root, python_executable=python_path, runtime_version="3.12.15"
+        root,
+        bootstrap_python_executable=python_path,
+        bootstrap_runtime_version="3.12.3",
     )
     commands.clear()
     parity = iter((False, True))
@@ -219,12 +236,14 @@ def test_extra_installed_package_prevents_reuse_even_when_uv_check_succeeds(
     )
 
     assert not local_bootstrap.bootstrap_environment(
-        root, python_executable=python_path, runtime_version="3.12.15"
+        root,
+        bootstrap_python_executable=python_path,
+        bootstrap_runtime_version="3.12.3",
     )
     assert [command[1] for command in commands] == ["lock", "sync", "sync", "sync"]
 
 
-def test_exact_runtime_pin_is_required_before_tool_setup(
+def test_bootstrap_python_must_use_supported_minor_before_tool_setup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -243,13 +262,60 @@ def test_exact_runtime_pin_is_required_before_tool_setup(
 
     monkeypatch.setattr(local_bootstrap, "ensure_pinned_uv", fake_ensure)
 
-    with pytest.raises(local_bootstrap.BootstrapError, match="automatic Python downloads"):
+    with pytest.raises(local_bootstrap.BootstrapError, match="required to bootstrap"):
         local_bootstrap.bootstrap_environment(
             root,
-            python_executable=Path("/usr/bin/python3.12"),
-            runtime_version="3.12.3",
+            bootstrap_python_executable=Path("/usr/bin/python3.11"),
+            bootstrap_runtime_version="3.11.9",
         )
     assert not ensure_called
+
+
+def test_managed_python_is_installed_resolved_and_verified(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    commands: list[tuple[str, ...]] = []
+
+    def fake_run(command: Sequence[str], selected_root: Path) -> subprocess.CompletedProcess[str]:
+        del selected_root
+        commands.append(tuple(command))
+        if command[1:3] == ("python", "list"):
+            return _result(
+                command,
+                stdout=(
+                    '[{"implementation":"cpython","version":"3.12.15",'
+                    '"path":"/uv/managed/cpython-3.12.15/bin/python3.12"}]\n'
+                ),
+            )
+        if command[1] == "-c":
+            return _result(command, stdout="3.12.15\n")
+        return _result(command)
+
+    monkeypatch.setattr(local_bootstrap, "_run_command", fake_run)
+
+    result = local_bootstrap.ensure_managed_python(tmp_path, _contract(), Path("/tools/uv"))
+
+    assert result == Path("/uv/managed/cpython-3.12.15/bin/python3.12")
+    assert commands[0] == (
+        "/tools/uv",
+        "python",
+        "install",
+        "3.12.15",
+        "--managed-python",
+        "--no-bin",
+    )
+    assert commands[1] == (
+        "/tools/uv",
+        "python",
+        "list",
+        "3.12.15",
+        "--only-installed",
+        "--managed-python",
+        "--no-python-downloads",
+        "--output-format",
+        "json",
+    )
 
 
 def test_missing_pinned_uv_is_installed_in_separate_tool_environment(
@@ -278,6 +344,22 @@ def test_missing_pinned_uv_is_installed_in_separate_tool_environment(
     assert local_bootstrap.PYPI_INDEX in commands[1]
 
 
+def test_sanitized_environment_allows_only_explicit_managed_python_downloads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UV_PYTHON", "caller-python")
+    monkeypatch.setenv("UV_PYTHON_DOWNLOADS", "never")
+    monkeypatch.setenv("UV_PYTHON_DOWNLOADS_JSON_URL", "https://example.invalid/python.json")
+    monkeypatch.setenv("UV_PYTHON_INSTALL_DIR", "/caller/python")
+
+    environment = local_bootstrap.sanitized_environment()
+
+    assert "UV_PYTHON" not in environment
+    assert "UV_PYTHON_DOWNLOADS" not in environment
+    assert "UV_PYTHON_DOWNLOADS_JSON_URL" not in environment
+    assert "UV_PYTHON_INSTALL_DIR" not in environment
+
+
 def _copy_contract_files(tmp_path: Path) -> Path:
     for name in ("pyproject.toml", ".python-version", "uv.lock"):
         (tmp_path / name).write_text(
@@ -294,8 +376,19 @@ def _mock_uv(monkeypatch: pytest.MonkeyPatch, commands: list[tuple[str, ...]]) -
         lambda root, contract, python_executable: Path("/tools/uv"),
     )
     monkeypatch.setattr(local_bootstrap, "_run_command", _successful_runner(commands))
+    _mock_managed_python(monkeypatch)
     monkeypatch.setattr(
         local_bootstrap, "_environment_has_only_locked_packages", lambda root, contract, uv: True
+    )
+
+
+def _mock_managed_python(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        local_bootstrap,
+        "ensure_managed_python",
+        lambda root, contract, uv_executable: Path(
+            f"/uv/managed/cpython-{contract.python_pin}/bin/python3.12"
+        ),
     )
 
 

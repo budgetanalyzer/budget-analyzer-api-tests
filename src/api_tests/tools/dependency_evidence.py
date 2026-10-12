@@ -78,8 +78,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise DependencyEvidenceError(details)
         bootstrap_environment(
             root,
-            python_executable=Path(sys.executable),
-            runtime_version=platform.python_version(),
+            bootstrap_python_executable=Path(sys.executable),
+            bootstrap_runtime_version=platform.python_version(),
         )
         bootstrap_log.write_text(
             f"Python {contract.python_pin}\nuv {contract.uv_version}\n"

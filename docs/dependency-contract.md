@@ -11,10 +11,11 @@ requirement has a known-working inclusive lower bound and a reviewed upper
 boundary. These ranges state which versions may be considered during an
 intentional update; they do not make an installation reproducible.
 
-`.python-version` selects Python 3.12.15 exactly for local and hosted setup.
-The PEP 621 interval remains `>=3.12,<3.13` because the package supports only
-the selected Python minor line. The lock is universal across supported
-platforms for that line, so its normalized runtime constraint is `==3.12.*`.
+`.python-version` selects the uv-managed Python 3.12.15 project runtime exactly
+for local and hosted setup. The PEP 621 interval remains `>=3.12,<3.13`
+because the package supports only the selected Python minor line. The lock is
+universal across supported platforms for that line, so its normalized runtime
+constraint is `==3.12.*`.
 
 `uv.lock` is the machine-generated exact graph. It records selected direct and
 transitive versions, markers, standard PyPI sources, artifacts, and SHA-256
@@ -27,16 +28,21 @@ The exact `uv` bootstrap and `pip-audit` scanner versions live once in
 separate tool environment. The selected versions are `uv` 0.13.0 and
 `pip-audit` 2.10.1.
 
-`./run-tests` reads these checked-in declarations with the selected pinned
-Python, installs `uv` 0.13.0 from standard PyPI into the ignored
-`.dependency-tools/uv-0.13.0/` environment, and runs `uv lock --check` before
-`uv sync --frozen --all-groups`. Automatic Python downloads and inherited
-package-index overrides are disabled. `.venv` therefore contains the editable
-first-party package and the lock-selected build, runtime, and development
-graph, but not the bootstrap tool.
+`./run-tests` starts with any Python on the supported 3.12 minor line, installs
+`uv` 0.13.0 from standard PyPI into the ignored
+`.dependency-tools/uv-0.13.0/` environment, and uses that pinned tool to
+install and resolve the exact `.python-version` runtime from uv's per-user
+managed Python store. It then runs `uv lock --check` before
+`uv sync --frozen --all-groups`, passing the resolved managed interpreter to
+both operations. Downloads are allowed only during the explicit managed
+Python installation; subsequent lock, sync, parity, and inventory operations
+disable Python downloads. Inherited package-index and Python-selection
+overrides are removed. `.venv` therefore contains the editable first-party
+package and the lock-selected build, runtime, and development graph, but not
+the bootstrap tool.
 
 The readiness marker is content-addressed by `pyproject.toml`,
-`.python-version`, `uv.lock`, the selected interpreter, and the `uv` pin. A
+`.python-version`, `uv.lock`, the resolved managed interpreter, and the `uv` pin. A
 matching marker is reused only when `uv sync --check --frozen --all-groups`
 also proves that the environment has no missing, changed, or extra selected
 distribution. A stale manifest/lock pair fails before synchronization.
@@ -49,11 +55,13 @@ actions onto Node 24, and uses the organization-approved first-party
 `actions/checkout@v6` and `actions/setup-python@v6` sources. Concurrent runs for
 the same ref cancel superseded work.
 
-CI reads the exact `.python-version`, bootstraps the declared `uv`, performs a
-frozen all-groups synchronization, and then runs dependency contract/parity
-validation, deterministic unit tests, local API collection, production-safe
-API collection, Ruff format and lint checks, and strict mypy. Both API commands
-are collection-only. CI does not install Playwright browsers, acquire test
+CI reads the exact `.python-version` with `actions/setup-python` to establish
+its bootstrap interpreter. The declared `uv` then installs/resolves the same
+exact managed project runtime used locally and performs a frozen all-groups
+synchronization. CI then runs dependency contract/parity validation,
+deterministic unit tests, local API collection, production-safe API collection,
+Ruff format and lint checks, and strict mypy. Both API commands are
+collection-only. CI does not install Playwright browsers, acquire test
 identities, read application credentials, or contact a Budget Analyzer target.
 
 ## Dependency evidence

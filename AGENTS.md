@@ -59,14 +59,15 @@ they are superseded.
 
 ## Implemented Workflow
 
-- Bootstrap and run the full local suite with `./run-tests`. It requires the
-  exact `.python-version`, installs the declared `uv` pin separately, frozen
-  synchronizes and verifies `.venv` against `uv.lock`, installs Chromium when
-  needed, fixes the target to the declared local environment, lazily
-  provisions browser accounts, checks snapshot coverage and live contract
-  drift, and writes an isolated ignored run report. Pass ordinary pytest
-  selectors through this command, and treat any run with selectors as partial
-  validation.
+- Bootstrap and run the full local suite with `./run-tests`. It uses a Python
+  on the supported minor line to install the declared `uv` pin separately,
+  lets pinned `uv` install/cache the exact `.python-version` runtime, frozen
+  synchronizes and verifies `.venv` with that managed interpreter against
+  `uv.lock`, installs Chromium when needed, fixes the target to the declared
+  local environment, lazily provisions browser accounts, checks snapshot
+  coverage and live contract drift, and writes an isolated ignored run report.
+  Pass ordinary pytest selectors through this command, and treat any run with
+  selectors as partial validation.
 
 - Hosted CI performs frozen dependency setup, deterministic tests, both offline
   API collection gates, Ruff, and strict mypy without installing browsers or
@@ -254,9 +255,11 @@ Use pytest for tests.
   switches, `verify=False`, Playwright `ignore_https_errors`, or equivalent
   bypasses for agent containers.
 - Treat HTTPS trust and browser system dependencies as runtime prerequisites.
-  Do not install trust anchors, invoke external trust helpers, generate or
-  rotate certificates, or modify the runtime from this repository. Report a
-  request or login failure if the runtime prerequisite is absent.
+  The declared uv-managed Python is the only runner prerequisite this
+  repository installs. Do not install trust anchors, invoke external trust
+  helpers, generate or rotate certificates, or modify any other runtime
+  prerequisite from this repository. Report a request or login failure if a
+  prerequisite is absent.
 - Use `raw_request` only for `/api-docs`, auth edge checks, and other explicitly
   public non-API-prefix routes.
 - Never seed sessions in Redis, exchange identity-provider tokens directly for
