@@ -16,19 +16,21 @@ From a checkout, run:
 ./run-tests
 ```
 
-This is the single supported local entrypoint. It requires the exact Python
-patch release in `.python-version` (currently 3.12.15). By default it selects
-`python3.12`; set `BA_API_TEST_PYTHON` to an exact interpreter path when that
-command resolves to another patch release. The runner never downloads Python.
+This is the single supported local entrypoint. It uses `python3.12` only to
+bootstrap the repository's pinned `uv`; set `BA_API_TEST_PYTHON` to another
+Python 3.12 interpreter path when needed. The bootstrap interpreter's patch may
+differ from `.python-version`.
 
 On first use, the runner installs the exact reviewed `uv` version into the
-ignored `.dependency-tools/` directory, separate from the project graph. It
-then synchronizes `.venv` from `uv.lock` with all dependency groups in frozen
-mode. Every invocation checks manifest/lock freshness and exact environment
-parity before reuse. Changes to `pyproject.toml`, `.python-version`, the `uv`
-tool pin, or `uv.lock` invalidate readiness; normal runs never rewrite the
-lock. Playwright Chromium remains a lazy install derived from the locked
-Playwright package and is checked only after Python synchronization.
+ignored `.dependency-tools/` directory, separate from the project graph. That
+`uv` installs and caches the exact `.python-version` runtime (currently
+3.12.15), then uses only that managed interpreter to synchronize `.venv` from
+`uv.lock` with all dependency groups in frozen mode. Every invocation checks
+manifest/lock freshness and exact environment parity before reuse. Changes to
+`pyproject.toml`, `.python-version`, the `uv` tool pin, or `uv.lock` invalidate
+readiness; normal runs never rewrite the lock. Playwright Chromium remains a
+lazy install derived from the locked Playwright package and is checked only
+after Python synchronization.
 
 With no arguments the command runs the complete unit and public API suite,
 checks non-deferred OpenAPI marker coverage, compares the live public contract
@@ -133,10 +135,12 @@ the frozen flag or run an updating lock command as part of ordinary setup.
 
 ## Local Setup Troubleshooting
 
-- If the runner reports the wrong Python patch, install the version in
-  `.python-version` with your normal runtime manager and set
-  `BA_API_TEST_PYTHON=/absolute/path/to/python3.12`. The repository does not
-  download an interpreter or silently fall back to a different patch.
+- If `python3.12` is unavailable, install any Python on the supported 3.12
+  minor line or set `BA_API_TEST_PYTHON=/absolute/path/to/python3.12`. The
+  bootstrap patch need not match `.python-version`; pinned `uv` downloads the
+  exact managed project runtime when it is not already cached.
+- If managed Python installation fails, preserve the `uv python install`
+  diagnostic and verify outbound HTTPS access and user-cache permissions.
 - If `uv.lock` is stale, either restore the matching reviewed manifest/lock
   pair or intentionally refresh the lock using the documented update workflow.
   Re-running `./run-tests` will not repair a stale lock.

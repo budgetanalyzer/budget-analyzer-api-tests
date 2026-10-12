@@ -48,8 +48,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         reused = bootstrap_environment(
             root,
-            python_executable=Path(sys.executable),
-            runtime_version=platform.python_version(),
+            bootstrap_python_executable=Path(sys.executable),
+            bootstrap_runtime_version=platform.python_version(),
         )
     except BootstrapError as exc:
         print(f"run-tests dependency bootstrap failed: {exc}", file=sys.stderr)
@@ -64,27 +64,31 @@ def main(argv: Sequence[str] | None = None) -> int:
 def bootstrap_environment(
     root: Path,
     *,
-    python_executable: Path,
-    runtime_version: str,
+    bootstrap_python_executable: Path,
+    bootstrap_runtime_version: str,
 ) -> bool:
     """Prepare the exact locked environment and return whether it was reused unchanged."""
     contract, issues = validate_contract_files(root)
     if contract is None or issues:
         details = "; ".join(issues) if issues else "dependency contract is incomplete"
         raise BootstrapError(details)
-    if runtime_version != contract.python_pin:
+    pinned_minor = contract.python_pin.rsplit(".", maxsplit=1)[0]
+    bootstrap_minor = bootstrap_runtime_version.rsplit(".", maxsplit=1)[0]
+    if bootstrap_minor != pinned_minor:
         raise BootstrapError(
-            f"Python {contract.python_pin} is required by .python-version, but "
-            f"{python_executable} is Python {runtime_version}; install the pinned interpreter "
-            "or set BA_API_TEST_PYTHON to it (automatic Python downloads are disabled)"
+            f"Python {pinned_minor} is required to bootstrap this repository, but "
+            f"{bootstrap_python_executable} is Python {bootstrap_runtime_version}; "
+            "install a bootstrap interpreter on the supported minor line or set "
+            "BA_API_TEST_PYTHON to it"
         )
 
-    uv_executable = ensure_pinned_uv(root, contract, python_executable)
-    _check_lock(root, contract, uv_executable, python_executable)
+    uv_executable = ensure_pinned_uv(root, contract, bootstrap_python_executable)
+    project_python = ensure_managed_python(root, contract, uv_executable)
+    _check_lock(root, contract, uv_executable, project_python)
 
-    identity = _bootstrap_identity(root, contract, python_executable)
+    identity = _bootstrap_identity(root, contract, project_python)
     marker_path = root / ".venv" / BOOTSTRAP_MARKER_NAME
-    sync_command = _sync_command(uv_executable, python_executable)
+    sync_command = _sync_command(uv_executable, project_python)
     check_command = frozen_sync_check_command(uv_executable)
     if _marker_matches(marker_path, identity):
         check_result = _run_command(check_command, root)
@@ -162,6 +166,98 @@ def ensure_pinned_uv(
     return uv_executable
 
 
+def ensure_managed_python(
+    root: Path,
+    contract: DependencyContract,
+    uv_executable: Path,
+) -> Path:
+    """Install and resolve the exact repository runtime from uv's managed Pythons."""
+    install_result = _run_command(
+        (
+            str(uv_executable),
+            "python",
+            "install",
+            contract.python_pin,
+            "--managed-python",
+            "--no-bin",
+        ),
+        root,
+    )
+    if install_result.returncode != 0:
+        raise BootstrapError(
+            f"could not install uv-managed Python {contract.python_pin}: "
+            + _command_error(install_result)
+        )
+
+    list_result = _run_command(
+        (
+            str(uv_executable),
+            "python",
+            "list",
+            contract.python_pin,
+            "--only-installed",
+            "--managed-python",
+            "--no-python-downloads",
+            "--output-format",
+            "json",
+        ),
+        root,
+    )
+    if list_result.returncode != 0:
+        raise BootstrapError(
+            f"uv installed Python {contract.python_pin} but could not resolve it: "
+            + _command_error(list_result)
+        )
+    try:
+        installations: object = json.loads(list_result.stdout)
+    except json.JSONDecodeError as exc:
+        raise BootstrapError(f"uv returned an invalid managed Python inventory: {exc}") from exc
+    if not isinstance(installations, list):
+        raise BootstrapError("uv returned an invalid managed Python inventory")
+    matching_paths: list[str] = []
+    for value in installations:
+        if not isinstance(value, dict):
+            continue
+        path = value.get("path")
+        if (
+            value.get("implementation") == "cpython"
+            and value.get("version") == contract.python_pin
+            and isinstance(path, str)
+        ):
+            matching_paths.append(path)
+    if len(matching_paths) != 1:
+        raise BootstrapError(
+            f"uv reported {len(matching_paths)} managed CPython "
+            f"{contract.python_pin} installations; "
+            "expected exactly one"
+        )
+    python_executable = Path(matching_paths[0])
+    if not python_executable.is_absolute():
+        raise BootstrapError(
+            f"uv returned a non-absolute managed Python executable path: {python_executable}"
+        )
+
+    version_result = _run_command(
+        (
+            str(python_executable),
+            "-c",
+            "import platform; print(platform.python_version())",
+        ),
+        root,
+    )
+    if version_result.returncode != 0:
+        raise BootstrapError(
+            "could not execute the uv-managed Python: " + _command_error(version_result)
+        )
+    managed_version = version_result.stdout.strip()
+    if managed_version != contract.python_pin:
+        raise BootstrapError(
+            f"uv resolved Python {managed_version or 'with no reported version'}, "
+            f"expected {contract.python_pin}"
+        )
+    return python_executable
+
+
 def pinned_uv_executable(root: Path, contract: DependencyContract) -> Path:
     """Return the repository-local path for the declared bootstrap tool."""
     return root / ".dependency-tools" / f"uv-{contract.uv_version}" / "bin" / "uv"
@@ -175,6 +271,7 @@ def frozen_sync_check_command(uv_executable: Path) -> tuple[str, ...]:
         "--check",
         "--frozen",
         "--all-groups",
+        "--managed-python",
         "--no-python-downloads",
     )
 
@@ -187,14 +284,14 @@ def frozen_lock_check_command(uv_executable: Path, python_executable: Path) -> t
         "--check",
         "--python",
         str(python_executable),
-        "--no-managed-python",
+        "--managed-python",
         "--no-python-downloads",
         "--no-sources",
     )
 
 
 def sanitized_environment() -> Mapping[str, str]:
-    """Return an environment without caller-supplied package indexes or uv Python downloads."""
+    """Return an environment without caller-supplied package or uv Python selection overrides."""
     environment = os.environ.copy()
     for name in (
         "PIP_EXTRA_INDEX_URL",
@@ -215,10 +312,12 @@ def sanitized_environment() -> Mapping[str, str]:
         "UV_NO_MANAGED_PYTHON",
         "UV_PROJECT_ENVIRONMENT",
         "UV_PYTHON",
+        "UV_PYTHON_DOWNLOADS",
+        "UV_PYTHON_DOWNLOADS_JSON_URL",
+        "UV_PYTHON_INSTALL_DIR",
         "VIRTUAL_ENV",
     ):
         environment.pop(name, None)
-    environment["UV_PYTHON_DOWNLOADS"] = "never"
     return environment
 
 
@@ -244,7 +343,7 @@ def _sync_command(uv_executable: Path, python_executable: Path) -> tuple[str, ..
         "--all-groups",
         "--python",
         str(python_executable),
-        "--no-managed-python",
+        "--managed-python",
         "--no-python-downloads",
     )
 
