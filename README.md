@@ -16,12 +16,24 @@ From a checkout, run:
 ./run-tests
 ```
 
-This is the single supported local entrypoint. It requires a `python3.12`
-command, creates `.venv`, installs development dependencies, and downloads
-Playwright Chromium only when each is missing or stale. Later runs reuse them.
-With no arguments it runs the complete unit and public API suite, checks
-non-deferred OpenAPI marker coverage, and compares the live public contract to
-the checked-in snapshot. Any failed test, incomplete coverage, or contract
+This is the single supported local entrypoint. It requires the exact Python
+patch release in `.python-version` (currently 3.12.15). By default it selects
+`python3.12`; set `BA_API_TEST_PYTHON` to an exact interpreter path when that
+command resolves to another patch release. The runner never downloads Python.
+
+On first use, the runner installs the exact reviewed `uv` version into the
+ignored `.dependency-tools/` directory, separate from the project graph. It
+then synchronizes `.venv` from `uv.lock` with all dependency groups in frozen
+mode. Every invocation checks manifest/lock freshness and exact environment
+parity before reuse. Changes to `pyproject.toml`, `.python-version`, the `uv`
+tool pin, or `uv.lock` invalidate readiness; normal runs never rewrite the
+lock. Playwright Chromium remains a lazy install derived from the locked
+Playwright package and is checked only after Python synchronization.
+
+With no arguments the command runs the complete unit and public API suite,
+checks non-deferred OpenAPI marker coverage, compares the live public contract
+to the checked-in snapshot, and writes dependency parity evidence. Any stale
+lock, environment mismatch, failed test, incomplete coverage, or contract
 drift makes the command fail. It always selects `environments/local.yaml` and
 rejects `--env`.
 
@@ -69,6 +81,71 @@ HTTPS verification always uses the runtime's normal trust stores. The harness
 does not install certificates, invoke trust helpers, probe the gateway before a
 run, or provide an insecure fallback. Connection and certificate problems are
 reported by the request or browser login that encounters them.
+
+## Dependency Contract
+
+`pyproject.toml` declares reviewed compatibility ranges, `.python-version`
+selects the supported Python patch release, and `uv.lock` records the exact
+cross-platform Python 3.12 graph. The rationale for each direct dependency,
+the pinned bootstrap and scanner tools, and the intentional lock-refresh
+procedure are documented in [docs/dependency-contract.md](docs/dependency-contract.md).
+
+Validate declarations, lock structure, lock freshness, and the exact hashed
+export with the pinned `uv` executable installed by `./run-tests`:
+
+```bash
+PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py \
+  --uv .dependency-tools/uv-0.13.0/bin/uv
+```
+
+GitHub Actions CI runs on pushes to `main`, pull requests targeting `main`, and
+manual dispatch. It performs the same exact-runtime frozen synchronization,
+dependency contract check, unit tests, offline local and production-safe API
+collection, Ruff checks, and strict mypy check without installing a browser,
+acquiring credentials, or contacting a Budget Analyzer deployment.
+
+Generate the same bounded dependency evidence used by the scheduled workflow
+with the exact Python in `.python-version`:
+
+```bash
+PYTHONPATH=src .venv/bin/python tools/generate-dependency-evidence.py
+```
+
+This command recreates the isolated `pip-audit` environment and writes the
+validated allowlist under `artifacts/dependency-evidence/`. It contacts only
+standard Python package and vulnerability services. Details of the workflow,
+artifact, and failure policy are in
+[docs/dependency-contract.md](docs/dependency-contract.md). Renovate activation
+and repository settings remain separate administrator-owned work.
+
+Repository-specific Renovate extraction, lock maintenance, review rules,
+failure triage, and the pre-activation administrator checklist live in
+[docs/dependency-automation.md](docs/dependency-automation.md). Read that
+document before changing a dependency declaration, runtime or tool pin,
+`uv.lock`, dependency workflows, or `renovate.json`. The checked-in preparation
+does not mean the Mend App or GitHub dependency settings are active.
+
+Intentional dependency updates are the only time the lock should change. Edit
+the reviewed compatibility declaration, use the isolated pinned tool and the
+lock-refresh commands in [docs/dependency-contract.md](docs/dependency-contract.md),
+then review and validate both the manifest and generated lock. Do not delete
+the frozen flag or run an updating lock command as part of ordinary setup.
+
+## Local Setup Troubleshooting
+
+- If the runner reports the wrong Python patch, install the version in
+  `.python-version` with your normal runtime manager and set
+  `BA_API_TEST_PYTHON=/absolute/path/to/python3.12`. The repository does not
+  download an interpreter or silently fall back to a different patch.
+- If `uv.lock` is stale, either restore the matching reviewed manifest/lock
+  pair or intentionally refresh the lock using the documented update workflow.
+  Re-running `./run-tests` will not repair a stale lock.
+- If frozen synchronization fails, preserve the error and verify normal PyPI
+  access and filesystem permissions. A readiness marker is written only after
+  `uv sync --check` proves exact parity, so the next run safely retries.
+- Browser installation remains separate from dependency-only checks. Use the
+  dependency-contract checker and unit/collection commands directly when no
+  browser or deployment access should occur.
 
 ## Test Layout
 
@@ -265,12 +342,24 @@ to exercise it against accounts containing data from earlier runs.
 ## Run Artifacts
 
 Every `./run-tests` invocation writes to a distinct ignored directory under
-`artifacts/runs/`. Full runs contain exact installed dependency versions,
-Python runtime details, OpenAPI coverage and drift reports, JUnit pytest
-results, and redacted public request diagnostics. Focused runs contain their
-JUnit result and any request diagnostics. Artifacts never contain browser
+`artifacts/runs/`. Full runs contain `dependency-inventory.json`, which records
+the Python and `uv` versions, lock SHA-256 identity, universal locked graph,
+editable first-party project, selected installed third-party set, and a
+successful exact `uv sync --check` parity result. They also contain OpenAPI
+coverage and drift reports, JUnit pytest results, and redacted public request
+diagnostics. Focused runs contain their JUnit result and any request
+diagnostics. Artifacts never contain package-index credentials, browser
 storage, provisioning form captures, passwords, authorization headers, or
 session-cookie values.
+
+The dependency-evidence workflow uploads exactly one separate seven-day
+artifact. Its semantic allowlist includes setup diagnostics, runtime and tool
+metadata, the hashed lock export and selected package list, installed
+inventory, dependency tree, Playwright-owned browser revisions, CycloneDX
+SBOM, machine- and human-readable `pip-audit` results, scanner status/stderr,
+exact parity, diagnostics, and completion. See
+[docs/dependency-contract.md](docs/dependency-contract.md) for exact filenames
+and failure interpretation.
 
 ## Spring Upgrade Workflow
 
@@ -283,6 +372,8 @@ intentional; do not make the suite accept an unexplained service change.
 ## Quality Gates
 
 ```bash
+PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py \
+  --uv .dependency-tools/uv-0.13.0/bin/uv
 .venv/bin/python -m pytest tests/unit --env local
 .venv/bin/python -m pytest tests/api --env local --collect-only
 .venv/bin/python -m pytest tests/api --env production \
@@ -290,5 +381,7 @@ intentional; do not make the suite accept an unexplained service change.
 .venv/bin/python -m ruff format --check .
 .venv/bin/python -m ruff check .
 .venv/bin/python -m mypy src tests
+actionlint .github/workflows/*.yml
+shellcheck run-tests
 ./run-tests
 ```
