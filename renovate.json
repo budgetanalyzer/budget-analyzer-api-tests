@@ -1,0 +1,88 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>budgetanalyzer/orchestration//renovate-presets/default"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the isolated uv bootstrap pin",
+      "managerFilePatterns": [
+        "/^pyproject\\.toml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=pypi depName=uv\\s+uv\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "uv",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the isolated pip-audit scanner pin",
+      "managerFilePatterns": [
+        "/^pyproject\\.toml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=pypi depName=pip-audit\\s+pip-audit\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "pip-audit",
+      "versioningTemplate": "pep440"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Keep generated dependency evidence outside update ownership",
+      "matchFileNames": [
+        "artifacts/**"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Keep both setuptools build declarations aligned",
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchPackageNames": [
+        "setuptools"
+      ],
+      "groupName": "setuptools build contract"
+    },
+    {
+      "description": "Require the complete Python dependency contract review",
+      "matchManagers": [
+        "pep621",
+        "pyenv",
+        "custom.regex"
+      ],
+      "prBodyNotes": [
+        "Keep pyproject.toml, .python-version, uv.lock, the frozen installed graph, and dependency evidence aligned. Run the complete non-live quality suite and review any compatibility-bound change before merge."
+      ]
+    },
+    {
+      "description": "Keep Playwright package and derived browser metadata coupled",
+      "matchPackageNames": [
+        "playwright"
+      ],
+      "prBodyNotes": [
+        "The Playwright Python package owns its browser revision. Regenerate and review the derived browser metadata; do not add or update an independent browser pin."
+      ]
+    },
+    {
+      "description": "Require workflow and graph review for GitHub Actions",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "prBodyNotes": [
+        "Keep Actions on the approved Node 24-ready majors and run actionlint plus the complete non-live quality suite."
+      ]
+    }
+  ]
+}

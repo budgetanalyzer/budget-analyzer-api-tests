@@ -1,0 +1,85 @@
+name: Python Dependency Evidence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dependency-evidence.yml
+      - .python-version
+      - pyproject.toml
+      - uv.lock
+      - src/api_tests/dependency_contract.py
+      - src/api_tests/dependency_evidence.py
+      - src/api_tests/dependency_inventory.py
+      - src/api_tests/local_bootstrap.py
+      - src/api_tests/tools/dependency_evidence.py
+      - tools/check-dependency-contract.py
+      - tools/generate-dependency-evidence.py
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-dependency-evidence
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  evidence:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Initialize bounded diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/dependency-evidence
+          printf '%s\n' 'Pinned Python setup has not completed.' \
+            > artifacts/dependency-evidence/bootstrap.log
+
+      - name: Set up pinned Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+          check-latest: false
+
+      - name: Generate and validate complete dependency evidence
+        env:
+          PYTHONPATH: src
+        run: >-
+          python tools/generate-dependency-evidence.py
+          --output artifacts/dependency-evidence
+
+      - name: Upload bounded dependency evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-dependency-evidence-${{ github.sha }}
+          path: |
+            artifacts/dependency-evidence/bootstrap.log
+            artifacts/dependency-evidence/scanner-install.log
+            artifacts/dependency-evidence/diagnostics.json
+            artifacts/dependency-evidence/metadata.json
+            artifacts/dependency-evidence/lock-export.txt
+            artifacts/dependency-evidence/lock-selection.json
+            artifacts/dependency-evidence/installed-packages.json
+            artifacts/dependency-evidence/dependency-tree.json
+            artifacts/dependency-evidence/playwright-browser-metadata.json
+            artifacts/dependency-evidence/pip-audit.json
+            artifacts/dependency-evidence/pip-audit.txt
+            artifacts/dependency-evidence/sbom.cdx.json
+            artifacts/dependency-evidence/scanner-status.json
+            artifacts/dependency-evidence/scanner.stderr.log
+            artifacts/dependency-evidence/parity.json
+            artifacts/dependency-evidence/completion.json
+          if-no-files-found: error
+          retention-days: 7

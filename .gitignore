@@ -12,6 +12,7 @@ pip-wheel-metadata/
 
 # Local virtual environments
 .venv/
+.dependency-tools/
 venv/
 env/
 ENV/
@@ -72,4 +73,3 @@ Thumbs.db
 
 # AI Session Handler configuration
 .ai-session-handler/
-

@@ -59,12 +59,36 @@ they are superseded.
 
 ## Implemented Workflow
 
-- Bootstrap and run the full local suite with `./run-tests`. It creates and
-  reuses `.venv`, installs dependencies and Chromium when needed, fixes the
-  target to the declared local environment, lazily provisions browser
-  accounts, checks snapshot coverage and live contract drift, and writes an
-  isolated ignored run report. Pass ordinary pytest selectors through this
-  command, and treat any run with selectors as partial validation.
+- Bootstrap and run the full local suite with `./run-tests`. It requires the
+  exact `.python-version`, installs the declared `uv` pin separately, frozen
+  synchronizes and verifies `.venv` against `uv.lock`, installs Chromium when
+  needed, fixes the target to the declared local environment, lazily
+  provisions browser accounts, checks snapshot coverage and live contract
+  drift, and writes an isolated ignored run report. Pass ordinary pytest
+  selectors through this command, and treat any run with selectors as partial
+  validation.
+
+- Hosted CI performs frozen dependency setup, deterministic tests, both offline
+  API collection gates, Ruff, and strict mypy without installing browsers or
+  contacting a deployment. The scheduled/trusted-main dependency-evidence
+  workflow creates one exact seven-day allowlisted artifact. Reproduce it with
+  the exact pinned interpreter using
+  `PYTHONPATH=src .venv/bin/python tools/generate-dependency-evidence.py`.
+
+- Before changing Python declarations, the runtime or isolated tool pins,
+  `uv.lock`, dependency workflows, evidence behavior, or `renovate.json`, read
+  `docs/dependency-automation.md` and `docs/dependency-contract.md`. Discover
+  current owned declarations with:
+
+  ```bash
+  rg -n '(^requires =|dependencies =|include-group|renovate:|uses:)' \
+    pyproject.toml .github/workflows renovate.json
+  ```
+
+  For Renovate changes, run the strict validation and credential-free
+  extraction commands documented there with the orchestration-owned Node and
+  Renovate pins. Report anonymous lookup limitations; do not treat them as
+  successful hosted acceptance.
 
 - Validate environment configuration with:
 
@@ -164,12 +188,16 @@ falling back to global tooling.
 Run the repository quality gates with:
 
 ```bash
+PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py \
+  --uv .dependency-tools/uv-0.13.0/bin/uv
 .venv/bin/python -m pytest tests/unit --env local
 .venv/bin/python -m pytest tests/api --env local --collect-only
 .venv/bin/python -m pytest tests/api --env production -m "readonly and production_safe" --collect-only
 .venv/bin/python -m ruff format --check .
 .venv/bin/python -m ruff check .
 .venv/bin/python -m mypy src tests
+actionlint .github/workflows/*.yml
+shellcheck run-tests
 ./run-tests
 ```
 
@@ -183,8 +211,8 @@ Use pytest for tests.
 
 - Keep deterministic tests under `tests/unit/` and deployed public HTTP tests
   under `tests/api/`. Keep `pytester` enabled only in the unit subtree.
-- Prefer `tmp_path`, `monkeypatch`, `capsys`, `httpx.MockTransport`, and
-  `respx` for harness unit tests.
+- Prefer `tmp_path`, `monkeypatch`, `capsys`, and `httpx.MockTransport` for
+  harness unit tests.
 - Do not call real identity providers or live Budget Analyzer targets from unit
   tests.
 - Keep tests deterministic. Do not add sleeps to individual API tests; public

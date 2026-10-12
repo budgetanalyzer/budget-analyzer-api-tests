@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -18,6 +17,7 @@ from api_tests.coverage import (
     placeholder_operation_ids,
     write_coverage_artifact,
 )
+from api_tests.dependency_inventory import DependencyInventoryError, write_dependency_inventory
 from api_tests.local_credentials import LocalCredentialError, ensure_exact_local_target
 from api_tests.openapi import fetch_live_openapi, load_snapshot
 from api_tests.openapi_drift import compare_openapi_documents, write_drift_artifact
@@ -58,7 +58,11 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
         "FULL LOCAL REGRESSION: checking dependency inventory, coverage, and live contract drift."
     )
     try:
-        _write_dependency_inventory(artifact_dir / "dependencies.txt")
+        write_dependency_inventory(
+            artifact_dir / "dependency-inventory.json",
+            root=repository_root(),
+            python_executable=Path(sys.executable),
+        )
         coverage = build_coverage(env_name="local", source="snapshot")
         write_coverage_artifact(artifact_dir / "openapi-coverage.json", coverage)
         missing = missing_operation_ids(coverage)
@@ -86,6 +90,7 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
         )
     except (
         FileNotFoundError,
+        DependencyInventoryError,
         LocalCredentialError,
         ValueError,
         ValidationError,
@@ -147,24 +152,6 @@ def _new_artifact_dir(parent: Path) -> Path:
     path = parent / run_id
     path.mkdir(parents=True, exist_ok=False)
     return path
-
-
-def _write_dependency_inventory(path: Path) -> None:
-    result = subprocess.run(
-        [sys.executable, "-m", "pip", "freeze", "--all", "--exclude-editable"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    path.write_text(result.stdout, encoding="utf-8")
-    metadata = {
-        "python": sys.version,
-        "executable": sys.executable,
-    }
-    path.with_name("runtime.json").write_text(
-        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
 
 
 if __name__ == "__main__":
