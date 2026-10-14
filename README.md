@@ -1,12 +1,9 @@
 # Budget Analyzer API Tests
 
 Standalone black-box tests for the Budget Analyzer public gateway API. The
-active implementation plan is
-`docs/plans/simple-local-api-regression-baseline-plan.md`.
-
-The harness keeps deterministic unit tests separate from deployed public API
-tests. Its checked-in OpenAPI snapshot and handwritten scenarios follow the
-current public contract.
+harness keeps deterministic unit tests separate from deployed public API tests.
+Its checked-in OpenAPI snapshot and handwritten scenarios follow the current
+public contract.
 
 ## Local Run
 
