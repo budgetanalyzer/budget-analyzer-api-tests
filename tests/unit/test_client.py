@@ -130,3 +130,23 @@ def test_gateway_client_returns_429_without_retrying() -> None:
     assert response.status_code == httpx.codes.TOO_MANY_REQUESTS
     assert request_count == 1
     assert timing.sleeps == []
+
+
+def test_gateway_client_without_session_sends_no_authentication_headers() -> None:
+    config = load_environment("local")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(httpx.codes.UNAUTHORIZED)
+
+    with GatewayClient(
+        config,
+        transport=httpx.MockTransport(handler),
+        request_pacer=RequestPacer(requests_per_second=8),
+    ) as gateway_client:
+        gateway_client.raw_request("GET", "/auth/v1/user")
+
+    assert len(requests) == 1
+    assert "cookie" not in requests[0].headers
+    assert "authorization" not in requests[0].headers

@@ -67,6 +67,7 @@ markers = [
   "mutation: test may create or update API resources",
   "destructive: test may delete, hide, import, or otherwise destructively alter API resources",
   "readonly: test only reads API resources",
+  "authentication: test verifies missing or invalid authentication behavior",
   "authorization: test verifies authorization or resource isolation behavior",
   "production_safe: test is allowed to run against production defaults",
   "auth_smoke: focused live browser/session integration smoke test",

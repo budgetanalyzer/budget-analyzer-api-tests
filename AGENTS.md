@@ -146,10 +146,12 @@ replace missing prerequisites with test-harness workarounds.
 
   This command also writes `artifacts/openapi-coverage.json` and fails for
   unrecognized markers, missing or placeholder-only non-deferred coverage, or
-  stale deferred method/path entries. Keep snapshot refresh as the separate,
-  intentional `tools/refresh-openapi.py` operation. The normal no-argument
-  `./run-tests` workflow performs coverage and live structural drift checks
-  itself; do not require operators to invoke either tool first.
+  stale deferred method/path entries. It requires schema-backed `401` and `403`
+  responses for every operation and one exact forbidden-response deferral whose
+  reason agrees with the admin deferral inventory. Keep snapshot refresh as the
+  separate, intentional `tools/refresh-openapi.py` operation. The normal
+  no-argument `./run-tests` workflow performs coverage and live structural drift
+  checks itself; do not require operators to invoke either tool first.
 
 - Live API tests require the selected environment, runtime-provided HTTPS
   trust, Playwright system dependencies, and network access. Exact-local tests
@@ -267,8 +269,13 @@ Use pytest for tests.
 - Use `placeholder` only while a phase is under construction. Placeholder
   coverage is not an acceptable local regression baseline.
 - Mark mutating tests with `mutation`, destructive tests with `destructive`,
-  read-only tests with `readonly`, authorization tests with `authorization`,
-  and production-safe tests with `production_safe`.
+  read-only tests with `readonly`, missing or invalid identity tests with
+  `authentication`, authorization or ownership-isolation tests with
+  `authorization`, and production-safe tests with `production_safe`.
+- Keep all documented `403` responses in
+  `schemas/deferred-forbidden-responses.yaml` until a separate authorization
+  plan defines a safe restricted principal. Do not reinterpret privacy-safe
+  cross-user `404` or domain `422` responses as `403` coverage.
 - Production execution should select only explicitly production-safe read-only
   tests.
 - Mutation and destructive markers must be blocked by environment policy before
@@ -314,6 +321,10 @@ Use pytest for tests.
 - Keep checked-in OpenAPI snapshots under `schemas/`.
 - Keep deferred admin/global operations explicit in
   `schemas/deferred-admin-operations.yaml` once the coverage phase is active.
+- Classify every documented `403` by exact operation id, method, path, and
+  deferral reason in `schemas/deferred-forbidden-responses.yaml`. Keep admin
+  operations deferred regardless of HTTP method until an admin identity,
+  cleanup, and global-state safety model is approved.
 - Make JSON artifacts stable and readable with indentation where they are meant
   for review.
 - Preserve OpenAPI operation ids exactly. Do not rename them in test markers.

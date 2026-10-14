@@ -250,12 +250,27 @@ Mutation and destructive policy is applied during collection, before client or
 session fixtures can run. Public-route tests use the unauthenticated client and
 do not acquire a user session.
 
+The `authentication` matrix sends one bodyless, queryless request per checked-in
+OpenAPI operation and requires the documented `401` `UNAUTHORIZED` JSON response.
+Its operation-id parameter names remain directly selectable, and the matrix does
+not log in or provision either browser identity. `GET` cases are read-only and
+production-safe; every other method remains blocked by production mutation
+policy even though authentication should reject it before request parsing.
+
+The same selection also checks unauthenticated `GET /auth/v1/user` and
+`GET /auth/v1/session` through the public gateway. Both require the generic
+`401` `UNAUTHORIZED` / `Authentication required` JSON response, use no session
+fixture, and are read-only and production-safe. They remain separate from the
+unified `/api` operation inventory because Session Gateway publishes its own
+OpenAPI specification.
+
 ## OpenAPI Snapshot And Coverage
 
 The intentionally refreshed public contract is checked in at
 `schemas/openapi.json`. One command checks every test marker against that
 snapshot, rejects missing and placeholder-only coverage, validates the exact
-method and path of deferred admin operations, and writes
+method and path of deferred admin operations, requires an exact classified
+forbidden-response deferral for every operation that documents `403`, and writes
 `artifacts/openapi-coverage.json`:
 
 ```bash
@@ -276,6 +291,16 @@ public contract change has been reviewed:
 ```bash
 .venv/bin/python tools/refresh-openapi.py --env local
 ```
+
+Response-level security coverage is distinct from operation-marker coverage.
+The snapshot must provide schema-backed `401` and `403` responses for every
+operation, and the typed request-case inventory must materialize every path
+without generating query values or request bodies. A documented `403` is not
+treated as live-covered unless a safe principal and reproducible request exist.
+All current `403` cases are explicitly classified in
+`schemas/deferred-forbidden-responses.yaml`; the eight admin/global operations
+remain deferred regardless of HTTP method. See
+[docs/openapi-coverage.md](docs/openapi-coverage.md) for the coverage policy.
 
 An authenticated unknown path under the API prefix must return a non-HTML 404;
 returning the browser SPA is a routing regression. The unauthenticated API edge
@@ -321,9 +346,22 @@ environment-specific exceptions, or weakened assertions.
 
 An OpenAPI marker has exactly one operation id:
 `@pytest.mark.openapi("operationId")`. Behavioral markers are independent:
-`readonly`, `mutation`, `destructive`, `authorization`, `production_safe`,
-`auth_smoke`, and `secondary_auth_smoke`. Use normal pytest marker expressions;
-the harness does not inspect marker-expression strings to change test behavior.
+`readonly`, `mutation`, `destructive`, `authentication`, `authorization`,
+`production_safe`, `auth_smoke`, and `secondary_auth_smoke`. Use normal pytest
+marker expressions; the harness does not inspect marker-expression strings to
+change test behavior.
+
+Run the complete authentication and user-level authorization selections with:
+
+```bash
+./run-tests -m authentication
+./run-tests tests/api/authorization/test_cross_user_resources.py
+```
+
+The authorization selection preserves privacy-safe cross-user `404` responses
+and domain `422` responses; it does not count them as live `403` coverage. All
+documented `403` responses remain in the checked-in deferral inventory until a
+separate authorization plan defines safe restricted and admin principals.
 
 Focused phase-4 scenarios can be run with:
 
