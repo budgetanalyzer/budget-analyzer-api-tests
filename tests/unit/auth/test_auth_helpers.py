@@ -8,7 +8,7 @@ from typing import Self, TypedDict, cast
 
 import httpx
 import pytest
-from playwright.sync_api import BrowserContext
+from playwright.sync_api import BrowserContext, Route
 
 import api_tests.browser_login as browser_login_module
 from api_tests.assertions import assert_status
@@ -32,6 +32,20 @@ class FakeBrowserCookie(TypedDict, total=False):
     domain: str
     path: str
     httpOnly: bool
+
+
+class FakeBrowserRequest:
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+
+class FakeRoute:
+    def __init__(self, url: str) -> None:
+        self.request = FakeBrowserRequest(url)
+        self.continued = False
+
+    def continue_(self) -> None:
+        self.continued = True
 
 
 def test_generate_run_id_uses_required_format() -> None:
@@ -95,6 +109,49 @@ def test_session_verification_uses_gateway_client(
     verify_session(config, session)
 
     assert calls == [(config, session, "GET", "/auth/v1/user")]
+
+
+def test_browser_route_interception_paces_only_same_origin_and_strips_queries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway_origin = "https://app.budgetanalyzer.localhost"
+    paced_paths: list[str] = []
+    routes = [
+        FakeRoute(f"{gateway_origin}/assets/app.js?cache=public"),
+        FakeRoute(f"{gateway_origin}/login/oauth2/code/idp?probe=callback"),
+        FakeRoute("https://identity.example.test/auth/v1/user?probe=provider"),
+    ]
+    monkeypatch.setattr(
+        GatewayClient,
+        "pace_shared_request",
+        staticmethod(paced_paths.append),
+    )
+
+    for route in routes:
+        browser_login_module._continue_paced_gateway_request(
+            cast(Route, route),
+            gateway_origin=gateway_origin,
+        )
+
+    assert paced_paths == ["/assets/app.js", "/login/oauth2/code/idp"]
+    assert all(route.continued for route in routes)
+
+
+def test_browser_registers_one_interceptor_for_same_origin_and_external_requests() -> None:
+    registered: list[tuple[str, object]] = []
+
+    class FakeContext:
+        def route(self, url: str, handler: object) -> None:
+            registered.append((url, handler))
+
+    browser_login_module._pace_public_gateway_requests(
+        cast(BrowserContext, FakeContext()),
+        load_environment("local"),
+    )
+
+    assert len(registered) == 1
+    assert registered[0][0] == "**/*"
+    assert callable(registered[0][1])
 
 
 def test_browser_acquisition_logs_in_only_requested_user() -> None:

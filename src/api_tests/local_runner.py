@@ -21,7 +21,8 @@ from api_tests.dependency_inventory import DependencyInventoryError, write_depen
 from api_tests.local_credentials import LocalCredentialError, ensure_exact_local_target
 from api_tests.openapi import fetch_live_openapi, load_snapshot
 from api_tests.openapi_drift import compare_openapi_documents, write_drift_artifact
-from api_tests.tools.openapi_coverage import build_coverage
+from api_tests.session_gateway_inventory import write_session_gateway_coverage_artifact
+from api_tests.tools.openapi_coverage import build_coverage, build_session_gateway_coverage
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -65,6 +66,10 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
         )
         coverage = build_coverage(env_name="local", source="snapshot")
         write_coverage_artifact(artifact_dir / "openapi-coverage.json", coverage)
+        session_gateway_coverage = build_session_gateway_coverage()
+        write_session_gateway_coverage_artifact(
+            artifact_dir / "session-gateway-coverage.json", session_gateway_coverage
+        )
         missing = missing_operation_ids(coverage)
         placeholders = placeholder_operation_ids(coverage)
         if missing or placeholders:
@@ -102,7 +107,8 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
 
     print(
         f"OpenAPI coverage passed: {len(coverage)} operations, "
-        f"{sum(row.deferred_admin for row in coverage)} deferred admin."
+        f"{sum(row.deferred_admin for row in coverage)} deferred admin; "
+        f"{len(session_gateway_coverage)} Session Gateway cases."
     )
     if differences:
         print("live OpenAPI contract differs from schemas/openapi.json:", file=sys.stderr)

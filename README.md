@@ -1,9 +1,10 @@
 # Budget Analyzer API Tests
 
-Standalone black-box tests for the Budget Analyzer public gateway API. The
-harness keeps deterministic unit tests separate from deployed public API tests.
-Its checked-in OpenAPI snapshot and handwritten scenarios follow the current
-public contract.
+Standalone contract inventory and black-box tests for Budget Analyzer API
+surfaces. Every known inbound surface is recorded, while deployed tests remain
+limited to authorized browser-facing HTTPS lanes. Inaccessible internal and
+operational behavior is reported explicitly rather than ignored or reached by
+bypassing deployment boundaries.
 
 ## Local Run
 
@@ -30,11 +31,11 @@ lazy install derived from the locked Playwright package and is checked only
 after Python synchronization.
 
 With no arguments the command runs the complete unit and public API suite,
-checks non-deferred OpenAPI marker coverage, compares the live public contract
-to the checked-in snapshot, and writes dependency parity evidence. Any stale
-lock, environment mismatch, failed test, incomplete coverage, or contract
-drift makes the command fail. It always selects `environments/local.yaml` and
-rejects `--env`.
+checks namespaced OpenAPI and Session Gateway inventory coverage, compares the
+live unified public contract to its checked-in snapshot, and writes dependency
+parity evidence. Any stale lock, environment mismatch, failed test, incomplete
+coverage, or contract drift makes the command fail. It always selects
+`environments/local.yaml` and rejects `--env`.
 
 Ordinary pytest selectors pass through. The command labels these runs as
 partial validation because they do not include the coverage and live-contract
@@ -52,16 +53,28 @@ network access, and Playwright system libraries. The repository reports missing
 runtime prerequisites but does not administer the deployment, install trust
 anchors, or weaken certificate verification.
 
-The public gateway contract has one per-client-IP NGINX bucket shared by all
-rate-limited API routes: 10 requests/second with `burst=50` and `nodelay`.
-Every `GatewayClient` in a test process deliberately shares a monotonic,
-fixed-interval pacer capped at 8 requests/second. This conservative client-side
-pacing applies centrally to API and raw gateway requests, including requests
-made by different authenticated clients. Same-origin public-gateway requests
-during browser authentication reserve slots from that same pacer; external
-identity-provider traffic does not. Individual tests do not sleep or implement
-their own throttling. An HTTP 429 is returned directly to the test and remains
-a failure signal rather than being retried.
+Public ingress has two independent rate policies. NGINX owns one per-client-IP
+bucket shared by rate-limited API routes: 10 requests/second with `burst=50` and
+`nodelay`. Every `GatewayClient` in a test process shares a monotonic,
+fixed-interval pacer capped at 8 requests/second, and every same-origin browser
+request uses that general pacer too.
+
+Istio separately owns a discrete 10-token bucket that refills all 10 tokens
+every 60 seconds for exact `/login` and for `/logout`, `/auth`, `/oauth2`, and
+`/login/oauth2` with their descendants. Matching `GatewayClient` and same-origin
+browser requests share one process budget in addition to general pacing. The
+first matching request in each process waits one full refill interval, so a
+fresh run does not assume that an immediately preceding process left ingress
+tokens available. Exhausting 10 local reservations causes another wait until
+the next discrete refill. Browser timeout accounting includes one such planned
+wait; external identity-provider requests consume neither local-ingress budget.
+
+Individual tests do not sleep or implement their own throttling. HTTP `429` is
+returned directly and never retried. An auth-edge response carrying
+`x-local-rate-limit: auth-sensitive` is either a shared-pacing regression or
+evidence of concurrent traffic outside this harness; it is not a transient test
+response to hide with a retry. The conservative startup wait means selectors
+that touch Session Gateway take at least one additional minute per process.
 
 The first test that needs each normal user generates its credentials and signs
 up through the public hosted flow; no credential editing or separate bootstrap
@@ -260,14 +273,21 @@ policy even though authentication should reject it before request parsing.
 The same selection also checks unauthenticated `GET /auth/v1/user` and
 `GET /auth/v1/session` through the public gateway. Both require the generic
 `401` `UNAUTHORIZED` / `Authentication required` JSON response, use no session
-fixture, and are read-only and production-safe. They remain separate from the
-unified `/api` operation inventory because Session Gateway publishes its own
-OpenAPI specification.
+fixture, and are read-only and production-safe. Session Gateway publishes its
+own checked-in OpenAPI contract, so its operation markers use the explicit
+`session_gateway` namespace and cannot collide with unified `/api` operation
+ids.
 
-That separate specification currently misdocuments `GET /logout` as returning
-`200`; the deployed and documented browser contract is a `302` redirect to the
-identity-provider logout endpoint. The black-box contract must retain the
-observable redirect behavior rather than accepting the generated status.
+Machine-endpoint coverage lives under `tests/api/session_gateway/`. It checks
+missing and plausible invalid cookies, valid user semantics, invalid-cookie
+clearing, and authenticated heartbeat refresh followed by a still-valid user
+read. Heartbeat is intentionally a `mutation` despite using `GET`. Unknown
+`/auth/v1/...` paths and wrong methods are tracked as gateway-routing
+regressions rather than OpenAPI operations.
+
+The Session Gateway snapshot requires `GET /logout` to return `302 Found` with
+a URI-formatted `Location` header for the identity-provider logout endpoint.
+The offline checker rejects a stale `200` declaration.
 
 Session Gateway's `DELETE /internal/v1/sessions/users/{userId}` operation is not
 reachable through public ingress and accepts mesh traffic only from the
@@ -278,20 +298,23 @@ silently omitted or treated as covered by an ingress-denial request. A future
 public admin deactivation test could cover the end-to-end revocation outcome
 without directly exercising the internal hop.
 
-## OpenAPI Snapshot And Coverage
+## Contract Snapshots And Coverage
 
-The intentionally refreshed public contract is checked in at
-`schemas/openapi.json`. One command checks every test marker against that
-snapshot, rejects missing and placeholder-only coverage, validates the exact
-method and path of deferred admin operations, requires an exact classified
-forbidden-response deferral for every operation that documents `403`, and writes
-`artifacts/openapi-coverage.json`:
+The intentionally refreshed unified public contract is checked in at
+`schemas/openapi.json`. The separately generated, filtered Session Gateway
+contract is checked in at `schemas/session-gateway-openapi.yaml`, and its full
+inbound route/case inventory is
+`schemas/session-gateway-inbound-inventory.yaml`. One command validates both
+contract namespaces, every route/case classification, and the existing admin
+and forbidden-response manifests. It writes
+`artifacts/openapi-coverage.json` and
+`artifacts/session-gateway-coverage.json`:
 
 ```bash
 .venv/bin/python tools/check-openapi-coverage.py --env local
 ```
 
-The full `./run-tests` gate fetches the public OpenAPI document and reports
+The full `./run-tests` gate fetches the unified public OpenAPI document and reports
 added or removed operations, method/path moves, and changed parameters, request
 bodies, responses, or component schemas. Server URLs, mapping key order, and
 other irrelevant metadata do not cause drift. Differences are review failures;
@@ -305,6 +328,38 @@ public contract change has been reviewed:
 ```bash
 .venv/bin/python tools/refresh-openapi.py --env local
 ```
+
+The Session Gateway snapshot is generated outside this harness from the
+service-local Springdoc route and filtered to remove `/internal/*`. From this
+repository root, an operator with the documented orchestration/Kubernetes
+prerequisites refreshes exactly that reviewed output with:
+
+```bash
+repo_root=$(git rev-parse --show-toplevel)
+../orchestration/scripts/repo/generate-unified-api-docs.sh \
+  --session-gateway-only "$repo_root/schemas/session-gateway-openapi.yaml"
+```
+
+Review the resulting diff, especially the logout redirect contract, before
+accepting it. Test tools never invoke `kubectl`, read a service-local docs
+route, or refresh this snapshot automatically.
+
+Unified markers keep the compatible one-argument form. Session Gateway markers
+must provide the contract qualifier:
+
+```python
+@pytest.mark.openapi("listViews")
+@pytest.mark.openapi("getCurrentUser", contract="session_gateway")
+@pytest.mark.session_gateway_case("current-user-authenticated")
+```
+
+The route inventory is behavior-level accounting, distinct from operation
+markers. Each case is classified as `covered`, `deferred` with one reason and
+prerequisite, or `untestable` with one enforced architectural boundary and no
+planned prerequisite. Public-ingress denial of an `/internal/...` path does not
+count as execution of the mesh-only controller.
+Literal `session_gateway_case` markers bind executable tests to covered case
+ids, and `artifacts/session-gateway-coverage.json` reports their marker counts.
 
 Response-level security coverage is distinct from operation-marker coverage.
 The snapshot must provide schema-backed `401` and `403` responses for every

@@ -18,8 +18,18 @@ def test_check_openapi_coverage_writes_artifact(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     output_path = tmp_path / "openapi-coverage.json"
+    session_gateway_output_path = tmp_path / "session-gateway-coverage.json"
 
-    exit_code = check_main(["--env", "local", "--output", str(output_path)])
+    exit_code = check_main(
+        [
+            "--env",
+            "local",
+            "--output",
+            str(output_path),
+            "--session-gateway-output",
+            str(session_gateway_output_path),
+        ]
+    )
 
     captured = capsys.readouterr()
     assert exit_code == 0
@@ -31,6 +41,7 @@ def test_check_openapi_coverage_writes_artifact(
     assert rows
     assert {
         "operation_id",
+        "contract",
         "method",
         "path",
         "source",
@@ -39,6 +50,16 @@ def test_check_openapi_coverage_writes_artifact(
         "placeholder_marker_count",
         "status",
     }.issubset(rows[0])
+    session_rows = json.loads(session_gateway_output_path.read_text(encoding="utf-8"))
+    assert isinstance(session_rows, list)
+    assert {
+        "case_id",
+        "status",
+        "test_marker_count",
+        "reason",
+        "prerequisite",
+        "boundary",
+    }.issubset(session_rows[0])
 
 
 def test_check_openapi_coverage_fails_placeholder_gate(
@@ -57,6 +78,7 @@ def test_check_openapi_coverage_fails_placeholder_gate(
         assert source == "snapshot"
         return (
             OperationCoverage(
+                contract="unified",
                 operation_id="placeholderOperation",
                 method="GET",
                 path="/v1/placeholder",

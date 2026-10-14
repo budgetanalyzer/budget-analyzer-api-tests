@@ -15,6 +15,7 @@ from api_tests.client import GatewayClient
 
 type JsonValue = bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"] | None
 type OpenApiDocument = Mapping[str, JsonValue]
+type OpenApiContractKey = Literal["unified", "session_gateway"]
 
 HTTP_METHODS: frozenset[str] = frozenset({"get", "post", "put", "patch", "delete"})
 type HttpMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -51,6 +52,7 @@ class OpenApiOperation:
     operation_id: str
     method: HttpMethod
     path: str
+    contract: OpenApiContractKey = "unified"
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +60,7 @@ class OpenApiRequestCase:
     operation_id: str
     method: HttpMethod
     path: str
+    contract: OpenApiContractKey = "unified"
 
     @property
     def case_id(self) -> str:
@@ -81,10 +84,15 @@ class _OpenApiOperationEntry:
 
 def load_snapshot(path: Path) -> OpenApiDocument:
     with path.open("r", encoding="utf-8") as snapshot_file:
-        raw_document = json.load(snapshot_file)
+        if path.suffix.lower() == ".json":
+            raw_document = json.load(snapshot_file)
+        elif path.suffix.lower() in {".yaml", ".yml"}:
+            raw_document = yaml.safe_load(snapshot_file)
+        else:
+            raise ValueError(f"OpenAPI snapshot must be JSON or YAML: {path}")
 
     if not isinstance(raw_document, dict):
-        raise ValueError(f"OpenAPI snapshot must contain a JSON object: {path}")
+        raise ValueError(f"OpenAPI snapshot must contain an object: {path}")
     return cast(dict[str, JsonValue], raw_document)
 
 
@@ -101,19 +109,25 @@ def fetch_live_openapi(client: GatewayClient, openapi_path: str) -> OpenApiDocum
     return cast(dict[str, JsonValue], raw_document)
 
 
-def iter_operations(openapi_doc: OpenApiDocument) -> Iterator[OpenApiOperation]:
-    for entry in _validated_operation_entries(openapi_doc):
+def iter_operations(
+    openapi_doc: OpenApiDocument,
+    *,
+    contract: OpenApiContractKey = "unified",
+) -> Iterator[OpenApiOperation]:
+    for entry in _validated_operation_entries(openapi_doc, contract=contract):
         yield entry.operation
 
 
 def operations_documenting_response(
     openapi_doc: OpenApiDocument,
     status: int | str,
+    *,
+    contract: OpenApiContractKey = "unified",
 ) -> tuple[OpenApiOperation, ...]:
     status_key = str(status)
     operations = [
         entry.operation
-        for entry in _validated_operation_entries(openapi_doc)
+        for entry in _validated_operation_entries(openapi_doc, contract=contract)
         if _documents_response(entry.raw_operation, status_key)
     ]
     return tuple(sorted(operations, key=_operation_sort_key))
@@ -122,15 +136,17 @@ def operations_documenting_response(
 def build_operation_request_cases(
     openapi_doc: OpenApiDocument,
     *,
+    contract: OpenApiContractKey = "unified",
     required_response_statuses: Iterable[int | str] = (),
 ) -> tuple[OpenApiRequestCase, ...]:
     status_keys = tuple(dict.fromkeys(str(status) for status in required_response_statuses))
     cases: list[OpenApiRequestCase] = []
-    for entry in _validated_operation_entries(openapi_doc):
+    for entry in _validated_operation_entries(openapi_doc, contract=contract):
         for status_key in status_keys:
             _require_json_response_schema(entry, status_key)
         cases.append(
             OpenApiRequestCase(
+                contract=entry.operation.contract,
                 operation_id=entry.operation.operation_id,
                 method=entry.operation.method,
                 path=_materialize_operation_path(entry),
@@ -260,6 +276,8 @@ def validate_forbidden_response_deferrals(
 
 def _validated_operation_entries(
     openapi_doc: OpenApiDocument,
+    *,
+    contract: OpenApiContractKey,
 ) -> tuple[_OpenApiOperationEntry, ...]:
     paths = _required_mapping(openapi_doc, "paths", "OpenAPI document")
     entries: list[_OpenApiOperationEntry] = []
@@ -281,6 +299,7 @@ def _validated_operation_entries(
                 )
 
             parsed_operation = OpenApiOperation(
+                contract=contract,
                 operation_id=operation_id,
                 method=_normalize_method(method),
                 path=path,

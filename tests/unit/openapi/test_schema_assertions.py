@@ -13,6 +13,14 @@ def test_openapi_snapshot_fixture_loads_checked_in_document(
     assert isinstance(openapi_snapshot.get("paths"), dict)
 
 
+def test_session_gateway_snapshot_fixture_loads_checked_in_document(
+    session_gateway_openapi_snapshot: OpenApiDocument,
+) -> None:
+    paths = session_gateway_openapi_snapshot.get("paths")
+    assert isinstance(paths, dict)
+    assert "/auth/v1/user" in paths
+
+
 def test_assert_response_matches_openapi_accepts_matching_object_response() -> None:
     openapi_doc = _openapi_doc(
         operation_id="getWidget",

@@ -23,12 +23,22 @@ in the `Location` header. Treat that declaration as the executable contract and 
 assertions for the redirect target.
 
 All live requests must continue through the selected environment's public HTTPS origin and the
-shared `GatewayClient`/browser pacer. Do not add Kubernetes, service-DNS, Redis, database, forged
-workload identity, direct identity-provider token exchange, TLS bypass, or fault-injection paths.
-Production remains read-only. OAuth and logout tests may create only a test-owned session for an
-existing configured test identity and must invalidate that session in the same scenario. The plan
-does not authorize changes to sibling repositories. Mesh-internal endpoints remain inventoried but
-untestable by design in this harness: no pod-specific or workload-identity test lane is planned.
+shared `GatewayClient`/browser pacing system. Two independent public limits apply: the NGINX API
+lane allows 10 requests/second with `burst=50`, while Istio ingress applies an auth-sensitive token
+bucket of 10 requests per 60 seconds to `/login` and the `/logout`, `/auth`, `/oauth2`, and
+`/login/oauth2` path families. Post-fix endpoint-coverage evidence showed that the Session Gateway
+no longer serialized `fieldErrors=null`, but the focused suite still exhausted the auth-sensitive
+bucket and received HTTP `429` responses carrying `x-local-rate-limit: auth-sensitive`; browser
+login could surface the same exhaustion as a callback/navigation timeout. The harness must pace
+both policies centrally, including matching same-origin browser requests, without retrying `429`
+responses or adding sleeps to individual tests.
+
+Do not add Kubernetes, service-DNS, Redis, database, forged workload identity, direct
+identity-provider token exchange, TLS bypass, or fault-injection paths. Production remains
+read-only. OAuth and logout tests may create only a test-owned session for an existing configured
+test identity and must invalidate that session in the same scenario. The plan does not authorize
+changes to sibling repositories. Mesh-internal endpoints remain inventoried but untestable by
+design in this harness: no pod-specific or workload-identity test lane is planned.
 
 ## Phase 1: Establish the Session Gateway contract and coverage inventory
 
@@ -140,7 +150,117 @@ untestable by an explicit architectural boundary; the three generated Session Ga
 operations cannot be confused with unified API operations; the corrected logout redirect contract
 is preserved in the snapshot; and all focused offline validations pass.
 
-## Phase 2: Cover the user and heartbeat machine APIs
+## Phase 2: Add auth-sensitive public-ingress pacing
+
+### Workspace
+
+.
+
+### Goal
+
+Make all harness and browser requests deterministic under the public Istio auth-sensitive token
+bucket as well as the existing NGINX API rate policy, so Session Gateway coverage cannot exhaust
+ingress and misreport HTTP `429` or browser navigation timeouts as product failures.
+
+### Scope
+
+Add a shared, path-aware auth-sensitive pacing policy; apply it to every matching `GatewayClient`
+request and same-origin browser request; add injected-time unit coverage; document both public rate
+policies; and reproduce the previously failing Phase 3 selector without changing deployment
+configuration.
+
+### Non-goals
+
+Do not weaken or modify the Istio or NGINX limits, forge client identity headers, retry HTTP `429`
+responses, add sleeps to API tests, serialize unrelated external identity-provider traffic, or add
+environment-specific bypasses. Do not treat a naturally refilled bucket as proof that pacing is
+correct.
+
+### Required context
+
+Read `AGENTS.md`, `README.md`, `src/api_tests/client.py`, `src/api_tests/browser_login.py`,
+`src/api_tests/auth.py`, `src/api_tests/local_runner.py`, the client/browser/auth unit tests, and
+the Phase 1 Session Gateway route inventory. Read
+`../orchestration/kubernetes/istio/ingress-rate-limit.yaml`,
+`../orchestration/docs/architecture/session-edge-authorization-pattern.md`, and the auth-throttle
+checks in `../orchestration/scripts/smoketest/verify-istio-ingress.sh`. Inspect the prior blocked
+endpoint-coverage outcome and the post-fix run artifacts, especially the
+`x-local-rate-limit: auth-sensitive` responses, without copying secrets into source or diagnostics.
+Before editing `AGENTS.md`, read `../orchestration/docs/agents-md-checkstyle.md` completely.
+
+### Execution steps
+
+1. Model the auth-sensitive policy separately from the existing 8-requests/second NGINX-compliance
+   pacer. Preserve the exact public path families and the reviewed 10-token/60-second budget in one
+   typed, testable location; path matching must handle query strings without classifying external
+   identity-provider URLs as same-origin auth traffic.
+2. Implement one process-wide deterministic reservation mechanism shared by every
+   `GatewayClient`. A matching request must reserve capacity from both the general gateway pacer
+   and the auth-sensitive policy before it starts. The policy must remain monotonic and
+   thread-safe, and it must safely account for the non-continuous 10-token refill contract and
+   immediate consecutive local runs rather than assuming the ingress bucket is fresh.
+3. Update browser request interception to inspect each request's origin and path. Matching
+   same-origin login, authorization, callback, logout, and `/auth/*` requests must reserve from the
+   same auth-sensitive process budget as `GatewayClient`; other same-origin requests retain general
+   gateway pacing, and external provider requests must not consume a local-ingress reservation.
+4. Keep pacing in shared client/browser infrastructure. Do not add sleeps or ordering dependencies
+   to individual tests, and do not retry a rejected request. Preserve request-log redaction and do
+   not add credentials, cookies, authorization codes, state, or provider query values to pacing
+   diagnostics.
+5. Add deterministic unit tests with injected monotonic time and sleep functions for path
+   classification, shared reservations across clients, token exhaustion/refill boundaries,
+   conservative first-use and consecutive-run behavior, concurrent callers, browser routing, and
+   coexistence with the existing 8-requests/second cap. Assert that non-auth API and external IdP
+   traffic do not consume auth-sensitive slots.
+6. Update `README.md`, the rate-policy guidance in `AGENTS.md`, and nearby operational
+   documentation so both public limits, their route ownership, and expected runtime impact are
+   explicit. State that an auth-edge `429` is a pacing regression or an external concurrent-traffic
+   prerequisite failure, not a response to retry.
+7. Re-run the exact focused selector that previously produced auth-sensitive `429` responses, then
+   run it again without a manual cooldown to prove consecutive execution is safe. Inspect the
+   isolated request logs for the absence of `429`, secrets, and unredacted browser authentication
+   material.
+
+### Implementation notes
+
+The orchestration policy is an Envoy local-rate-limit descriptor with `max_tokens: 10`,
+`tokens_per_fill: 10`, and `fill_interval: 60s`; it is distinct from the NGINX per-client API
+bucket. A generic fixed 8-requests/second interval is therefore insufficient. Prefer a small typed
+reservation abstraction whose production instance is process-wide and whose clock and sleeper are
+injectable. The design must explicitly handle bucket state left by an immediately preceding
+process; merely allowing a burst of ten at process startup will reproduce the failure.
+
+Browser pacing must make its classification from a parsed request URL and the selected environment
+origin. Keep all policy constants and matching logic reviewable, and preserve the existing rule
+that every same-origin browser request also reserves from the general gateway pacer.
+
+### Validation
+
+Run:
+
+```bash
+.venv/bin/python -m pytest tests/unit/test_client.py tests/unit/auth --env local
+.venv/bin/python -m pytest tests/unit --env local
+./run-tests tests/api/session_gateway -k 'user or session'
+./run-tests tests/api/session_gateway -k 'user or session'
+.venv/bin/python -m ruff format --check .
+.venv/bin/python -m ruff check .
+.venv/bin/python -m mypy src tests
+```
+
+Treat both selected `./run-tests` invocations as partial validation. Inspect their request logs and
+JUnit output and require no `x-local-rate-limit: auth-sensitive` response, no browser login timeout
+caused by local ingress throttling, and no credential-pattern findings.
+
+### Completion criteria
+
+Every auth-sensitive request initiated by `GatewayClient` or the same-origin browser flow shares
+one deterministic process budget in addition to general gateway pacing; the implementation models
+the 10-per-60-second refill safely across immediate consecutive runs; focused and full unit tests
+pass; two back-to-back focused live runs complete without HTTP `429` or auth callback timeout; rate
+policy documentation matches orchestration; and no deployment or sibling repository was changed.
+
+## Phase 3: Cover the user and heartbeat machine APIs
 
 ### Workspace
 
@@ -164,10 +284,12 @@ session TTL, or infer that unavailable failure branches passed.
 
 ### Required context
 
-Read the Phase 1 snapshot, inventory, marker rules, and coverage artifact; `tests/conftest.py`,
-`tests/api/auth/test_edge_auth.py`, `tests/api/auth/test_auth_smoke.py`, `src/api_tests/client.py`,
-`src/api_tests/schemas.py`, `src/api_tests/session.py`, and request-log redaction. Re-read the
-Session Gateway user/session controllers, response records, cookie helper contract, and
+Read the Phase 1 snapshot, inventory, marker rules, and coverage artifact and the completed Phase 2
+auth-sensitive pacing contract; `tests/conftest.py`, `tests/api/auth/test_edge_auth.py`, the current
+`tests/api/session_gateway/` worktree, `src/api_tests/client.py`, `src/api_tests/schemas.py`,
+`src/api_tests/session.py`, and request-log redaction. Inspect the prior blocked phase outcome and
+preserve valid in-progress endpoint tests rather than recreating them. Re-read the Session Gateway
+user/session controllers, response records, cookie helper contract, and
 `docs/session-configuration.md` in `../session-gateway`.
 
 ### Execution steps
@@ -229,7 +351,7 @@ semantic assertions; heartbeat mutation safety is accurate; invalid-cookie clear
 the shared sessions remain usable; exact operation/case coverage is reported; and focused live and
 offline checks pass.
 
-## Phase 3: Cover OAuth authorization, callback, cookie, and logout lifecycle
+## Phase 4: Cover OAuth authorization, callback, cookie, and logout lifecycle
 
 ### Workspace
 
@@ -254,11 +376,12 @@ proof, or leave an extra live session behind intentionally.
 
 ### Required context
 
-Read the Phase 1 route/case inventory, `src/api_tests/browser_login.py`, `src/api_tests/auth.py`,
-local credential handling, browser/auth unit tests, environment auth modes, and request pacing.
-Read the Session Gateway security configuration, authorization-request repository, callback
-redirect resolver and handlers, redirect validator, session cookie helper, logout controller, and
-the durable return-URL/cookie behavior in Session Gateway documentation.
+Read the Phase 1 route/case inventory, the Phase 2 auth-sensitive pacing implementation,
+`src/api_tests/browser_login.py`, `src/api_tests/auth.py`, local credential handling, browser/auth
+unit tests, environment auth modes, and request pacing. Read the Session Gateway security
+configuration, authorization-request repository, callback redirect resolver and handlers, redirect
+validator, session cookie helper, logout controller, and the durable return-URL/cookie behavior in
+Session Gateway documentation.
 
 ### Execution steps
 
@@ -337,7 +460,7 @@ through public ingress; each created session is narrowly cleaned up; sensitive O
 is absent from artifacts; and deterministic callback failure cases are either tested or explicitly
 deferred.
 
-## Phase 4: Make untestable and fault-dependent coverage honest and actionable
+## Phase 5: Make untestable and fault-dependent coverage honest and actionable
 
 ### Workspace
 
@@ -432,7 +555,7 @@ coverage output; indirect future coverage is documented without implying that a 
 lane is planned; no public denial or service-local test is miscounted as internal behavior coverage;
 and all offline gates pass.
 
-## Phase 5: Integrate the full local regression and documentation
+## Phase 6: Integrate the full local regression and documentation
 
 ### Workspace
 

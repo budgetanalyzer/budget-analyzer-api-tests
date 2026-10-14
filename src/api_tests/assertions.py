@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from http.cookies import CookieError, Morsel, SimpleCookie
 from typing import cast
 
 import httpx
@@ -105,3 +106,45 @@ def array_field(body: JsonObject, field_name: str) -> JsonArray:
     if not isinstance(value, list):
         raise AssertionError(f"expected array field {field_name!r}, got: {value!r}")
     return value
+
+
+def string_array_field(body: JsonObject, field_name: str) -> list[str]:
+    values = array_field(body, field_name)
+    if not all(isinstance(value, str) for value in values):
+        raise AssertionError(f"expected string array field {field_name!r}")
+    return cast(list[str], values)
+
+
+def assert_cookie_cleared(
+    response: httpx.Response,
+    cookie_name: str,
+    *,
+    expected_path: str = "/",
+) -> None:
+    """Require a scoped empty-cookie deletion without exposing its prior value."""
+    cookie = _response_cookie(response, cookie_name)
+    if cookie is None:
+        raise AssertionError(f"expected response to clear cookie {cookie_name!r}")
+    assert cookie.value == "", f"expected {cookie_name!r} clearing cookie to be empty"
+    assert cookie["max-age"] == "0", f"expected {cookie_name!r} clearing cookie to set Max-Age=0"
+    assert cookie["path"] == expected_path, (
+        f"expected {cookie_name!r} clearing cookie path {expected_path!r}"
+    )
+
+
+def assert_cookie_not_set(response: httpx.Response, cookie_name: str) -> None:
+    if _response_cookie(response, cookie_name) is not None:
+        raise AssertionError(f"expected response not to set cookie {cookie_name!r}")
+
+
+def _response_cookie(response: httpx.Response, cookie_name: str) -> Morsel[str] | None:
+    for header in response.headers.get_list("set-cookie"):
+        parsed = SimpleCookie()
+        try:
+            parsed.load(header)
+        except CookieError:
+            continue
+        cookie = parsed.get(cookie_name)
+        if cookie is not None:
+            return cookie
+    return None

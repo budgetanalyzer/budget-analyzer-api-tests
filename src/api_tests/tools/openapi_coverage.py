@@ -16,6 +16,7 @@ from api_tests.coverage import (
     OperationCoverage,
     build_operation_coverage,
     collect_openapi_markers_from_tests,
+    collect_session_gateway_case_markers_from_tests,
     load_deferred_admin_operations,
     missing_operation_ids,
     placeholder_operation_ids,
@@ -29,6 +30,13 @@ from api_tests.openapi import (
     load_snapshot,
     validate_forbidden_response_deferrals,
 )
+from api_tests.session_gateway_inventory import (
+    SessionGatewayCaseCoverage,
+    load_session_gateway_inventory,
+    validate_session_gateway_contract,
+    validate_session_gateway_inventory,
+    write_session_gateway_coverage_artifact,
+)
 
 type CoverageDocumentSource = Literal["snapshot", "live"]
 
@@ -39,6 +47,7 @@ def check_main(argv: Sequence[str] | None = None) -> int:
         env_name=str(args.env),
         source=args.source,
         output_path=Path(args.output),
+        session_gateway_output_path=Path(args.session_gateway_output),
     )
 
 
@@ -52,6 +61,11 @@ def _parse_coverage_args(
         "--env",
         default="local",
         help="environment name to load from environments/<env>.yaml",
+    )
+    parser.add_argument(
+        "--session-gateway-output",
+        default=str(repository_root() / "artifacts" / "session-gateway-coverage.json"),
+        help="Session Gateway route/case coverage artifact path",
     )
     parser.add_argument(
         "--output",
@@ -72,10 +86,15 @@ def _run_coverage_command(
     env_name: str,
     source: CoverageDocumentSource,
     output_path: Path,
+    session_gateway_output_path: Path,
 ) -> int:
     try:
         coverage = build_coverage(env_name=env_name, source=source)
+        session_gateway_coverage = build_session_gateway_coverage()
         write_coverage_artifact(output_path, coverage)
+        write_session_gateway_coverage_artifact(
+            session_gateway_output_path, session_gateway_coverage
+        )
     except (FileNotFoundError, ValueError, ValidationError, httpx.RequestError) as exc:
         print(f"OpenAPI coverage failed: {exc}", file=sys.stderr)
         return 1
@@ -83,12 +102,19 @@ def _run_coverage_command(
     missing = missing_operation_ids(coverage)
     placeholders = placeholder_operation_ids(coverage)
     print(f"wrote OpenAPI coverage artifact: {output_path}")
+    print(f"wrote Session Gateway coverage artifact: {session_gateway_output_path}")
     print(f"operations: {len(coverage)}")
     print(f"missing: {len(missing)}")
     print(f"placeholder: {len(placeholders)}")
+    print(f"deferred_admin: {sum(1 for operation in coverage if operation.deferred_admin)}")
+    print(f"session_gateway_cases: {len(session_gateway_coverage)}")
     print(
-        "deferred_admin: "
-        f"{sum(1 for operation in coverage if operation.status == 'deferred_admin')}"
+        "session_gateway_deferred: "
+        f"{sum(1 for case in session_gateway_coverage if case.status == 'deferred')}"
+    )
+    print(
+        "session_gateway_untestable: "
+        f"{sum(1 for case in session_gateway_coverage if case.status == 'untestable')}"
     )
 
     if missing:
@@ -126,12 +152,32 @@ def build_coverage(
         deferred_admin_operation_ids=(operation.operation_id for operation in deferred),
     )
 
-    return build_operation_coverage(
-        iter_operations(openapi_doc),
+    unified_coverage = build_operation_coverage(
+        iter_operations(openapi_doc, contract="unified"),
         deferred,
-        markers,
+        {key: counts for key, counts in markers.items() if key.contract == "unified"},
         source=source,
     )
+    session_gateway_doc = load_snapshot(root / "schemas" / "session-gateway-openapi.yaml")
+    validate_session_gateway_contract(session_gateway_doc)
+    session_gateway_coverage = build_operation_coverage(
+        iter_operations(session_gateway_doc, contract="session_gateway"),
+        (),
+        {key: counts for key, counts in markers.items() if key.contract == "session_gateway"},
+        source="snapshot",
+    )
+    return unified_coverage + session_gateway_coverage
+
+
+def build_session_gateway_coverage() -> tuple[SessionGatewayCaseCoverage, ...]:
+    root = repository_root()
+    openapi_doc = load_snapshot(root / "schemas" / "session-gateway-openapi.yaml")
+    validate_session_gateway_contract(openapi_doc)
+    inventory = load_session_gateway_inventory(
+        root / "schemas" / "session-gateway-inbound-inventory.yaml"
+    )
+    marker_counts = collect_session_gateway_case_markers_from_tests(root / "tests")
+    return validate_session_gateway_inventory(inventory, openapi_doc, marker_counts)
 
 
 def refresh_main(argv: Sequence[str] | None = None) -> int:

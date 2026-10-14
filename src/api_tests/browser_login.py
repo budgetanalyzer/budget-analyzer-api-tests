@@ -7,7 +7,12 @@ import httpx
 from playwright.sync_api import BrowserContext, Page, Route, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
 
-from api_tests.client import GatewayClient
+from api_tests.client import (
+    AUTH_SENSITIVE_RATE_POLICY,
+    GatewayClient,
+    is_same_origin,
+    request_path_from_url,
+)
 from api_tests.config import EnvironmentConfig
 from api_tests.session import Session
 
@@ -30,7 +35,7 @@ def login_with_browser(
     config: EnvironmentConfig,
     credentials: BrowserLoginCredentials,
 ) -> Session:
-    timeout_ms = int(config.timeouts.eventually_seconds * 1000)
+    timeout_ms = _browser_timeout_ms(config)
     browser_config = config.auth.browser
     if browser_config is None:
         raise BrowserLoginError("browser login requires browser settings")
@@ -64,7 +69,7 @@ def signup_with_browser(
     config: EnvironmentConfig,
     credentials: BrowserLoginCredentials,
 ) -> Session:
-    timeout_ms = int(config.timeouts.eventually_seconds * 1000)
+    timeout_ms = _browser_timeout_ms(config)
     browser_config = config.auth.browser
     if browser_config is None:
         raise BrowserLoginError("browser signup requires browser settings")
@@ -178,11 +183,16 @@ def _pace_public_gateway_requests(
     context: BrowserContext,
     config: EnvironmentConfig,
 ) -> None:
-    context.route(f"{config.origin}/**", _continue_paced_gateway_request)
+    def continue_with_public_gateway_pacing(route: Route) -> None:
+        _continue_paced_gateway_request(route, gateway_origin=config.origin)
+
+    context.route("**/*", continue_with_public_gateway_pacing)
 
 
-def _continue_paced_gateway_request(route: Route) -> None:
-    GatewayClient.pace_shared_request()
+def _continue_paced_gateway_request(route: Route, *, gateway_origin: str) -> None:
+    request_url = route.request.url
+    if is_same_origin(request_url, gateway_origin):
+        GatewayClient.pace_shared_request(request_path_from_url(request_url))
     route.continue_()
 
 
@@ -225,3 +235,8 @@ def _is_existing_account_error(message: str) -> bool:
 def _redact_browser_error(message: str, credentials: BrowserLoginCredentials) -> str:
     redacted = message.replace(credentials.password, "[REDACTED]")
     return redacted.replace(credentials.username, "[REDACTED]")
+
+
+def _browser_timeout_ms(config: EnvironmentConfig) -> int:
+    pacing_allowance_seconds = AUTH_SENSITIVE_RATE_POLICY.fill_interval_seconds + 1.0
+    return int((config.timeouts.eventually_seconds + pacing_allowance_seconds) * 1000)
