@@ -42,6 +42,22 @@ excluded from this unified `/api` inventory. Dedicated black-box cases still
 exercise both machine endpoints through public ingress and require the shared
 generic `ApiErrorResponse` wire behavior without acquiring a session.
 
+The generated Session Gateway specification currently declares `GET /logout`
+with a `200` response, but the public implementation and documented browser
+contract return `302 Found` with an identity-provider logout location. The
+generated declaration is incorrect; tests must preserve the observable redirect
+behavior and must not reinterpret `200` as the accepted logout contract.
+
+The mesh-internal
+`DELETE /internal/v1/sessions/users/{userId}` revocation operation has no public
+ingress route, and mesh authorization admits only the permission-service
+workload identity. This public-gateway harness does not run pod-specific clients,
+mint workload identities, or bypass that boundary, and no direct internal-route
+test lane is planned. A future public admin deactivation scenario could verify
+the end-to-end revocation outcome, but it would not constitute a direct test of
+the internal hop. Internal operations must be identified as untestable through
+this harness rather than omitted or counted as covered by an external denial.
+
 Safety markers are assigned per generated unauthenticated case. `GET` requests
 are `readonly` and `production_safe`; non-`GET` requests are conservatively
 `mutation`, with delete, hide, import, deactivation, and membership-removal

@@ -264,6 +264,20 @@ fixture, and are read-only and production-safe. They remain separate from the
 unified `/api` operation inventory because Session Gateway publishes its own
 OpenAPI specification.
 
+That separate specification currently misdocuments `GET /logout` as returning
+`200`; the deployed and documented browser contract is a `302` redirect to the
+identity-provider logout endpoint. The black-box contract must retain the
+observable redirect behavior rather than accepting the generated status.
+
+Session Gateway's `DELETE /internal/v1/sessions/users/{userId}` operation is not
+reachable through public ingress and accepts mesh traffic only from the
+permission-service workload identity. This repository will not add pod-specific
+clients or impersonate that identity. The operation is therefore untestable in
+this harness's current execution boundary and must be reported as such, not
+silently omitted or treated as covered by an ingress-denial request. A future
+public admin deactivation test could cover the end-to-end revocation outcome
+without directly exercising the internal hop.
+
 ## OpenAPI Snapshot And Coverage
 
 The intentionally refreshed public contract is checked in at
