@@ -21,7 +21,14 @@ from api_tests.coverage import (
     placeholder_operation_ids,
     write_coverage_artifact,
 )
-from api_tests.openapi import fetch_live_openapi, iter_operations, load_snapshot
+from api_tests.openapi import (
+    build_operation_request_cases,
+    fetch_live_openapi,
+    iter_operations,
+    load_forbidden_response_deferrals,
+    load_snapshot,
+    validate_forbidden_response_deferrals,
+)
 
 type CoverageDocumentSource = Literal["snapshot", "live"]
 
@@ -108,6 +115,16 @@ def build_coverage(
             openapi_doc = fetch_live_openapi(client, config.openapi_path)
     else:
         openapi_doc = load_snapshot(root / "schemas" / "openapi.json")
+
+    forbidden_deferrals = load_forbidden_response_deferrals(
+        root / "schemas" / "deferred-forbidden-responses.yaml"
+    )
+    build_operation_request_cases(openapi_doc, required_response_statuses=(401, 403))
+    validate_forbidden_response_deferrals(
+        openapi_doc,
+        forbidden_deferrals,
+        deferred_admin_operation_ids=(operation.operation_id for operation in deferred),
+    )
 
     return build_operation_coverage(
         iter_operations(openapi_doc),

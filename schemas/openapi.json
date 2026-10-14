@@ -406,6 +406,7 @@
           "amount": {
             "description": "Positive transaction amount; direction is specified by type",
             "example": 100.5,
+            "exclusiveMinimum": 0,
             "type": "number"
           },
           "bankName": {
@@ -2193,6 +2194,34 @@
             },
             "description": "OK"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2264,6 +2293,34 @@
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -2365,6 +2422,34 @@
             },
             "description": "Currency series retrieved successfully"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -2461,6 +2546,34 @@
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -2567,14 +2680,39 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ExchangeRateResponse"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
             "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -2682,6 +2820,34 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2748,6 +2914,34 @@
             },
             "description": "OK"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2809,16 +3003,40 @@
           "400": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
                 "example": {
-                  "message": "Bad Request",
-                  "type": "INVALID_REQUEST"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -2911,6 +3129,34 @@
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -3008,6 +3254,34 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3104,6 +3378,34 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3195,6 +3497,34 @@
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -3292,6 +3622,34 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3388,6 +3746,34 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -3461,12 +3847,46 @@
             },
             "description": "OK"
           },
-          "404": {
+          "401": {
             "content": {
               "application/json": {
                 "example": {
-                  "message": "Not Found",
-                  "type": "NOT_FOUND"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Format Not Found": {
+                    "description": "Format Not Found",
+                    "summary": "Statement format does not exist",
+                    "value": {
+                      "message": "Statement format not found with id: 999",
+                      "type": "NOT_FOUND"
+                    }
+                  }
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
@@ -3560,19 +3980,43 @@
             },
             "description": "Bad Request"
           },
-          "404": {
+          "401": {
             "content": {
               "application/json": {
                 "example": {
-                  "message": "Not Found",
-                  "type": "NOT_FOUND"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Statement format not found"
           },
           "500": {
             "content": {
@@ -3643,6 +4087,34 @@
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -3724,6 +4196,34 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -3786,6 +4286,34 @@
               }
             },
             "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "500": {
             "content": {
@@ -3858,16 +4386,40 @@
           "400": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          },
+          "401": {
+            "content": {
+              "application/json": {
                 "example": {
-                  "message": "Bad Request",
-                  "type": "INVALID_REQUEST"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -3942,9 +4494,25 @@
           "400": {
             "content": {
               "application/json": {
-                "example": {
-                  "message": "Bad Request",
-                  "type": "INVALID_REQUEST"
+                "examples": {
+                  "Validation Failed": {
+                    "description": "Validation Failed",
+                    "summary": "One or more transactions failed validation",
+                    "value": {
+                      "fieldErrors": [
+                        {
+                          "field": "files[0].transactions[44].amount",
+                          "message": "must not be null"
+                        },
+                        {
+                          "field": "files[1].transactions[89].date",
+                          "message": "must not be null"
+                        }
+                      ],
+                      "message": "Validation failed for 2 field(s)",
+                      "type": "VALIDATION_ERROR"
+                    }
+                  }
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
@@ -3952,6 +4520,34 @@
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -4059,16 +4655,40 @@
           "400": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request (empty ID list)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
                 "example": {
-                  "message": "Bad Request",
-                  "type": "INVALID_REQUEST"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "500": {
             "content": {
@@ -4130,6 +4750,34 @@
               }
             },
             "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "500": {
             "content": {
@@ -4241,6 +4889,34 @@
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -4584,6 +5260,34 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -4830,6 +5534,34 @@
             },
             "description": "OK"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -4883,6 +5615,34 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -4956,6 +5716,34 @@
               }
             },
             "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -5054,12 +5842,46 @@
             },
             "description": "Bad Request"
           },
-          "404": {
+          "401": {
             "content": {
               "application/json": {
                 "example": {
-                  "message": "Not Found",
-                  "type": "NOT_FOUND"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Transaction Not Found": {
+                    "description": "Transaction Not Found",
+                    "summary": "Transaction does not exist or is deleted",
+                    "value": {
+                      "message": "Transaction not found with id: 999",
+                      "type": "APPLICATION_ERROR"
+                    }
+                  }
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
@@ -5286,15 +6108,33 @@
             },
             "description": "Invalid request"
           },
-          "403": {
+          "401": {
             "content": {
               "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
-            "description": "Insufficient permissions"
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "500": {
             "content": {
@@ -5358,115 +6198,33 @@
             },
             "description": "User retrieved successfully"
           },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Insufficient permissions"
-          },
-          "404": {
+          "401": {
             "content": {
               "application/json": {
                 "example": {
-                  "message": "Not Found",
-                  "type": "NOT_FOUND"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
-            "description": "Not Found"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "example": {
-                  "message": "Internal Server Error",
-                  "type": "INTERNAL_ERROR"
-                },
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "example": {
-                  "message": "Service Unavailable",
-                  "type": "SERVICE_UNAVAILABLE"
-                },
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Get user",
-        "tags": [
-          "User Administration"
-        ]
-      }
-    },
-    "/v1/users/{id}/deactivate": {
-      "post": {
-        "description": "Marks a user as deactivated, removes all role assignments, and revokes active sessions. Idempotent \u2014 deactivating an already-deactivated user returns 200.",
-        "operationId": "deactivateUser",
-        "parameters": [
-          {
-            "description": "User ID",
-            "example": "usr_abc123",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserDeactivationResponse"
-                }
-              }
-            },
-            "description": "User deactivated successfully"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "example": {
-                  "message": "Bad Request",
-                  "type": "INVALID_REQUEST"
-                },
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
+            "description": "Unauthorized"
           },
           "403": {
             "content": {
               "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
-            "description": "Insufficient permissions"
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -5507,6 +6265,116 @@
             "description": "Service Unavailable"
           }
         },
+        "summary": "Get user",
+        "tags": [
+          "User Administration"
+        ]
+      }
+    },
+    "/v1/users/{id}/deactivate": {
+      "post": {
+        "description": "Marks a user as deactivated, removes all role assignments, and revokes active sessions. For an already-deactivated user, preserves the original audit fields and role state but still attempts session revocation. Returns 200 only when revocation succeeds; failed revocation returns 503 and can be retried safely.",
+        "operationId": "deactivateUser",
+        "parameters": [
+          {
+            "description": "User ID",
+            "example": "usr_abc123",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDeactivationResponse"
+                }
+              }
+            },
+            "description": "User deactivated successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Bad Request",
+                  "type": "INVALID_REQUEST"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "User not found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Internal Server Error",
+                  "type": "INTERNAL_ERROR"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Session revocation failed after retry; user was deactivated, retry is safe"
+          }
+        },
         "summary": "Deactivate a user",
         "tags": [
           "User Administration"
@@ -5529,6 +6397,34 @@
               }
             },
             "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "500": {
             "content": {
@@ -5600,16 +6496,40 @@
           "400": {
             "content": {
               "application/json": {
-                "example": {
-                  "message": "Bad Request",
-                  "type": "INVALID_REQUEST"
-                },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -5673,6 +6593,34 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -5746,13 +6694,37 @@
             },
             "description": "OK"
           },
-          "404": {
+          "401": {
             "content": {
               "application/json": {
                 "example": {
-                  "message": "Not Found",
-                  "type": "NOT_FOUND"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
                 },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
@@ -5831,10 +6803,6 @@
           "400": {
             "content": {
               "application/json": {
-                "example": {
-                  "message": "Bad Request",
-                  "type": "INVALID_REQUEST"
-                },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
@@ -5842,13 +6810,37 @@
             },
             "description": "Bad Request"
           },
-          "404": {
+          "401": {
             "content": {
               "application/json": {
                 "example": {
-                  "message": "Not Found",
-                  "type": "NOT_FOUND"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
                 },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
@@ -5926,13 +6918,37 @@
             },
             "description": "OK"
           },
-          "404": {
+          "401": {
             "content": {
               "application/json": {
                 "example": {
-                  "message": "Not Found",
-                  "type": "NOT_FOUND"
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
                 },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
@@ -6014,6 +7030,34 @@
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "404": {
             "content": {
@@ -6123,16 +7167,40 @@
           "400": {
             "content": {
               "application/json": {
-                "example": {
-                  "message": "Bad Request",
-                  "type": "INVALID_REQUEST"
-                },
                 "schema": {
                   "$ref": "#/components/schemas/ApiErrorResponse"
                 }
               }
             },
             "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Authentication required",
+                  "type": "UNAUTHORIZED"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "You do not have permission to perform this action",
+                  "type": "FORBIDDEN"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "404": {
             "content": {

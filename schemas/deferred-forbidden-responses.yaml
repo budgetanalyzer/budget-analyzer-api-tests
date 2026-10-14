@@ -1,0 +1,161 @@
+deferred_forbidden_responses:
+  - operationId: getAll
+    method: GET
+    path: /v1/currencies
+    reason: no_restricted_normal_user_scenario
+  - operationId: create
+    method: POST
+    path: /v1/currencies
+    reason: admin_identity_and_safety_plan_required
+  - operationId: getById
+    method: GET
+    path: /v1/currencies/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: update
+    method: PUT
+    path: /v1/currencies/{id}
+    reason: admin_identity_and_safety_plan_required
+  - operationId: getExchangeRates
+    method: GET
+    path: /v1/exchange-rates
+    reason: no_restricted_normal_user_scenario
+  - operationId: importLatestExchangeRates
+    method: POST
+    path: /v1/exchange-rates/import
+    reason: admin_identity_and_safety_plan_required
+  - operationId: listFormats
+    method: GET
+    path: /v1/statement-formats
+    reason: no_restricted_normal_user_scenario
+  - operationId: createFormat
+    method: POST
+    path: /v1/statement-formats
+    reason: no_restricted_normal_user_scenario
+  - operationId: analyzeCsvSample
+    method: POST
+    path: /v1/statement-formats/csv-wizard/analyze
+    reason: no_restricted_normal_user_scenario
+  - operationId: previewCsvMapping
+    method: POST
+    path: /v1/statement-formats/csv-wizard/preview
+    reason: no_restricted_normal_user_scenario
+  - operationId: saveCsvWizardFormat
+    method: POST
+    path: /v1/statement-formats/csv-wizard/save
+    reason: no_restricted_normal_user_scenario
+  - operationId: analyzePdfSample
+    method: POST
+    path: /v1/statement-formats/pdf-wizard/analyze
+    reason: no_restricted_normal_user_scenario
+  - operationId: previewPdfMapping
+    method: POST
+    path: /v1/statement-formats/pdf-wizard/preview
+    reason: no_restricted_normal_user_scenario
+  - operationId: savePdfWizardFormat
+    method: POST
+    path: /v1/statement-formats/pdf-wizard/save
+    reason: no_restricted_normal_user_scenario
+  - operationId: getFormat
+    method: GET
+    path: /v1/statement-formats/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: updateFormat
+    method: PUT
+    path: /v1/statement-formats/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: hideFormat
+    method: POST
+    path: /v1/statement-formats/{id}/hide
+    reason: no_restricted_normal_user_scenario
+  - operationId: unhideFormat
+    method: POST
+    path: /v1/statement-formats/{id}/unhide
+    reason: no_restricted_normal_user_scenario
+  - operationId: getTransactions
+    method: GET
+    path: /v1/transactions
+    reason: no_restricted_normal_user_scenario
+  - operationId: createTransaction
+    method: POST
+    path: /v1/transactions
+    reason: no_restricted_normal_user_scenario
+  - operationId: batchImportTransactions
+    method: POST
+    path: /v1/transactions/batch
+    reason: no_restricted_normal_user_scenario
+  - operationId: bulkDeleteTransactions
+    method: POST
+    path: /v1/transactions/bulk-delete
+    reason: no_restricted_normal_user_scenario
+  - operationId: countTransactions
+    method: GET
+    path: /v1/transactions/count
+    reason: no_restricted_normal_user_scenario
+  - operationId: previewTransactions
+    method: POST
+    path: /v1/transactions/preview
+    reason: no_restricted_normal_user_scenario
+  - operationId: searchTransactions
+    method: GET
+    path: /v1/transactions/search
+    reason: admin_identity_and_safety_plan_required
+  - operationId: countTransactionsAcrossUsers
+    method: GET
+    path: /v1/transactions/search/count
+    reason: admin_identity_and_safety_plan_required
+  - operationId: deleteTransaction
+    method: DELETE
+    path: /v1/transactions/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: getTransaction
+    method: GET
+    path: /v1/transactions/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: updateTransaction
+    method: PATCH
+    path: /v1/transactions/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: getUsers
+    method: GET
+    path: /v1/users
+    reason: admin_identity_and_safety_plan_required
+  - operationId: getUser
+    method: GET
+    path: /v1/users/{id}
+    reason: admin_identity_and_safety_plan_required
+  - operationId: deactivateUser
+    method: POST
+    path: /v1/users/{id}/deactivate
+    reason: admin_identity_and_safety_plan_required
+  - operationId: listViews
+    method: GET
+    path: /v1/views
+    reason: no_restricted_normal_user_scenario
+  - operationId: createView
+    method: POST
+    path: /v1/views
+    reason: no_restricted_normal_user_scenario
+  - operationId: deleteView
+    method: DELETE
+    path: /v1/views/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: getView
+    method: GET
+    path: /v1/views/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: updateView
+    method: PATCH
+    path: /v1/views/{id}
+    reason: no_restricted_normal_user_scenario
+  - operationId: getViewTransactions
+    method: GET
+    path: /v1/views/{id}/transactions
+    reason: no_restricted_normal_user_scenario
+  - operationId: updateViewTransactions
+    method: PATCH
+    path: /v1/views/{id}/transactions
+    reason: no_restricted_normal_user_scenario
+  - operationId: cloneView
+    method: POST
+    path: /v1/views/{sourceViewId}/clone
+    reason: no_restricted_normal_user_scenario

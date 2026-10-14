@@ -1,5 +1,34 @@
 # Budget Analyzer API Tests
 
+## Repository Position
+
+**Archetype:** black-box API test harness
+
+**Scope:** Budget Analyzer public gateway behavior
+
+**Role:** validates deployed environments through their public browser-facing
+request path
+
+### Boundaries
+
+- Read sibling repositories when their public contracts or orchestration
+  context are relevant to the requested test work.
+- Keep writes in this repository unless the user explicitly changes the task
+  scope.
+- Do not change sibling service implementation or deployment configuration
+  from this repository context.
+
+## Code Exploration
+
+Never use Agent or subagent tools for code exploration. Use direct repository
+searches and targeted file reads instead:
+
+```bash
+rg --files
+rg -n "pattern" .
+find . -maxdepth 2 -type f | sort
+```
+
 ## Repository Purpose
 
 This repository contains standalone black-box tests for the Budget Analyzer
@@ -19,14 +48,19 @@ At the start of work:
 
 1. Read this `AGENTS.md`.
 2. Inspect the repository structure before editing.
-3. Read the nearest relevant modules, tests, environment files, and plan
-   documents before changing them.
+3. Read the nearest relevant modules, tests, environment files, and
+   source-of-truth documents before changing them.
 
-Keep changes scoped to the requested plan phase or user request. The active
-implementation plan is
-`docs/plans/simple-local-api-regression-baseline-plan.md`. Treat the other
-plans in `docs/plans/` as historical context when their successor notices say
-they are superseded.
+Keep changes scoped to the current user request or its selected plan phase.
+Consult the relevant source-of-truth files for the behavior being changed; do
+not infer the current task from plans that merely exist in `docs/plans/`.
+
+## Prerequisites First
+
+Before implementing a plan or feature, identify its required environment,
+trust, deployment, credentials, and tools in the relevant documentation. If a
+required prerequisite is missing, stop and report it. Do not bypass, weaken, or
+replace missing prerequisites with test-harness workarounds.
 
 ## Core Product Constraints
 
@@ -112,10 +146,12 @@ they are superseded.
 
   This command also writes `artifacts/openapi-coverage.json` and fails for
   unrecognized markers, missing or placeholder-only non-deferred coverage, or
-  stale deferred method/path entries. Keep snapshot refresh as the separate,
-  intentional `tools/refresh-openapi.py` operation. The normal no-argument
-  `./run-tests` workflow performs coverage and live structural drift checks
-  itself; do not require operators to invoke either tool first.
+  stale deferred method/path entries. It requires schema-backed `401` and `403`
+  responses for every operation and one exact forbidden-response deferral whose
+  reason agrees with the admin deferral inventory. Keep snapshot refresh as the
+  separate, intentional `tools/refresh-openapi.py` operation. The normal
+  no-argument `./run-tests` workflow performs coverage and live structural drift
+  checks itself; do not require operators to invoke either tool first.
 
 - Live API tests require the selected environment, runtime-provided HTTPS
   trust, Playwright system dependencies, and network access. Exact-local tests
@@ -233,8 +269,13 @@ Use pytest for tests.
 - Use `placeholder` only while a phase is under construction. Placeholder
   coverage is not an acceptable local regression baseline.
 - Mark mutating tests with `mutation`, destructive tests with `destructive`,
-  read-only tests with `readonly`, authorization tests with `authorization`,
-  and production-safe tests with `production_safe`.
+  read-only tests with `readonly`, missing or invalid identity tests with
+  `authentication`, authorization or ownership-isolation tests with
+  `authorization`, and production-safe tests with `production_safe`.
+- Keep all documented `403` responses in
+  `schemas/deferred-forbidden-responses.yaml` until a separate authorization
+  plan defines a safe restricted principal. Do not reinterpret privacy-safe
+  cross-user `404` or domain `422` responses as `403` coverage.
 - Production execution should select only explicitly production-safe read-only
   tests.
 - Mutation and destructive markers must be blocked by environment policy before
@@ -280,6 +321,10 @@ Use pytest for tests.
 - Keep checked-in OpenAPI snapshots under `schemas/`.
 - Keep deferred admin/global operations explicit in
   `schemas/deferred-admin-operations.yaml` once the coverage phase is active.
+- Classify every documented `403` by exact operation id, method, path, and
+  deferral reason in `schemas/deferred-forbidden-responses.yaml`. Keep admin
+  operations deferred regardless of HTTP method until an admin identity,
+  cleanup, and global-state safety model is approved.
 - Make JSON artifacts stable and readable with indentation where they are meant
   for review.
 - Preserve OpenAPI operation ids exactly. Do not rename them in test markers.
@@ -310,11 +355,13 @@ tooling, marker conventions, environment schema, or workflow changes.
   Run a specific plan through the workspace wrapper with:
 
   ```bash
+  repo_root=$(git rev-parse --show-toplevel)
+  workspace_parent=$(dirname "$repo_root")
   ai-session-handler run \
-    --plan /workspace/REPOSITORY/docs/plans/PLAN.md \
+    --plan "$repo_root/docs/plans/PLAN.md" \
     --max-phases 999 \
     --quiet \
-    --agent-cmd "/workspace/ai-session-handler/.venv/bin/ai-session-handler-codex-high --model MODEL"
+    --agent-cmd "$workspace_parent/ai-session-handler/.venv/bin/ai-session-handler-codex-high --model MODEL"
   ```
 
   Omit `--model MODEL` from the quoted agent command to use the wrapper's
@@ -323,5 +370,20 @@ tooling, marker conventions, environment schema, or workflow changes.
 - Update `docs/` when architecture, OpenAPI coverage, artifact schema, marker
   grammar, exit codes, CI workflow, or operational behavior changes.
 - Update this `AGENTS.md` when agent instructions, quality gates, tooling, or
-  repository workflow changes.
+  repository workflow changes. Before editing it, read
+  `../orchestration/docs/agents-md-checkstyle.md` and apply that authoring
+  standard.
 - Do not leave documentation updates as follow-up work.
+
+## Path Portability
+
+Never hardcode absolute workspace or checkout paths such as `/workspace`. Use
+repository-relative paths, sibling-relative paths, or roots derived at runtime
+with commands such as `git rev-parse --show-toplevel`.
+
+## No Git Write Operations
+
+Never run Git write commands such as `commit`, `push`, `checkout`, `reset`, or
+branch manipulation unless the user explicitly requests them. Read-only
+inspection commands such as `git status`, `git diff`, and `git log` are
+allowed.

@@ -63,16 +63,81 @@ def test_unauthenticated_gateway_client_does_not_acquire_sessions(
     pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
     pytester.makepyfile(
         """
+        import pytest
         from api_tests.client import GatewayClient
 
+        @pytest.mark.authentication
+        @pytest.mark.readonly
+        @pytest.mark.production_safe
         def test_unauthenticated_client(unauthenticated_gateway_client):
             assert isinstance(unauthenticated_gateway_client, GatewayClient)
         """
     )
 
-    result = pytester.runpytest("--env", "production")
+    result = pytester.runpytest(
+        "--env",
+        "production",
+        "-m",
+        "readonly and production_safe",
+    )
 
     result.assert_outcomes(passed=1)
+
+
+def test_authentication_marker_does_not_require_a_staging_secondary_session() -> None:
+    production = load_environment("production")
+    staging_without_secondary = production.model_copy(update={"environment_type": "staging"})
+
+    assert marker_policy_skip_reason(staging_without_secondary, ["authentication"]) is None
+    assert marker_policy_skip_reason(staging_without_secondary, ["authorization"]) == (
+        "staging authorization tests require a configured secondary supplied session"
+    )
+
+
+def test_production_policy_runs_safe_authentication_reads_and_skips_writes_before_setup(
+    pytester: pytest.Pytester,
+) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.fixture
+        def unauthenticated_gateway_client(request):
+            method = request.node.callspec.params["method"]
+            if method != "GET":
+                raise AssertionError("unsafe request fixture should not run")
+            return object()
+
+        @pytest.mark.parametrize(
+            ("method", "path"),
+            [
+                pytest.param(
+                    "GET",
+                    "/v1/widgets",
+                    marks=[
+                        pytest.mark.authentication,
+                        pytest.mark.readonly,
+                        pytest.mark.production_safe,
+                    ],
+                ),
+                pytest.param(
+                    "POST",
+                    "/v1/widgets",
+                    marks=[pytest.mark.authentication, pytest.mark.mutation],
+                ),
+            ],
+        )
+        def test_authentication_case(method, path, unauthenticated_gateway_client):
+            assert method == "GET"
+            assert path == "/v1/widgets"
+            assert unauthenticated_gateway_client is not None
+        """
+    )
+
+    result = pytester.runpytest("--env", "production")
+
+    result.assert_outcomes(passed=1, skipped=1)
 
 
 def test_primary_fixture_does_not_eagerly_acquire_secondary_session(
