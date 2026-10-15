@@ -8,8 +8,6 @@ import httpx
 import pytest
 
 from api_tests.client import (
-    AUTH_SENSITIVE_RATE_POLICY,
-    DiscreteTokenBucketPacer,
     GatewayClient,
     GatewayRequestPacing,
     RequestPacer,
@@ -131,13 +129,10 @@ def test_snapshot_security_cases_compose_bodyless_sessionless_api_requests(
         artifact_path=tmp_path / "request-log.jsonl",
         transport=httpx.MockTransport(handler),
         request_pacing=GatewayRequestPacing(
-            gateway_pacer=RequestPacer(requests_per_second=1_000_000),
-            auth_sensitive_pacer=DiscreteTokenBucketPacer(
-                max_tokens=AUTH_SENSITIVE_RATE_POLICY.max_tokens,
-                tokens_per_fill=AUTH_SENSITIVE_RATE_POLICY.tokens_per_fill,
-                fill_interval_seconds=AUTH_SENSITIVE_RATE_POLICY.fill_interval_seconds,
-                conservative_initial_wait=False,
-            ),
+            login_initiation_pacer=RequestPacer(requests_per_second=1_000_000),
+            login_completion_pacer=RequestPacer(requests_per_second=1_000_000),
+            session_operations_pacer=RequestPacer(requests_per_second=1_000_000),
+            api_requests_pacer=RequestPacer(requests_per_second=1_000_000),
         ),
     ) as client:
         for case in cases:

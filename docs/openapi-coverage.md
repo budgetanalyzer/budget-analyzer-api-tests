@@ -178,14 +178,15 @@ Account deactivation, permission-service and Redis faults, refresh races, and
 natural TTL expiry remain deferred under their inventory prerequisites. The
 suite does not manipulate internal state or wait for the configured TTL.
 
-Session Gateway execution is also subject to the Istio auth-sensitive ingress
-descriptor, independently of the NGINX API rate policy. The shared client and
-browser infrastructure classifies the exact local auth route families, waits a
-full 60-second discrete refill before first use, and accounts for every 10-token
-refill process-wide. This intentionally lengthens focused execution. A `429`
-with `x-local-rate-limit: auth-sensitive` is not retried; it indicates either a
-harness pacing regression or concurrent traffic consuming the deployment-owned
-bucket.
+Session Gateway execution is subject to the independent Istio login-initiation,
+login-completion, and session-operations policies. The shared client and browser
+infrastructure classifies their exact bounded route families and paces each
+below its sustained allowance process-wide, without modeling Envoy bursts or a
+first-use cooldown. The API policy is paced independently. A `429` with
+`x-local-rate-limit-policy` is not retried; it indicates either a harness pacing
+regression or concurrent traffic sharing the deployment's per-client address.
+Canonical policy boundaries and per-ingress-instance semantics live in
+`../orchestration/docs/architecture/security-architecture.md`.
 
 ## Session Gateway Browser Lifecycle
 
@@ -210,7 +211,7 @@ before network dispatch and reserves them from the same process-wide pacer as
 `GatewayClient`. This specifically includes the cross-origin provider redirect
 to `/login/oauth2/code/idp`; generic Playwright route handling sees only the
 first request in that redirect chain. A safe observation-to-reservation audit
-rejects any completed auth-sensitive browser response that bypassed pacing.
+rejects any completed rate-limited browser response that bypassed pacing.
 
 Default and explicit safe-return flows require observed callback traversal,
 the final same-origin path, the configured public cookie with `HttpOnly`,

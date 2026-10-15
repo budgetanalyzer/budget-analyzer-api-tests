@@ -229,7 +229,7 @@ def test_browser_flow_observations_drop_queries_and_classify_external_hosts() ->
     assert "tenant.us.auth0.com" not in rendered
 
 
-def test_browser_flow_observer_rejects_an_unpaced_auth_sensitive_response() -> None:
+def test_browser_flow_observer_rejects_an_unpaced_rate_limited_response() -> None:
     config = load_environment("local")
     observer = BrowserFlowObserver(config)
     observer.record_response(
@@ -240,7 +240,7 @@ def test_browser_flow_observer_rejects_an_unpaced_auth_sensitive_response() -> N
     )
 
     with pytest.raises(BrowserLoginError, match="bypassed shared pacing"):
-        observer.assert_auth_sensitive_responses_were_paced()
+        observer.assert_rate_limited_responses_were_paced()
 
 
 @pytest.mark.parametrize(
