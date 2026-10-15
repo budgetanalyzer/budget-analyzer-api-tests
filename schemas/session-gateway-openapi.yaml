@@ -1,0 +1,256 @@
+openapi: 3.1.0
+info:
+  title: Session Gateway
+  description: API documentation for Session Gateway endpoints
+  contact:
+    name: Bleu Rubin
+    email: contact@budgetanalyzer.org
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  version: '1.0'
+servers:
+- url: http://localhost:8080
+  description: Local environment (via gateway)
+- url: http://localhost:8081
+  description: Local environment (direct)
+- url: https://api.budgetanalyzer.org
+  description: Production environment
+tags:
+- name: User
+  description: Authentication status and user information
+- name: Session
+  description: Session heartbeat and status
+- name: Logout
+  description: Browser logout and session invalidation
+paths:
+  /logout:
+    get:
+      tags:
+      - Logout
+      summary: Log out
+      description: Invalidates the browser session and redirects to the identity provider
+        logout endpoint.
+      operationId: logout
+      responses:
+        '302':
+          description: Redirect to the identity provider logout endpoint
+          headers:
+            Location:
+              description: Identity provider logout URL
+              style: simple
+              schema:
+                type: string
+                format: uri
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                type: INTERNAL_ERROR
+                message: Internal Server Error
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                type: SERVICE_UNAVAILABLE
+                message: Service Unavailable
+  /auth/v1/user:
+    get:
+      tags:
+      - User
+      summary: Get current user info
+      description: Returns the authenticated user's profile, roles, and permissions.
+        Returns 200 with user info if authenticated, or a JSON 401 response if not.
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Authenticated user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfoResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                type: INTERNAL_ERROR
+                message: Internal Server Error
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                type: SERVICE_UNAVAILABLE
+                message: Service Unavailable
+  /auth/v1/session:
+    get:
+      tags:
+      - Session
+      summary: Session heartbeat
+      description: Refreshes current authorization and extends the local session only
+        after a successful permission-service lookup.
+      operationId: getSessionStatus
+      responses:
+        '200':
+          description: Session is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStatusResponse'
+        '401':
+          description: No valid session or active account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '503':
+          description: Authorization refresh or Redis update unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+              example:
+                type: INTERNAL_ERROR
+                message: Internal Server Error
+components:
+  schemas:
+    UserInfoResponse:
+      type: object
+      description: Authenticated user information
+      properties:
+        sub:
+          type: string
+          description: IDP subject identifier
+          example: auth0|abc123
+        name:
+          type: string
+          description: User's display name
+          example: Jane Doe
+        email:
+          type: string
+          description: User's email address
+          example: jane@example.com
+        picture:
+          type: string
+          description: Profile picture URL
+          example: https://example.com/photo.jpg
+        authenticated:
+          type: boolean
+          description: Always true when this response is returned
+          example: true
+        roles:
+          type: array
+          description: User's roles for UI visibility
+          example:
+          - USER
+          items:
+            type: string
+        permissions:
+          type: array
+          description: User's resolved permissions for action-level UI gating
+          example:
+          - transactions:read
+          - transactions:read:any
+          items:
+            type: string
+    ApiErrorResponse:
+      description: Standard API error response format
+      properties:
+        type:
+          type: string
+          description: Error type categorization for API responses
+          enum:
+          - INVALID_REQUEST
+          - VALIDATION_ERROR
+          - NOT_FOUND
+          - APPLICATION_ERROR
+          - SERVICE_UNAVAILABLE
+          - INTERNAL_ERROR
+          - UNAUTHORIZED
+          - FORBIDDEN
+          example: APPLICATION_ERROR
+        message:
+          type: string
+          description: Human-readable message describing the error
+          example: 'CSV format: fake-bank not supported'
+        code:
+          type: string
+          description: Machine-readable error code for specific application errors
+            (required for APPLICATION_ERROR type)
+          example: CSV_PARSING_ERROR
+        fieldErrors:
+          type: array
+          description: List of field-level validation errors (populated for VALIDATION_ERROR
+            type)
+          items:
+            $ref: '#/components/schemas/FieldError'
+      required:
+      - message
+      - type
+    FieldError:
+      description: Field-level validation error details
+      properties:
+        index:
+          type: integer
+          format: int32
+          description: Zero-based index of the item in a batch/list that caused the
+            error. Null for single-item validation errors.
+          example: 44
+        field:
+          type: string
+          description: Field that triggered the error
+          example: email
+        message:
+          type: string
+          description: Error message
+          example: must be a valid email address
+        rejectedValue:
+          type: object
+          description: Value that caused the error
+          example: invalid@email
+      required:
+      - field
+      - message
+    SessionStatusResponse:
+      type: object
+      description: Session status from heartbeat endpoint
+      properties:
+        userId:
+          type: string
+          description: User's internal ID
+          example: user123
+        roles:
+          type: array
+          description: User's roles
+          example:
+          - USER
+          items:
+            type: string
+        expiresAt:
+          type: integer
+          format: int64
+          description: Unix epoch seconds when session expires
+          example: 1711720800

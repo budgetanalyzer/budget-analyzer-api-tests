@@ -118,6 +118,55 @@ def acquire_browser_session(
     return login(config, credentials)
 
 
+def load_existing_browser_credentials(
+    config: EnvironmentConfig,
+    role: SessionRole,
+    *,
+    environ: Mapping[str, str] | None = None,
+    credential_path: Path | None = None,
+) -> BrowserLoginCredentials:
+    """Load an already provisioned browser identity without creating a session or account."""
+    if config.auth.mode != "browser_preprovisioned":
+        raise AuthConfigurationError(
+            "isolated browser lifecycle requires auth.mode browser_preprovisioned; supplied "
+            "sessions cannot create a test-owned session"
+        )
+    if config.environment_type == "production":
+        raise AuthConfigurationError("browser lifecycle acquisition is forbidden for production")
+
+    browser_config = config.auth.browser
+    if browser_config is None:
+        raise AuthConfigurationError("browser_preprovisioned requires browser settings")
+
+    if config.environment_type == "local":
+        try:
+            record = load_or_create_local_credentials(
+                config,
+                role,
+                environ=environ,
+                path=credential_path,
+            )
+        except LocalCredentialError as exc:
+            raise AuthConfigurationError(str(exc)) from exc
+        if record.state == "pending":
+            raise AuthConfigurationError(
+                f"{role} browser identity is not provisioned; acquire the reusable session first"
+            )
+        return record.credentials
+
+    if role == "primary":
+        username_env = browser_config.primary_username_env
+        password_env = browser_config.primary_password_env
+    else:
+        username_env = browser_config.secondary_username_env
+        password_env = browser_config.secondary_password_env
+    source = os.environ if environ is None else environ
+    return BrowserLoginCredentials(
+        username=_required_secret(source, username_env, f"{role} username"),
+        password=_required_secret(source, password_env, f"{role} password"),
+    )
+
+
 def load_supplied_session(
     config: EnvironmentConfig,
     role: SessionRole,

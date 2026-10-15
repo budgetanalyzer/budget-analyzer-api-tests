@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 import httpx
@@ -14,7 +15,15 @@ from api_tests.config import repository_root
 
 MAX_BODY_BYTES = 4096
 REQUEST_STARTED_AT = "budget_analyzer_request_started_at"
-SENSITIVE_HEADER_NAMES = {"authorization", "cookie", "set-cookie"}
+SENSITIVE_HEADER_NAMES = {"authorization", "cookie", "location", "set-cookie"}
+SENSITIVE_OAUTH_QUERY_NAMES = {
+    "client_id",
+    "code",
+    "code_challenge",
+    "id_token_hint",
+    "nonce",
+    "state",
+}
 SENSITIVE_KEY_RE = re.compile(
     r"(authorization|cookie|email|username|password|client_secret|access_token|refresh_token|"
     r"id_token|token)",
@@ -45,7 +54,12 @@ def redacted_response_context(response: httpx.Response, *, limit: int = 500) -> 
 
 def redact_sensitive_text(value: str) -> str:
     """Redact credential-like values from diagnostics outside artifact logging."""
-    return _redact_sensitive_text(value)
+    redacted = _redact_sensitive_text(value)
+    return re.sub(
+        r"(?i)([?&](?:client_id|code|code_challenge|id_token_hint|nonce|state)=)[^&#\s]+",
+        r"\1[REDACTED]",
+        redacted,
+    )
 
 
 def request_response_hooks(
@@ -158,4 +172,14 @@ def _redact_sensitive_text(value: str) -> str:
 
 
 def _redact_url(url: str) -> str:
-    return _redact_sensitive_text(url)
+    parsed = urlsplit(url)
+    redacted_query = urlencode(
+        [
+            (name, "[REDACTED]" if name.casefold() in SENSITIVE_OAUTH_QUERY_NAMES else value)
+            for name, value in parse_qsl(parsed.query, keep_blank_values=True)
+        ],
+        doseq=True,
+    )
+    return _redact_sensitive_text(
+        urlunsplit((parsed.scheme, parsed.netloc, parsed.path, redacted_query, parsed.fragment))
+    )

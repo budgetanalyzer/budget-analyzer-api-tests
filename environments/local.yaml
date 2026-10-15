@@ -17,6 +17,15 @@ auth:
     primary_password_env: BA_PRIMARY_TEST_PASSWORD
     secondary_username_env: BA_SECONDARY_TEST_USERNAME
     secondary_password_env: BA_SECONDARY_TEST_PASSWORD
+browser_auth_contract:
+  callback_path: /login/oauth2/code/idp
+  default_return_path: /
+  logout_return_path: /peace
+  provider_logout_path: /v2/logout
+  provider_host_suffixes:
+    - auth0.com
+    - auth.budgetanalyzer.org
+  session_cookie_same_site: Strict
 timeouts:
   request_seconds: 15
   eventually_seconds: 30

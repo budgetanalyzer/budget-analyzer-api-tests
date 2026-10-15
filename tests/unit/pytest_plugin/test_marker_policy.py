@@ -267,3 +267,94 @@ def test_collection_does_not_acquire_sessions_or_construct_clients(
     result = pytester.runpytest("--env", "local", "--collect-only")
 
     assert result.ret == pytest.ExitCode.OK
+
+
+def test_contract_qualified_openapi_marker_collects(pytester: pytest.Pytester) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.openapi("logout", contract="session_gateway")
+        def test_qualified_marker():
+            pass
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "--collect-only")
+
+    assert result.ret == pytest.ExitCode.OK
+
+
+def test_session_gateway_case_marker_collects(pytester: pytest.Pytester) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.session_gateway_case("current-user-authenticated")
+        def test_case_marker():
+            pass
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "--collect-only")
+
+    assert result.ret == pytest.ExitCode.OK
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "@pytest.mark.session_gateway_case()",
+        '@pytest.mark.session_gateway_case("case", extra=True)',
+        "@pytest.mark.session_gateway_case(7)",
+    ],
+)
+def test_invalid_session_gateway_case_marker_fails_collection(
+    pytester: pytest.Pytester,
+    marker: str,
+) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        f"""
+        import pytest
+
+        {marker}
+        def test_invalid_marker():
+            pass
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "--collect-only")
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*pytest.mark.session_gateway_case*"])
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        '@pytest.mark.openapi("logout", namespace="session_gateway")',
+        '@pytest.mark.openapi("logout", contract="unknown")',
+    ],
+)
+def test_invalid_openapi_contract_marker_fails_collection(
+    pytester: pytest.Pytester,
+    marker: str,
+) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        f"""
+        import pytest
+
+        {marker}
+        def test_invalid_marker():
+            pass
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "--collect-only")
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*pytest.mark.openapi*"])

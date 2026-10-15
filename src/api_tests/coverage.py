@@ -6,14 +6,14 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import yaml
 
-from api_tests.openapi import HttpMethod, OpenApiOperation
+from api_tests.openapi import HttpMethod, OpenApiContractKey, OpenApiOperation
 
 CoverageSource = Literal["live", "snapshot"]
-CoverageStatus = Literal["covered", "placeholder", "missing", "deferred_admin"]
+CoverageStatus = Literal["covered", "placeholder", "missing", "deferred"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,8 +29,15 @@ class MarkerCounts:
     placeholder_marker_count: int = 0
 
 
+@dataclass(frozen=True, slots=True, order=True)
+class OperationKey:
+    contract: OpenApiContractKey
+    operation_id: str
+
+
 @dataclass(frozen=True, slots=True)
 class OperationCoverage:
+    contract: OpenApiContractKey
     operation_id: str
     method: HttpMethod
     path: str
@@ -79,29 +86,32 @@ def load_deferred_admin_operations(path: Path) -> tuple[DeferredAdminOperation, 
     return tuple(operations)
 
 
-def build_marker_counts(markers: Iterable[tuple[str, bool]]) -> Mapping[str, MarkerCounts]:
-    marker_counts: Counter[str] = Counter()
-    placeholder_counts: Counter[str] = Counter()
+def build_marker_counts(
+    markers: Iterable[tuple[OpenApiContractKey, str, bool]],
+) -> Mapping[OperationKey, MarkerCounts]:
+    marker_counts: Counter[OperationKey] = Counter()
+    placeholder_counts: Counter[OperationKey] = Counter()
 
-    for operation_id, is_placeholder in markers:
-        marker_counts[operation_id] += 1
+    for contract, operation_id, is_placeholder in markers:
+        key = OperationKey(contract=contract, operation_id=operation_id)
+        marker_counts[key] += 1
         if is_placeholder:
-            placeholder_counts[operation_id] += 1
+            placeholder_counts[key] += 1
 
-    operation_ids = marker_counts.keys() | placeholder_counts.keys()
+    operation_keys = marker_counts.keys() | placeholder_counts.keys()
     return {
-        operation_id: MarkerCounts(
-            marker_count=marker_counts[operation_id],
-            placeholder_marker_count=placeholder_counts[operation_id],
+        operation_key: MarkerCounts(
+            marker_count=marker_counts[operation_key],
+            placeholder_marker_count=placeholder_counts[operation_key],
         )
-        for operation_id in sorted(operation_ids)
+        for operation_key in sorted(operation_keys)
     }
 
 
 def build_operation_coverage(
     operations: Iterable[OpenApiOperation],
     deferred_admin_operations: Iterable[DeferredAdminOperation],
-    marker_counts: Mapping[str, MarkerCounts],
+    marker_counts: Mapping[OperationKey, MarkerCounts],
     *,
     source: CoverageSource,
 ) -> tuple[OperationCoverage, ...]:
@@ -113,10 +123,14 @@ def build_operation_coverage(
     for operation in sorted(
         operation_list, key=lambda item: (item.path, item.method, item.operation_id)
     ):
-        counts = marker_counts.get(operation.operation_id, MarkerCounts())
-        deferred_admin = operation.operation_id in deferred_by_id
+        operation_key = OperationKey(operation.contract, operation.operation_id)
+        counts = marker_counts.get(operation_key, MarkerCounts())
+        deferred_admin = (
+            operation.contract == "unified" and operation.operation_id in deferred_by_id
+        )
         coverage.append(
             OperationCoverage(
+                contract=operation.contract,
                 operation_id=operation.operation_id,
                 method=operation.method,
                 path=operation.path,
@@ -133,23 +147,27 @@ def build_operation_coverage(
 def _validate_inventory(
     operations: Sequence[OpenApiOperation],
     deferred_admin_operations: Sequence[DeferredAdminOperation],
-    marker_counts: Mapping[str, MarkerCounts],
+    marker_counts: Mapping[OperationKey, MarkerCounts],
 ) -> None:
-    operations_by_id: dict[str, OpenApiOperation] = {}
+    operations_by_key: dict[OperationKey, OpenApiOperation] = {}
     for operation in operations:
-        previous = operations_by_id.get(operation.operation_id)
+        key = OperationKey(operation.contract, operation.operation_id)
+        previous = operations_by_key.get(key)
         if previous is not None:
             raise ValueError(
-                "duplicate OpenAPI operationId "
+                f"duplicate {operation.contract} OpenAPI operationId "
                 f"{operation.operation_id!r}: {previous.method} {previous.path} and "
                 f"{operation.method} {operation.path}"
             )
-        operations_by_id[operation.operation_id] = operation
+        operations_by_key[key] = operation
 
-    unrecognized_markers = sorted(set(marker_counts) - operations_by_id.keys())
+    unrecognized_markers = sorted(set(marker_counts) - operations_by_key.keys())
     if unrecognized_markers:
         raise ValueError(
-            "unrecognized pytest.mark.openapi operation ids: " + ", ".join(unrecognized_markers)
+            "unrecognized pytest.mark.openapi operations: "
+            + ", ".join(
+                f"{marker.contract}:{marker.operation_id}" for marker in unrecognized_markers
+            )
         )
 
     seen_deferred_ids: set[str] = set()
@@ -157,7 +175,9 @@ def _validate_inventory(
         if deferred.operation_id in seen_deferred_ids:
             raise ValueError(f"duplicate deferred admin operationId: {deferred.operation_id}")
         seen_deferred_ids.add(deferred.operation_id)
-        matching_operation = operations_by_id.get(deferred.operation_id)
+        matching_operation = operations_by_key.get(
+            OperationKey(contract="unified", operation_id=deferred.operation_id)
+        )
         if matching_operation is None:
             raise ValueError(
                 "stale deferred admin operation is absent from OpenAPI: "
@@ -191,16 +211,32 @@ def write_coverage_artifact(path: Path, coverage: Iterable[OperationCoverage]) -
     )
 
 
-def collect_openapi_markers_from_tests(tests_dir: Path) -> Mapping[str, MarkerCounts]:
-    marker_entries: list[tuple[str, bool]] = []
+def collect_openapi_markers_from_tests(
+    tests_dir: Path,
+) -> Mapping[OperationKey, MarkerCounts]:
+    marker_entries: list[tuple[OpenApiContractKey, str, bool]] = []
     for test_path in sorted(tests_dir.rglob("test_*.py")):
         marker_entries.extend(_collect_openapi_markers_from_file(test_path))
     return build_marker_counts(marker_entries)
 
 
+def collect_session_gateway_case_markers_from_tests(tests_dir: Path) -> Mapping[str, int]:
+    marker_counts: Counter[str] = Counter()
+    for test_path in sorted(tests_dir.rglob("test_*.py")):
+        module = ast.parse(test_path.read_text(encoding="utf-8"), filename=str(test_path))
+        for node in ast.walk(module):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for decorator in node.decorator_list:
+                case_id = _session_gateway_case_marker(decorator)
+                if case_id is not None:
+                    marker_counts[case_id] += 1
+    return dict(sorted(marker_counts.items()))
+
+
 def _coverage_status(deferred_admin: bool, counts: MarkerCounts) -> CoverageStatus:
     if deferred_admin:
-        return "deferred_admin"
+        return "deferred"
     if counts.marker_count == 0:
         return "missing"
     if counts.placeholder_marker_count == counts.marker_count:
@@ -208,38 +244,69 @@ def _coverage_status(deferred_admin: bool, counts: MarkerCounts) -> CoverageStat
     return "covered"
 
 
-def _collect_openapi_markers_from_file(path: Path) -> Sequence[tuple[str, bool]]:
+def _collect_openapi_markers_from_file(
+    path: Path,
+) -> Sequence[tuple[OpenApiContractKey, str, bool]]:
     module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    markers: list[tuple[str, bool]] = []
+    markers: list[tuple[OpenApiContractKey, str, bool]] = []
     for node in ast.walk(module):
         if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             continue
 
-        operation_ids = [
-            operation_id
+        operations = [
+            operation
             for decorator in node.decorator_list
-            if (operation_id := _openapi_marker_operation_id(decorator)) is not None
+            if (operation := _openapi_marker_operation(decorator)) is not None
         ]
-        if not operation_ids:
+        if not operations:
             continue
         is_placeholder = any(
             _is_pytest_marker(decorator, "placeholder") for decorator in node.decorator_list
         )
-        markers.extend((operation_id, is_placeholder) for operation_id in operation_ids)
+        markers.extend(
+            (operation.contract, operation.operation_id, is_placeholder) for operation in operations
+        )
     return markers
 
 
-def _openapi_marker_operation_id(node: ast.expr) -> str | None:
+def _openapi_marker_operation(node: ast.expr) -> OperationKey | None:
     if not isinstance(node, ast.Call):
         return None
     if not _is_pytest_marker(node.func, "openapi"):
         return None
-    if len(node.args) != 1 or node.keywords:
+    if len(node.args) != 1:
         raise ValueError("@pytest.mark.openapi requires exactly one positional operation id")
     operation_id = node.args[0]
     if not isinstance(operation_id, ast.Constant) or not isinstance(operation_id.value, str):
         raise ValueError("@pytest.mark.openapi operation id must be a string literal")
-    return operation_id.value
+    contract: OpenApiContractKey = "unified"
+    if node.keywords:
+        if len(node.keywords) != 1 or node.keywords[0].arg != "contract":
+            raise ValueError("@pytest.mark.openapi accepts only the contract keyword")
+        raw_contract = node.keywords[0].value
+        if not isinstance(raw_contract, ast.Constant) or not isinstance(raw_contract.value, str):
+            raise ValueError("@pytest.mark.openapi contract must be a string literal")
+        if raw_contract.value not in {"unified", "session_gateway"}:
+            raise ValueError("@pytest.mark.openapi contract must be 'unified' or 'session_gateway'")
+        contract = cast(OpenApiContractKey, raw_contract.value)
+    return OperationKey(contract=contract, operation_id=operation_id.value)
+
+
+def _session_gateway_case_marker(node: ast.expr) -> str | None:
+    if not isinstance(node, ast.Call):
+        return None
+    if not _is_pytest_marker(node.func, "session_gateway_case"):
+        return None
+    if len(node.args) != 1 or node.keywords:
+        raise ValueError(
+            "@pytest.mark.session_gateway_case requires exactly one positional case id"
+        )
+    case_id = node.args[0]
+    if not isinstance(case_id, ast.Constant) or not isinstance(case_id.value, str):
+        raise ValueError("@pytest.mark.session_gateway_case case id must be a string literal")
+    if not case_id.value:
+        raise ValueError("@pytest.mark.session_gateway_case case id must not be empty")
+    return case_id.value
 
 
 def _is_pytest_marker(node: ast.expr, marker_name: str) -> bool:

@@ -4,10 +4,10 @@
 
 **Archetype:** black-box API test harness
 
-**Scope:** Budget Analyzer public gateway behavior
+**Scope:** Budget Analyzer system API surface inventory and public gateway behavior
 
-**Role:** validates deployed environments through their public browser-facing
-request path
+**Role:** inventories every inbound API surface and validates supported behavior
+through the public browser-facing request path
 
 ### Boundaries
 
@@ -31,16 +31,18 @@ find . -maxdepth 2 -type f | sort
 
 ## Repository Purpose
 
-This repository contains standalone black-box tests for the Budget Analyzer
-public gateway API. It tests deployed environments through the same public lane
-used by the browser:
+This repository contains standalone contract inventory and black-box tests for
+Budget Analyzer API surfaces. It tests supported deployed behavior through the
+same public lane used by the browser:
 
 ```text
 test runner -> HTTPS ingress -> ext_authz -> NGINX -> services
 ```
 
 The suite must stay separate from service implementation repositories and must
-not depend on service internals.
+not depend on service internals. Inventory inaccessible mesh, operational, and
+development-only surfaces explicitly; never ignore them or bypass architecture
+boundaries to turn them into executable tests.
 
 ## Session Initialization
 
@@ -68,12 +70,17 @@ replace missing prerequisites with test-harness workarounds.
   Redis, RabbitMQ, Kubernetes, service-DNS, or service-internal setup paths.
 - Compose API requests as `{origin}{api_base_path}{openapi path}` through
   `GatewayClient`.
-- Treat the public NGINX rate policy as fixed: rate-limited API routes share
-  one per-client-IP bucket at 10 requests/second with `burst=50` and `nodelay`.
-  All `GatewayClient` instances in a process must share deterministic,
-  monotonic pacing capped at 8 requests/second. Same-origin gateway requests
-  made during browser authentication must reserve slots from the same pacer.
-- Treat the OpenAPI document as the executable coverage manifest.
+- Treat both public rate policies as fixed. Rate-limited NGINX API routes share
+  one per-client-IP bucket at 10 requests/second with `burst=50` and `nodelay`;
+  pace all same-origin harness and browser requests at no more than 8 starts per
+  second. Istio separately applies a non-continuous 10-token/60-second bucket to
+  `/login`, `/logout`, `/auth`, `/oauth2`, and `/login/oauth2` route families.
+  Reserve matching `GatewayClient` and same-origin browser requests from one
+  process-wide auth-sensitive budget, including a conservative first-use wait.
+  Read `../orchestration/kubernetes/istio/ingress-rate-limit.yaml` before
+  changing pacing constants or path matching.
+- Treat each namespaced OpenAPI document and the Session Gateway inbound-route
+  inventory as executable coverage manifests.
 - Keep environment YAML declarative and non-secret. Read secrets only from
   environment variables or CI secret stores.
 - Do not write generated passwords, session cookies, authorization headers, or
@@ -88,6 +95,11 @@ replace missing prerequisites with test-harness workarounds.
 - Do not broaden production permissions to reach coverage targets.
 - Keep admin/global operations deferred until a separate admin identity,
   cleanup, and global-state safety plan exists.
+- Keep mesh-internal Session Gateway behavior classified as untestable by this
+  public harness. Do not add pod-specific requests, forge or delegate workload
+  identity, or imply that a trusted service-to-service runner is planned. An
+  optional future admin deactivation scenario may prove end-to-end revocation,
+  but it must not reclassify the internal hop.
 - Do not add generic cleanup callbacks or janitors. Use the pytest session's
   run id and resources created by the current test as the user-data boundary.
 
@@ -144,14 +156,25 @@ replace missing prerequisites with test-harness workarounds.
   .venv/bin/python tools/check-openapi-coverage.py --env local
   ```
 
-  This command also writes `artifacts/openapi-coverage.json` and fails for
-  unrecognized markers, missing or placeholder-only non-deferred coverage, or
-  stale deferred method/path entries. It requires schema-backed `401` and `403`
-  responses for every operation and one exact forbidden-response deferral whose
-  reason agrees with the admin deferral inventory. Keep snapshot refresh as the
-  separate, intentional `tools/refresh-openapi.py` operation. The normal
-  no-argument `./run-tests` workflow performs coverage and live structural drift
+  This command writes `artifacts/openapi-coverage.json` and
+  `artifacts/session-gateway-coverage.json`. It fails for unrecognized or
+  malformed namespaced markers, missing or placeholder-only non-deferred
+  operation coverage, executable Session Gateway cases without markers, stale
+  deferred entries, incomplete route/case classifications, and Session Gateway
+  inventory/snapshot conflicts. The Session Gateway artifact and CLI report
+  operation and scenario classifications separately, including counts and ids.
+  Keep snapshot refresh separate and intentional. The normal no-argument
+  `./run-tests` workflow performs coverage and unified live structural drift
   checks itself; do not require operators to invoke either tool first.
+
+  The reviewed Session Gateway baseline is 3 covered filtered OpenAPI
+  operations and 34 scenarios: 14 covered, 11 deferred, and 9 untestable across
+  14 inbound routes. Treat `schemas/session-gateway-inbound-inventory.yaml` and
+  the generated artifact as the source of truth; update this summary in the
+  same change when classifications change. Say “all known inbound routes
+  inventoried” and “all currently executable public cases covered.” Never claim
+  full Session Gateway behavior coverage while deferred or untestable cases
+  remain.
 
 - Live API tests require the selected environment, runtime-provided HTTPS
   trust, Playwright system dependencies, and network access. Exact-local tests
@@ -260,7 +283,15 @@ Use pytest for tests.
 
   ```python
   @pytest.mark.openapi("operationId")
+  @pytest.mark.openapi("getCurrentUser", contract="session_gateway")
+  @pytest.mark.session_gateway_case("current-user-authenticated")
   ```
+
+  Keep the one-argument form as the unified contract default. Always qualify
+  Session Gateway operations so equal operation ids cannot merge coverage.
+  Use `session_gateway_case` only for exact `covered` ids in the inbound
+  inventory; use `gateway_routing` for public route/method boundaries that are
+  not OpenAPI operations.
 
 - Keep browser/session smoke outcomes identifiable. Use `auth_smoke` for the
   primary account and `secondary_auth_smoke` for the independently lazy
@@ -287,10 +318,12 @@ Use pytest for tests.
 
 - Use `GatewayClient` for API requests so base origin, API prefix, TLS policy,
   timeout, cookies, request logging, and public-gateway pacing stay centralized.
-- Preserve the shared 8-requests/second client-side pace as deliberate
-  compliance with the public gateway contract. Do not retry HTTP 429 responses,
-  add test-level sleeps, bypass NGINX, forge client identity headers, or add
-  environment-specific rate-limit exceptions.
+- Preserve both the shared 8-requests/second general pace and the discrete
+  auth-sensitive 10-token/60-second pace as deliberate compliance with public
+  ingress. Do not retry HTTP 429 responses, add test-level sleeps, bypass
+  ingress, forge client identity headers, or add environment-specific
+  exceptions. Treat `x-local-rate-limit: auth-sensitive` as a pacing regression
+  or an external concurrent-traffic prerequisite failure.
 - Preserve HTTPS certificate verification for live tests in every environment,
   including local Tilt targets. Do not add insecure runner flags, environment
   switches, `verify=False`, Playwright `ignore_https_errors`, or equivalent
@@ -319,6 +352,9 @@ Use pytest for tests.
   invocation must use a distinct directory under `artifacts/runs/`; never mix
   new request diagnostics into an earlier run.
 - Keep checked-in OpenAPI snapshots under `schemas/`.
+- Keep the exhaustive Session Gateway route/case inventory under `schemas/`.
+  Classify inaccessible behavior as deferred with a concrete prerequisite or
+  untestable with an enforced architectural boundary; do not silently omit it.
 - Keep deferred admin/global operations explicit in
   `schemas/deferred-admin-operations.yaml` once the coverage phase is active.
 - Classify every documented `403` by exact operation id, method, path, and

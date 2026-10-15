@@ -65,6 +65,39 @@ class AuthConfig(StrictConfigModel):
     browser: BrowserConfig | None = None
 
 
+class BrowserAuthContract(StrictConfigModel):
+    callback_path: str
+    default_return_path: str
+    logout_return_path: str
+    provider_logout_path: str
+    provider_host_suffixes: tuple[str, ...]
+    session_cookie_same_site: Literal["Strict", "Lax", "None"]
+
+    @field_validator(
+        "callback_path",
+        "default_return_path",
+        "logout_return_path",
+        "provider_logout_path",
+    )
+    @classmethod
+    def validate_browser_path(cls, value: str) -> str:
+        value = value.strip()
+        parsed = urlparse(value)
+        if not value.startswith("/") or value.startswith("//"):
+            raise ValueError("browser contract paths must be same-origin absolute paths")
+        if parsed.scheme or parsed.netloc or parsed.fragment:
+            raise ValueError("browser contract paths must not include an origin or fragment")
+        return value
+
+    @field_validator("provider_host_suffixes")
+    @classmethod
+    def validate_provider_host_suffixes(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        normalized = tuple(item.strip().casefold().lstrip(".") for item in value)
+        if not normalized or any(not item or "/" in item for item in normalized):
+            raise ValueError("provider_host_suffixes must contain non-empty DNS suffixes")
+        return normalized
+
+
 class TimeoutConfig(StrictConfigModel):
     request_seconds: float = Field(gt=0)
     eventually_seconds: float = Field(gt=0)
@@ -86,6 +119,7 @@ class EnvironmentConfig(StrictConfigModel):
     allow_destructive: bool
     session_cookie_name: str
     auth: AuthConfig
+    browser_auth_contract: BrowserAuthContract
     timeouts: TimeoutConfig
 
     @field_validator("name", "session_cookie_name")

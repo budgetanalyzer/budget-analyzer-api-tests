@@ -1,9 +1,10 @@
 # Budget Analyzer API Tests
 
-Standalone black-box tests for the Budget Analyzer public gateway API. The
-harness keeps deterministic unit tests separate from deployed public API tests.
-Its checked-in OpenAPI snapshot and handwritten scenarios follow the current
-public contract.
+Standalone contract inventory and black-box tests for Budget Analyzer API
+surfaces. Every known inbound surface is recorded, while deployed tests remain
+limited to authorized browser-facing HTTPS lanes. Inaccessible internal and
+operational behavior is reported explicitly rather than ignored or reached by
+bypassing deployment boundaries.
 
 ## Local Run
 
@@ -30,11 +31,18 @@ lazy install derived from the locked Playwright package and is checked only
 after Python synchronization.
 
 With no arguments the command runs the complete unit and public API suite,
-checks non-deferred OpenAPI marker coverage, compares the live public contract
-to the checked-in snapshot, and writes dependency parity evidence. Any stale
-lock, environment mismatch, failed test, incomplete coverage, or contract
-drift makes the command fail. It always selects `environments/local.yaml` and
-rejects `--env`.
+checks namespaced OpenAPI and Session Gateway inventory coverage, compares the
+live unified public contract to its checked-in snapshot, and writes dependency
+parity evidence. Any stale lock, environment mismatch, failed test, incomplete
+coverage, or contract drift makes the command fail. It always selects
+`environments/local.yaml` and rejects `--env`.
+
+The preflight reports the 40 unified operations separately from the 3 filtered
+Session Gateway operations. It also prints every Session Gateway scenario id
+by classification, including the 11 deferred and 9 untestable cases, before
+reporting unified live-contract drift. The Session Gateway snapshot is
+validated offline and exercised semantically by public tests; the runner never
+fetches its non-public service-local Springdoc route.
 
 Ordinary pytest selectors pass through. The command labels these runs as
 partial validation because they do not include the coverage and live-contract
@@ -52,16 +60,32 @@ network access, and Playwright system libraries. The repository reports missing
 runtime prerequisites but does not administer the deployment, install trust
 anchors, or weaken certificate verification.
 
-The public gateway contract has one per-client-IP NGINX bucket shared by all
-rate-limited API routes: 10 requests/second with `burst=50` and `nodelay`.
-Every `GatewayClient` in a test process deliberately shares a monotonic,
-fixed-interval pacer capped at 8 requests/second. This conservative client-side
-pacing applies centrally to API and raw gateway requests, including requests
-made by different authenticated clients. Same-origin public-gateway requests
-during browser authentication reserve slots from that same pacer; external
-identity-provider traffic does not. Individual tests do not sleep or implement
-their own throttling. An HTTP 429 is returned directly to the test and remains
-a failure signal rather than being retried.
+Public ingress has two independent rate policies. NGINX owns one per-client-IP
+bucket shared by rate-limited API routes: 10 requests/second with `burst=50` and
+`nodelay`. Every `GatewayClient` in a test process shares a monotonic,
+fixed-interval pacer capped at 8 requests/second, and every same-origin browser
+request uses that general pacer too. Browser traffic is paused at Chromium's
+request stage for the selected origin before it reaches the network. This
+includes the cross-origin identity-provider redirect back to
+`/login/oauth2/code/idp`, which ordinary Playwright route interception does not
+observe as a second redirect-chain request.
+
+Istio separately owns a discrete 10-token bucket that refills all 10 tokens
+every 60 seconds for exact `/login` and for `/logout`, `/auth`, `/oauth2`, and
+`/login/oauth2` with their descendants. Matching `GatewayClient` and same-origin
+browser requests share one process budget in addition to general pacing. The
+first matching request in each process waits one full refill interval, so a
+fresh run does not assume that an immediately preceding process left ingress
+tokens available. Exhausting 10 local reservations causes another wait until
+the next discrete refill. Browser timeout accounting includes one such planned
+wait; external identity-provider requests consume neither local-ingress budget.
+
+Individual tests do not sleep or implement their own throttling. HTTP `429` is
+returned directly and never retried. An auth-edge response carrying
+`x-local-rate-limit: auth-sensitive` is either a shared-pacing regression or
+evidence of concurrent traffic outside this harness; it is not a transient test
+response to hide with a retry. The conservative startup wait means selectors
+that touch Session Gateway take at least one additional minute per process.
 
 The first test that needs each normal user generates its credentials and signs
 up through the public hosted flow; no credential editing or separate bootstrap
@@ -246,6 +270,10 @@ BA_PRIMARY_SESSION=... \
   -m "readonly and production_safe"
 ```
 
+That selection includes safe unauthenticated checks and authenticated user
+reads. It excludes authenticated heartbeat refresh, OAuth state or session
+creation, logout, and internal-revocation scenarios.
+
 Mutation and destructive policy is applied during collection, before client or
 session fixtures can run. Public-route tests use the unauthenticated client and
 do not acquire a user session.
@@ -260,24 +288,113 @@ policy even though authentication should reject it before request parsing.
 The same selection also checks unauthenticated `GET /auth/v1/user` and
 `GET /auth/v1/session` through the public gateway. Both require the generic
 `401` `UNAUTHORIZED` / `Authentication required` JSON response, use no session
-fixture, and are read-only and production-safe. They remain separate from the
-unified `/api` operation inventory because Session Gateway publishes its own
-OpenAPI specification.
+fixture, and are read-only and production-safe. Session Gateway publishes its
+own checked-in OpenAPI contract, so its operation markers use the explicit
+`session_gateway` namespace and cannot collide with unified `/api` operation
+ids.
 
-## OpenAPI Snapshot And Coverage
+Machine-endpoint coverage lives under `tests/api/session_gateway/`. It checks
+missing and plausible invalid cookies, valid user semantics, invalid-cookie
+clearing, and authenticated heartbeat refresh followed by a still-valid user
+read. Heartbeat is intentionally a `mutation` despite using `GET`. Unknown
+`/auth/v1/...` paths and wrong methods are tracked as gateway-routing
+regressions rather than OpenAPI operations.
 
-The intentionally refreshed public contract is checked in at
-`schemas/openapi.json`. One command checks every test marker against that
-snapshot, rejects missing and placeholder-only coverage, validates the exact
-method and path of deferred admin operations, requires an exact classified
-forbidden-response deferral for every operation that documents `403`, and writes
-`artifacts/openapi-coverage.json`:
+The same suite owns the browser-visible OAuth and logout lifecycle. Environment
+YAML declares only non-secret browser contract data: callback/default/logout
+paths, accepted identity-provider DNS suffixes, the provider logout path, and
+the expected SameSite policy. Browser-backed lifecycle tests are available only
+in `browser_preprovisioned` mode. They first preserve the reusable primary
+session, then use the same configured identity to create one additional opaque
+session for a single scenario and explicitly log out that exact session.
+`supplied_sessions` runs skip these scenarios because an opaque cookie cannot
+prove ownership of a newly created session.
+
+Lifecycle coverage checks the authorization-code/OIDC/PKCE redirect without
+following it, observes the same-origin callback without retaining code or state
+values, and validates default, safe, external-absolute, and protocol-relative
+return URL behavior. A successful flow requires the public cookie name plus
+`HttpOnly`, `Secure`, and the configured SameSite value. A Spring `SESSION`
+cookie may remain an internal framework detail, but it is never selected as the
+public authentication contract.
+
+Logout stops at the first identity-provider redirect. It requires the reviewed
+OpenAPI `302`, an allowlisted HTTPS provider `/v2/logout` endpoint, the configured
+same-origin return target, and a correctly scoped public-cookie clearing header.
+Fresh clients then reuse the pre-logout cookie against both user and heartbeat
+routes and require schema-backed `401` responses, proving server-side deletion.
+The unauthenticated logout path is checked separately as an idempotent
+redirect-and-clear operation. OAuth success is marked `mutation`; logout is
+marked `destructive`, so these scenarios remain excluded by production policy.
+
+Browser observations retain only method, response status, same-origin path, or
+an external host classification. Request artifacts redact redirect `Location`
+headers and OAuth query values such as code, state, nonce, client id, and PKCE
+challenge. They never record passwords, provider tokens, or session cookies.
+Each completed same-origin auth-sensitive browser response must also match a
+request-stage pacing reservation; an unmatched callback fails the flow as a
+pacing regression before later requests can exhaust ingress capacity.
+
+The Session Gateway snapshot requires `GET /logout` to return `302 Found` with
+a URI-formatted `Location` header for the identity-provider logout endpoint.
+The offline checker rejects a stale `200` declaration.
+
+Session Gateway's `DELETE /internal/v1/sessions/users/{userId}` operation is not
+reachable through public ingress and accepts mesh traffic only from the
+permission-service workload identity. This repository will not add pod-specific
+clients, forge or delegate that identity, or introduce a trusted
+service-to-service runner. The operation is therefore untestable in this
+harness's current execution boundary and must be reported as such, not silently
+omitted or treated as covered by an ingress-denial request.
+
+The optional public proof is deliberately different: create an active session
+for a disposable target identity, use a separately approved admin identity to
+call `deactivateUser`, then require both the target's user and heartbeat requests
+to return `401`. That would prove the deployed deactivation-to-revocation
+workflow, but it would not isolate the internal hop and must not change the
+internal case from `untestable`. The required admin identity and disposable-user
+cleanup model do not exist yet, so `deactivateUser` remains in the unchanged
+admin/global deferral manifest.
+
+The current reviewed matrix is:
+
+| Coverage layer | Covered | Deferred | Untestable | Meaning |
+| --- | ---: | ---: | ---: | --- |
+| Session Gateway OpenAPI operations | 3 | 0 | n/a | Every operation in the filtered public snapshot has a non-placeholder marker. |
+| Inbound behavior scenarios | 14 | 11 | 9 | Every currently executable public case has a marker; dependency/time cases and non-public boundaries remain explicit. |
+
+The 34 scenarios span 14 known inbound routes: five public routes, one
+mesh-internal route, four deployment-operational routes, and four
+development-only routes. Accurate status is therefore “all known inbound routes
+inventoried” and “all currently executable public cases covered,” with 11 cases
+deferred and 9 untestable by the current boundary. It is not full Session
+Gateway behavior coverage.
+
+## Contract Snapshots And Coverage
+
+The intentionally refreshed unified public contract is checked in at
+`schemas/openapi.json`. The separately generated, filtered Session Gateway
+contract is checked in at `schemas/session-gateway-openapi.yaml`, and its full
+inbound route/case inventory is
+`schemas/session-gateway-inbound-inventory.yaml`. One command validates both
+contract namespaces, every route/case classification, and the existing admin
+and forbidden-response manifests. It writes
+`artifacts/openapi-coverage.json` and
+`artifacts/session-gateway-coverage.json`:
 
 ```bash
 .venv/bin/python tools/check-openapi-coverage.py --env local
 ```
 
-The full `./run-tests` gate fetches the public OpenAPI document and reports
+The Session Gateway artifact is a structured report with separate
+`operation_coverage` and `scenario_coverage` sections. Each section includes
+stable rows plus classification counts and sorted ids. Its `claims` object
+states whether all executable public scenarios have markers and keeps
+`full_session_gateway_behavior_coverage` false while any scenario is deferred,
+untestable, or missing executable evidence. The command prints the same
+classifications, counts, ids, and truth flags.
+
+The full `./run-tests` gate fetches the unified public OpenAPI document and reports
 added or removed operations, method/path moves, and changed parameters, request
 bodies, responses, or component schemas. Server URLs, mapping key order, and
 other irrelevant metadata do not cause drift. Differences are review failures;
@@ -291,6 +408,38 @@ public contract change has been reviewed:
 ```bash
 .venv/bin/python tools/refresh-openapi.py --env local
 ```
+
+The Session Gateway snapshot is generated outside this harness from the
+service-local Springdoc route and filtered to remove `/internal/*`. From this
+repository root, an operator with the documented orchestration/Kubernetes
+prerequisites refreshes exactly that reviewed output with:
+
+```bash
+repo_root=$(git rev-parse --show-toplevel)
+../orchestration/scripts/repo/generate-unified-api-docs.sh \
+  --session-gateway-only "$repo_root/schemas/session-gateway-openapi.yaml"
+```
+
+Review the resulting diff, especially the logout redirect contract, before
+accepting it. Test tools never invoke `kubectl`, read a service-local docs
+route, or refresh this snapshot automatically.
+
+Unified markers keep the compatible one-argument form. Session Gateway markers
+must provide the contract qualifier:
+
+```python
+@pytest.mark.openapi("listViews")
+@pytest.mark.openapi("getCurrentUser", contract="session_gateway")
+@pytest.mark.session_gateway_case("current-user-authenticated")
+```
+
+The route inventory is behavior-level accounting, distinct from operation
+markers. Each case is classified as `covered`, `deferred` with one reason and
+prerequisite, or `untestable` with one enforced architectural boundary and no
+planned prerequisite. Public-ingress denial of an `/internal/...` path does not
+count as execution of the mesh-only controller.
+Literal `session_gateway_case` markers bind executable tests to covered case
+ids, and `artifacts/session-gateway-coverage.json` reports their marker counts.
 
 Response-level security coverage is distinct from operation-marker coverage.
 The snapshot must provide schema-backed `401` and `403` responses for every
@@ -384,11 +533,13 @@ Every `./run-tests` invocation writes to a distinct ignored directory under
 `artifacts/runs/`. Full runs contain `dependency-inventory.json`, which records
 the Python and `uv` versions, lock SHA-256 identity, universal locked graph,
 editable first-party project, selected installed third-party set, and a
-successful exact `uv sync --check` parity result. They also contain OpenAPI
-coverage and drift reports, JUnit pytest results, and redacted public request
-diagnostics. Focused runs contain their JUnit result and any request
-diagnostics. Artifacts never contain package-index credentials, browser
-storage, provisioning form captures, passwords, authorization headers, or
+successful exact `uv sync --check` parity result. They also contain unified
+OpenAPI coverage, the structured Session Gateway operation/scenario coverage
+report, unified live-drift evidence, JUnit pytest results, and redacted public
+request diagnostics. Focused runs contain their JUnit result and any request
+diagnostics. The harness does not persist browser screenshots, traces, storage,
+or provisioning form captures. Artifacts never contain package-index credentials,
+passwords, authorization headers, OAuth code or state values, email values, or
 session-cookie values.
 
 The dependency-evidence workflow uploads exactly one separate seven-day
@@ -417,6 +568,7 @@ PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py \
 .venv/bin/python -m pytest tests/api --env local --collect-only
 .venv/bin/python -m pytest tests/api --env production \
   -m "readonly and production_safe" --collect-only
+.venv/bin/python tools/check-openapi-coverage.py --env local
 .venv/bin/python -m ruff format --check .
 .venv/bin/python -m ruff check .
 .venv/bin/python -m mypy src tests

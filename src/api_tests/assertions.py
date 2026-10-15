@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from http.cookies import CookieError, Morsel, SimpleCookie
 from typing import cast
 
 import httpx
@@ -105,3 +106,60 @@ def array_field(body: JsonObject, field_name: str) -> JsonArray:
     if not isinstance(value, list):
         raise AssertionError(f"expected array field {field_name!r}, got: {value!r}")
     return value
+
+
+def string_array_field(body: JsonObject, field_name: str) -> list[str]:
+    values = array_field(body, field_name)
+    if not all(isinstance(value, str) for value in values):
+        raise AssertionError(f"expected string array field {field_name!r}")
+    return cast(list[str], values)
+
+
+def assert_cookie_cleared(
+    response: httpx.Response,
+    cookie_name: str,
+    *,
+    expected_path: str = "/",
+    expected_http_only: bool | None = None,
+    expected_secure: bool | None = None,
+    expected_same_site: str | None = None,
+) -> None:
+    """Require a scoped empty-cookie deletion without exposing its prior value."""
+    cookie = _response_cookie(response, cookie_name)
+    if cookie is None:
+        raise AssertionError(f"expected response to clear cookie {cookie_name!r}")
+    assert cookie.value == "", f"expected {cookie_name!r} clearing cookie to be empty"
+    assert cookie["max-age"] == "0", f"expected {cookie_name!r} clearing cookie to set Max-Age=0"
+    assert cookie["path"] == expected_path, (
+        f"expected {cookie_name!r} clearing cookie path {expected_path!r}"
+    )
+    if expected_http_only is not None:
+        assert bool(cookie["httponly"]) is expected_http_only, (
+            f"expected {cookie_name!r} clearing cookie HttpOnly={expected_http_only}"
+        )
+    if expected_secure is not None:
+        assert bool(cookie["secure"]) is expected_secure, (
+            f"expected {cookie_name!r} clearing cookie Secure={expected_secure}"
+        )
+    if expected_same_site is not None:
+        assert cookie["samesite"].casefold() == expected_same_site.casefold(), (
+            f"expected {cookie_name!r} clearing cookie SameSite={expected_same_site}"
+        )
+
+
+def assert_cookie_not_set(response: httpx.Response, cookie_name: str) -> None:
+    if _response_cookie(response, cookie_name) is not None:
+        raise AssertionError(f"expected response not to set cookie {cookie_name!r}")
+
+
+def _response_cookie(response: httpx.Response, cookie_name: str) -> Morsel[str] | None:
+    for header in response.headers.get_list("set-cookie"):
+        parsed = SimpleCookie()
+        try:
+            parsed.load(header)
+        except CookieError:
+            continue
+        cookie = parsed.get(cookie_name)
+        if cookie is not None:
+            return cookie
+    return None

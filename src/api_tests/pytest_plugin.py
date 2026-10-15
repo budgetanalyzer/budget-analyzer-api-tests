@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from collections.abc import Generator, Iterable
 from pathlib import Path
 from typing import cast
@@ -16,8 +17,8 @@ from api_tests.config import (
     repository_root,
     with_session_mode,
 )
-from api_tests.coverage import MarkerCounts, build_marker_counts
-from api_tests.openapi import OpenApiDocument, load_snapshot
+from api_tests.coverage import MarkerCounts, OperationKey, build_marker_counts
+from api_tests.openapi import OpenApiContractKey, OpenApiDocument, load_snapshot
 from api_tests.run_state import RunState, new_run_state
 from api_tests.session import (
     IndistinctSessionsError,
@@ -27,7 +28,7 @@ from api_tests.session import (
 )
 
 ENV_CONFIG_KEY: pytest.StashKey[EnvironmentConfig] = pytest.StashKey()
-OPENAPI_MARKER_COUNTS_KEY: pytest.StashKey[dict[str, MarkerCounts]] = pytest.StashKey()
+OPENAPI_MARKER_COUNTS_KEY: pytest.StashKey[dict[OperationKey, MarkerCounts]] = pytest.StashKey()
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -65,11 +66,14 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     env_config = config.stash[ENV_CONFIG_KEY]
-    marker_entries: list[tuple[str, bool]] = []
+    marker_entries: list[tuple[OpenApiContractKey, str, bool]] = []
     for item in items:
         is_placeholder = item.get_closest_marker("placeholder") is not None
         for marker in item.iter_markers("openapi"):
-            marker_entries.append((_openapi_marker_operation_id(marker, item), is_placeholder))
+            contract, operation_id = _openapi_marker_operation(marker, item)
+            marker_entries.append((contract, operation_id, is_placeholder))
+        for marker in item.iter_markers("session_gateway_case"):
+            _session_gateway_case_id(marker, item)
 
         reason = marker_policy_skip_reason(
             env_config,
@@ -80,12 +84,15 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     config.stash[OPENAPI_MARKER_COUNTS_KEY] = dict(build_marker_counts(marker_entries))
 
 
-def openapi_marker_counts(config: pytest.Config) -> dict[str, MarkerCounts]:
+def openapi_marker_counts(config: pytest.Config) -> dict[OperationKey, MarkerCounts]:
     return config.stash.get(OPENAPI_MARKER_COUNTS_KEY, {})
 
 
-def _openapi_marker_operation_id(marker: pytest.Mark, item: pytest.Item) -> str:
-    if len(marker.args) != 1 or marker.kwargs:
+def _openapi_marker_operation(
+    marker: pytest.Mark,
+    item: pytest.Item,
+) -> tuple[OpenApiContractKey, str]:
+    if len(marker.args) != 1:
         raise pytest.UsageError(
             f"{item.nodeid}: @pytest.mark.openapi requires exactly one positional operation id"
         )
@@ -94,7 +101,30 @@ def _openapi_marker_operation_id(marker: pytest.Mark, item: pytest.Item) -> str:
         raise pytest.UsageError(
             f"{item.nodeid}: @pytest.mark.openapi operation id must be a non-empty string"
         )
-    return operation_id
+    if set(marker.kwargs) - {"contract"}:
+        raise pytest.UsageError(
+            f"{item.nodeid}: @pytest.mark.openapi accepts only the contract keyword"
+        )
+    raw_contract = marker.kwargs.get("contract", "unified")
+    if raw_contract not in {"unified", "session_gateway"}:
+        raise pytest.UsageError(
+            f"{item.nodeid}: @pytest.mark.openapi contract must be 'unified' or 'session_gateway'"
+        )
+    return cast(OpenApiContractKey, raw_contract), operation_id
+
+
+def _session_gateway_case_id(marker: pytest.Mark, item: pytest.Item) -> str:
+    if len(marker.args) != 1 or marker.kwargs:
+        raise pytest.UsageError(
+            f"{item.nodeid}: @pytest.mark.session_gateway_case requires exactly one "
+            "positional case id"
+        )
+    case_id = marker.args[0]
+    if not isinstance(case_id, str) or not case_id:
+        raise pytest.UsageError(
+            f"{item.nodeid}: @pytest.mark.session_gateway_case case id must be a non-empty string"
+        )
+    return case_id
 
 
 def marker_policy_skip_reason(
@@ -135,6 +165,16 @@ def openapi_snapshot() -> OpenApiDocument:
 
 
 @pytest.fixture(scope="session")
+def session_gateway_openapi_snapshot() -> OpenApiDocument:
+    return load_snapshot(repository_root() / "schemas" / "session-gateway-openapi.yaml")
+
+
+@pytest.fixture(scope="session")
+def request_log_path(pytestconfig: pytest.Config) -> Path | None:
+    return _request_log_path(pytestconfig)
+
+
+@pytest.fixture(scope="session")
 def primary_session(env_config: EnvironmentConfig) -> Session:
     try:
         return acquire_session(env_config, "primary")
@@ -169,11 +209,11 @@ def distinct_user_sessions(
 def gateway_client(
     primary_session: Session,
     env_config: EnvironmentConfig,
-    pytestconfig: pytest.Config,
+    request_log_path: Path | None,
 ) -> Generator[GatewayClient, None, None]:
     with GatewayClient(
         env_config,
-        artifact_path=_request_log_path(pytestconfig),
+        artifact_path=request_log_path,
         session=primary_session,
     ) as client:
         yield client
@@ -183,11 +223,11 @@ def gateway_client(
 def secondary_gateway_client(
     secondary_session: Session,
     env_config: EnvironmentConfig,
-    pytestconfig: pytest.Config,
+    request_log_path: Path | None,
 ) -> Generator[GatewayClient, None, None]:
     with GatewayClient(
         env_config,
-        artifact_path=_request_log_path(pytestconfig),
+        artifact_path=request_log_path,
         session=secondary_session,
     ) as client:
         yield client
@@ -196,9 +236,26 @@ def secondary_gateway_client(
 @pytest.fixture(scope="session")
 def unauthenticated_gateway_client(
     env_config: EnvironmentConfig,
-    pytestconfig: pytest.Config,
+    request_log_path: Path | None,
 ) -> Generator[GatewayClient, None, None]:
-    with GatewayClient(env_config, artifact_path=_request_log_path(pytestconfig)) as client:
+    with GatewayClient(env_config, artifact_path=request_log_path) as client:
+        yield client
+
+
+@pytest.fixture
+def invalid_session_gateway_client(
+    env_config: EnvironmentConfig,
+    request_log_path: Path | None,
+) -> Generator[GatewayClient, None, None]:
+    invalid_session = Session(
+        cookie_name=env_config.session_cookie_name,
+        cookie_value=secrets.token_urlsafe(32),
+    )
+    with GatewayClient(
+        env_config,
+        artifact_path=request_log_path,
+        session=invalid_session,
+    ) as client:
         yield client
 
 

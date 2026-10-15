@@ -2,19 +2,27 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable
+from pathlib import Path
 from typing import Literal, cast
 
 import httpx
 import pytest
 
 from api_tests.auth import load_supplied_session
-from api_tests.client import GatewayClient, RequestPacer
+from api_tests.client import (
+    AUTH_SENSITIVE_RATE_POLICY,
+    DiscreteTokenBucketPacer,
+    GatewayClient,
+    GatewayRequestPacing,
+    RequestPacer,
+)
 from api_tests.config import load_environment
+from api_tests.openapi import OpenApiDocument, load_snapshot
 
 type SessionRole = Literal["primary", "secondary"]
-type AuthSmoke = Callable[[GatewayClient], None]
+type AuthSmoke = Callable[[GatewayClient, OpenApiDocument], None]
 
-_AUTH_SMOKE_MODULE = importlib.import_module("tests.api.auth.test_auth_smoke")
+_AUTH_SMOKE_MODULE = importlib.import_module("tests.api.session_gateway.test_user")
 _PRIMARY_AUTH_SMOKE = cast(
     AuthSmoke,
     _AUTH_SMOKE_MODULE.test_acquired_session_reaches_session_gateway,
@@ -40,7 +48,7 @@ def test_auth_smoke_accepts_valid_supplied_session(
         expected_cookie=expected_cookie,
         response_status=httpx.codes.OK,
     ) as client:
-        smoke(client)
+        smoke(client, _session_gateway_snapshot())
 
 
 @pytest.mark.parametrize(("role", "smoke", "expected_cookie"), _SMOKE_CASES)
@@ -59,7 +67,7 @@ def test_auth_smoke_rejects_invalid_supplied_session(
         ) as client,
         pytest.raises(AssertionError, match=f"HTTP {response_status}"),
     ):
-        smoke(client)
+        smoke(client, _session_gateway_snapshot())
 
 
 def _mocked_supplied_session_client(
@@ -82,6 +90,19 @@ def _mocked_supplied_session_client(
         assert request.method == "GET"
         assert request.url.path == "/auth/v1/user"
         assert request.headers["cookie"] == f"BA_SESSION={expected_cookie}"
+        if response_status == httpx.codes.OK:
+            return httpx.Response(
+                response_status,
+                json={
+                    "sub": "idp|subject",
+                    "name": "Test User",
+                    "email": "test@example.invalid",
+                    "picture": "https://example.invalid/picture.png",
+                    "authenticated": True,
+                    "roles": ["USER"],
+                    "permissions": ["transactions:read"],
+                },
+            )
         headers = {"location": "/login"} if response_status == httpx.codes.FOUND else None
         return httpx.Response(response_status, headers=headers)
 
@@ -89,5 +110,17 @@ def _mocked_supplied_session_client(
         config,
         session=session,
         transport=httpx.MockTransport(handler),
-        request_pacer=RequestPacer(requests_per_second=8),
+        request_pacing=GatewayRequestPacing(
+            gateway_pacer=RequestPacer(requests_per_second=8),
+            auth_sensitive_pacer=DiscreteTokenBucketPacer(
+                max_tokens=AUTH_SENSITIVE_RATE_POLICY.max_tokens,
+                tokens_per_fill=AUTH_SENSITIVE_RATE_POLICY.tokens_per_fill,
+                fill_interval_seconds=AUTH_SENSITIVE_RATE_POLICY.fill_interval_seconds,
+                conservative_initial_wait=False,
+            ),
+        ),
     )
+
+
+def _session_gateway_snapshot() -> OpenApiDocument:
+    return load_snapshot(Path("schemas/session-gateway-openapi.yaml"))

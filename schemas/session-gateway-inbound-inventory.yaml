@@ -1,0 +1,233 @@
+routes:
+  - method: GET
+    path: /oauth2/authorization/idp
+    owner: spring_security
+    exposure: public
+    cases:
+      - id: oauth-authorization-default-redirect
+        behavior: Starts authorization at the configured identity provider with the default return path.
+        status: covered
+      - id: oauth-authorization-valid-return-url
+        behavior: Preserves a valid same-origin returnUrl through the authorization round trip.
+        status: covered
+      - id: oauth-authorization-unsafe-return-url
+        behavior: Rejects an unsafe returnUrl and falls back to the safe default path.
+        status: covered
+      - id: oauth-authorization-state-store-failure
+        behavior: Redirects to /oops without starting provider authorization when Redis cannot persist the OAuth authorization request.
+        status: deferred
+        reason: redis_failure_requires_controlled_dependency_fault
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to test-owned OAuth state.
+
+  - method: GET
+    path: /login/oauth2/code/idp
+    owner: spring_security
+    exposure: public
+    cases:
+      - id: oauth-callback-success-default
+        behavior: Exchanges a valid code, creates a session, and redirects to the default path.
+        status: covered
+      - id: oauth-callback-success-return-url
+        behavior: Exchanges a valid code, creates a session, and redirects to the preserved returnUrl.
+        status: covered
+      - id: oauth-callback-provider-rejection
+        behavior: Redirects an identity-provider rejection to the controlled login failure path.
+        status: covered
+      - id: oauth-callback-invalid-state
+        behavior: Rejects a missing or invalid OAuth state through the controlled failure path.
+        status: covered
+      - id: oauth-callback-idp-failure
+        behavior: Redirects to /login?error=auth_failed without creating a public session when the identity provider times out, is unavailable, or returns an invalid token response.
+        status: deferred
+        reason: idp_failure_requires_controlled_external_dependency_fault
+        prerequisite: An approved identity-provider fault-injection lane in a controllable test deployment.
+      - id: oauth-callback-permission-service-failure
+        behavior: Redirects to /oops without creating a public session when permission-service user synchronization fails.
+        status: deferred
+        reason: permission_service_failure_requires_controlled_dependency_fault
+        prerequisite: An approved permission-service fault-injection lane in a controllable test deployment, scoped to a configured test identity.
+      - id: oauth-callback-redis-failure
+        behavior: Redirects to /oops without setting the public cookie when Redis session creation fails.
+        status: deferred
+        reason: redis_failure_requires_controlled_dependency_fault
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned login.
+
+  - method: GET
+    path: /logout
+    owner: controller
+    exposure: public
+    openapi_operation_id: logout
+    cases:
+      - id: logout-active-session
+        behavior: Deletes the current session, clears its cookie, and redirects to the identity-provider logout URL.
+        status: covered
+      - id: logout-without-session
+        behavior: Clears any browser cookie and redirects when no live session is present.
+        status: covered
+      - id: logout-redis-delete-failure
+        behavior: Returns a 5xx response without a provider redirect or clearing cookie when Redis session deletion fails.
+        status: deferred
+        reason: redis_failure_requires_controlled_dependency_fault
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned session.
+
+  - method: GET
+    path: /auth/v1/user
+    owner: controller
+    exposure: public
+    openapi_operation_id: getCurrentUser
+    cases:
+      - id: current-user-authenticated
+        behavior: Returns the authenticated profile, roles, permissions, and authenticated flag.
+        status: covered
+      - id: current-user-unauthenticated
+        behavior: Returns the documented JSON 401 response when the session cookie is absent or invalid.
+        status: covered
+      - id: current-user-redis-failure
+        behavior: Returns a JSON 500 response without profile data when Redis cannot read the session.
+        status: deferred
+        reason: redis_failure_requires_controlled_dependency_fault
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned session read.
+
+  - method: GET
+    path: /auth/v1/session
+    owner: controller
+    exposure: public
+    openapi_operation_id: getSessionStatus
+    cases:
+      - id: heartbeat-active-session
+        behavior: Refreshes current grants and TTL and returns the new session expiry.
+        status: covered
+      - id: heartbeat-unauthenticated
+        behavior: Returns the documented JSON 401 response when no session cookie is present.
+        status: covered
+      - id: heartbeat-invalid-session
+        behavior: Clears a non-empty stale public cookie and returns the documented JSON 401 response.
+        status: covered
+      - id: heartbeat-account-inactive
+        behavior: Deletes the session, clears the cookie, and returns 401 for a deactivated or missing account.
+        status: deferred
+        reason: account_state_transition_requires_test_owned_permission_control
+        prerequisite: A disposable target identity plus an approved admin deactivation and cleanup safety model.
+      - id: heartbeat-permission-service-failure
+        behavior: Returns JSON 503 without clearing the cookie or extending the session on permission-service timeout, unavailability, or invalid payload.
+        status: deferred
+        reason: permission_service_failure_requires_controlled_dependency_fault
+        prerequisite: An approved permission-service fault-injection lane in a controllable test deployment, scoped to a configured test identity.
+      - id: heartbeat-redis-failure
+        behavior: Returns JSON 503 without extending or changing the session when Redis read or atomic authorization refresh fails.
+        status: deferred
+        reason: redis_failure_requires_controlled_dependency_fault
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned session.
+      - id: heartbeat-refresh-race
+        behavior: Clears the cookie and returns 401 when the session disappears during its atomic refresh.
+        status: deferred
+        reason: concurrent_session_deletion_requires_deterministic_race_control
+        prerequisite: A controllable test deployment with a synchronization point that deletes only the test-owned session during refresh.
+      - id: heartbeat-natural-ttl-expiry
+        behavior: Clears the stale cookie and returns 401 after the session expires naturally.
+        status: deferred
+        reason: natural_ttl_expiry_exceeds_deterministic_test_timing
+        prerequisite: A configurable short-lived test session in a controllable test deployment.
+
+  - method: DELETE
+    path: /internal/v1/sessions/users/{userId}
+    owner: controller
+    exposure: mesh_internal
+    cases:
+      - id: internal-user-session-revocation
+        behavior: Revokes every indexed session for one user and returns 204.
+        status: untestable
+        reason: public_lane_lacks_internal_route_and_permission_service_workload_identity
+        boundary: The public HTTPRoute omits /internal and mesh policy admits this DELETE only from permission-service; the harness neither runs trusted service clients nor forges or delegates workload identity.
+        optional_indirect_proof:
+          scenario: Create an active session for a disposable target identity, deactivate that target through the public permission-service admin operation, then require the target user and heartbeat requests to return 401.
+          prerequisite: A separately approved admin identity plus a disposable-target lifecycle and cleanup safety model.
+          limitation: Proves the public deactivation-to-revocation workflow end to end but does not isolate or directly exercise the internal hop.
+
+  - method: GET
+    path: /actuator/health
+    owner: actuator
+    exposure: deployment_operational
+    cases:
+      - id: actuator-health
+        behavior: Reports aggregate service health for deployment probes.
+        status: untestable
+        reason: actuator endpoints are service-local deployment surfaces
+        boundary: Public ingress exposes only browser auth prefixes and does not route Session Gateway Actuator paths.
+
+  - method: GET
+    path: /actuator/health/liveness
+    owner: actuator
+    exposure: deployment_operational
+    cases:
+      - id: actuator-liveness
+        behavior: Reports the service liveness probe state.
+        status: untestable
+        reason: actuator endpoints are service-local deployment surfaces
+        boundary: Public ingress exposes only browser auth prefixes and does not route Session Gateway Actuator paths.
+
+  - method: GET
+    path: /actuator/health/readiness
+    owner: actuator
+    exposure: deployment_operational
+    cases:
+      - id: actuator-readiness
+        behavior: Reports the service readiness probe state.
+        status: untestable
+        reason: actuator endpoints are service-local deployment surfaces
+        boundary: Public ingress exposes only browser auth prefixes and does not route Session Gateway Actuator paths.
+
+  - method: GET
+    path: /actuator/prometheus
+    owner: actuator
+    exposure: deployment_operational
+    cases:
+      - id: actuator-prometheus
+        behavior: Exposes service metrics to the deployment monitoring lane.
+        status: untestable
+        reason: actuator metrics are service-local deployment surfaces
+        boundary: Public ingress exposes only browser auth prefixes and monitoring reaches the service through an operational lane.
+
+  - method: GET
+    path: /v3/api-docs
+    owner: springdoc
+    exposure: development_only
+    cases:
+      - id: springdoc-json
+        behavior: Serves the unfiltered service-local OpenAPI JSON document when Springdoc is enabled.
+        status: untestable
+        reason: service-local documentation is disabled in deployed profiles and absent from public routing
+        boundary: The harness cannot enable Springdoc or bypass public ingress to reach the service-local port.
+
+  - method: GET
+    path: /v3/api-docs.yaml
+    owner: springdoc
+    exposure: development_only
+    cases:
+      - id: springdoc-yaml
+        behavior: Serves the unfiltered service-local OpenAPI YAML document when Springdoc is enabled.
+        status: untestable
+        reason: service-local documentation is disabled in deployed profiles and absent from public routing
+        boundary: The harness cannot enable Springdoc or bypass public ingress to reach the service-local port.
+
+  - method: GET
+    path: /swagger-ui.html
+    owner: springdoc
+    exposure: development_only
+    cases:
+      - id: swagger-ui-entrypoint
+        behavior: Redirects to or serves the Swagger UI entry point when Springdoc is enabled.
+        status: untestable
+        reason: service-local documentation is disabled in deployed profiles and absent from public routing
+        boundary: The harness cannot enable Springdoc or bypass public ingress to reach the service-local port.
+
+  - method: GET
+    path: /swagger-ui/{asset}
+    owner: springdoc
+    exposure: development_only
+    cases:
+      - id: swagger-ui-assets
+        behavior: Serves Swagger UI assets when Springdoc is enabled.
+        status: untestable
+        reason: service-local documentation is disabled in deployed profiles and absent from public routing
+        boundary: The harness cannot enable Springdoc or bypass public ingress to reach the service-local port.
