@@ -120,6 +120,9 @@ def assert_cookie_cleared(
     cookie_name: str,
     *,
     expected_path: str = "/",
+    expected_http_only: bool | None = None,
+    expected_secure: bool | None = None,
+    expected_same_site: str | None = None,
 ) -> None:
     """Require a scoped empty-cookie deletion without exposing its prior value."""
     cookie = _response_cookie(response, cookie_name)
@@ -130,6 +133,18 @@ def assert_cookie_cleared(
     assert cookie["path"] == expected_path, (
         f"expected {cookie_name!r} clearing cookie path {expected_path!r}"
     )
+    if expected_http_only is not None:
+        assert bool(cookie["httponly"]) is expected_http_only, (
+            f"expected {cookie_name!r} clearing cookie HttpOnly={expected_http_only}"
+        )
+    if expected_secure is not None:
+        assert bool(cookie["secure"]) is expected_secure, (
+            f"expected {cookie_name!r} clearing cookie Secure={expected_secure}"
+        )
+    if expected_same_site is not None:
+        assert cookie["samesite"].casefold() == expected_same_site.casefold(), (
+            f"expected {cookie_name!r} clearing cookie SameSite={expected_same_site}"
+        )
 
 
 def assert_cookie_not_set(response: httpx.Response, cookie_name: str) -> None:

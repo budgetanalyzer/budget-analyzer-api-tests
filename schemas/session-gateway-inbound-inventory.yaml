@@ -14,10 +14,10 @@ routes:
         behavior: Rejects an unsafe returnUrl and falls back to the safe default path.
         status: covered
       - id: oauth-authorization-state-store-failure
-        behavior: Cannot persist the OAuth authorization request before redirecting.
+        behavior: Redirects to /oops without starting provider authorization when Redis cannot persist the OAuth authorization request.
         status: deferred
         reason: redis_failure_requires_controlled_dependency_fault
-        prerequisite: A deployment-owned Redis fault-injection lane scoped to a test-owned OAuth state.
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to test-owned OAuth state.
 
   - method: GET
     path: /login/oauth2/code/idp
@@ -37,20 +37,20 @@ routes:
         behavior: Rejects a missing or invalid OAuth state through the controlled failure path.
         status: covered
       - id: oauth-callback-idp-failure
-        behavior: Handles identity-provider timeout, unavailability, or invalid token responses.
+        behavior: Redirects to /login?error=auth_failed without creating a public session when the identity provider times out, is unavailable, or returns an invalid token response.
         status: deferred
         reason: idp_failure_requires_controlled_external_dependency_fault
-        prerequisite: A trusted identity-provider test lane that can deterministically inject callback failures.
+        prerequisite: An approved identity-provider fault-injection lane in a controllable test deployment.
       - id: oauth-callback-permission-service-failure
-        behavior: Redirects to the controlled unexpected-failure path when user synchronization fails.
+        behavior: Redirects to /oops without creating a public session when permission-service user synchronization fails.
         status: deferred
         reason: permission_service_failure_requires_controlled_dependency_fault
-        prerequisite: A deployment-owned permission-service fault-injection lane for a configured test identity.
+        prerequisite: An approved permission-service fault-injection lane in a controllable test deployment, scoped to a configured test identity.
       - id: oauth-callback-redis-failure
-        behavior: Redirects to the controlled unexpected-failure path when session creation fails.
+        behavior: Redirects to /oops without setting the public cookie when Redis session creation fails.
         status: deferred
         reason: redis_failure_requires_controlled_dependency_fault
-        prerequisite: A deployment-owned Redis fault-injection lane scoped to a test-owned login.
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned login.
 
   - method: GET
     path: /logout
@@ -65,10 +65,10 @@ routes:
         behavior: Clears any browser cookie and redirects when no live session is present.
         status: covered
       - id: logout-redis-delete-failure
-        behavior: Reports failure without pretending logout completed when Redis deletion fails.
+        behavior: Returns a 5xx response without a provider redirect or clearing cookie when Redis session deletion fails.
         status: deferred
         reason: redis_failure_requires_controlled_dependency_fault
-        prerequisite: A deployment-owned Redis fault-injection lane scoped to a test-owned session.
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned session.
 
   - method: GET
     path: /auth/v1/user
@@ -83,10 +83,10 @@ routes:
         behavior: Returns the documented JSON 401 response when the session cookie is absent or invalid.
         status: covered
       - id: current-user-redis-failure
-        behavior: Reports an internal dependency failure when the session cannot be read from Redis.
+        behavior: Returns a JSON 500 response without profile data when Redis cannot read the session.
         status: deferred
         reason: redis_failure_requires_controlled_dependency_fault
-        prerequisite: A deployment-owned Redis fault-injection lane scoped to a test-owned session read.
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned session read.
 
   - method: GET
     path: /auth/v1/session
@@ -107,27 +107,27 @@ routes:
         behavior: Deletes the session, clears the cookie, and returns 401 for a deactivated or missing account.
         status: deferred
         reason: account_state_transition_requires_test_owned_permission_control
-        prerequisite: A public test-user lifecycle that can deactivate or remove only the configured identity.
+        prerequisite: A disposable target identity plus an approved admin deactivation and cleanup safety model.
       - id: heartbeat-permission-service-failure
-        behavior: Returns 503 without extending the session on timeout, unavailability, or invalid payload.
+        behavior: Returns JSON 503 without clearing the cookie or extending the session on permission-service timeout, unavailability, or invalid payload.
         status: deferred
         reason: permission_service_failure_requires_controlled_dependency_fault
-        prerequisite: A deployment-owned permission-service fault-injection lane for a configured test identity.
+        prerequisite: An approved permission-service fault-injection lane in a controllable test deployment, scoped to a configured test identity.
       - id: heartbeat-redis-failure
-        behavior: Returns 503 when Redis read or atomic authorization refresh fails.
+        behavior: Returns JSON 503 without extending or changing the session when Redis read or atomic authorization refresh fails.
         status: deferred
         reason: redis_failure_requires_controlled_dependency_fault
-        prerequisite: A deployment-owned Redis fault-injection lane scoped to a test-owned session.
+        prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned session.
       - id: heartbeat-refresh-race
         behavior: Clears the cookie and returns 401 when the session disappears during its atomic refresh.
         status: deferred
         reason: concurrent_session_deletion_requires_deterministic_race_control
-        prerequisite: A test-only synchronization point that can delete the test-owned session during refresh.
+        prerequisite: A controllable test deployment with a synchronization point that deletes only the test-owned session during refresh.
       - id: heartbeat-natural-ttl-expiry
         behavior: Clears the stale cookie and returns 401 after the session expires naturally.
         status: deferred
         reason: natural_ttl_expiry_exceeds_deterministic_test_timing
-        prerequisite: A deployment-owned short-TTL test profile or controllable session clock.
+        prerequisite: A configurable short-lived test session in a controllable test deployment.
 
   - method: DELETE
     path: /internal/v1/sessions/users/{userId}
@@ -137,8 +137,12 @@ routes:
       - id: internal-user-session-revocation
         behavior: Revokes every indexed session for one user and returns 204.
         status: untestable
-        reason: public ingress cannot prove execution of the mesh-only controller route
-        boundary: Only the permission-service workload identity may call this service-local path; this harness uses public HTTPS ingress and never forges workload identity.
+        reason: public_lane_lacks_internal_route_and_permission_service_workload_identity
+        boundary: The public HTTPRoute omits /internal and mesh policy admits this DELETE only from permission-service; the harness neither runs trusted service clients nor forges or delegates workload identity.
+        optional_indirect_proof:
+          scenario: Create an active session for a disposable target identity, deactivate that target through the public permission-service admin operation, then require the target user and heartbeat requests to return 401.
+          prerequisite: A separately approved admin identity plus a disposable-target lifecycle and cleanup safety model.
+          limitation: Proves the public deactivation-to-revocation workflow end to end but does not isolate or directly exercise the internal hop.
 
   - method: GET
     path: /actuator/health

@@ -8,6 +8,7 @@ from typing import Literal, cast
 
 import yaml
 
+from api_tests.coverage import CoverageStatus, OperationCoverage
 from api_tests.openapi import (
     HttpMethod,
     JsonValue,
@@ -26,6 +27,20 @@ _OWNERS = frozenset({"controller", "spring_security", "actuator", "springdoc"})
 _EXPOSURES = frozenset({"public", "mesh_internal", "deployment_operational", "development_only"})
 _STATUSES = frozenset({"covered", "deferred", "untestable"})
 _METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
+_OPERATION_STATUSES: tuple[CoverageStatus, ...] = (
+    "covered",
+    "deferred",
+    "missing",
+    "placeholder",
+)
+_SCENARIO_STATUSES: tuple[InventoryStatus, ...] = ("covered", "deferred", "untestable")
+
+
+@dataclass(frozen=True, slots=True)
+class SessionGatewayIndirectProof:
+    scenario: str
+    prerequisite: str
+    limitation: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +51,7 @@ class SessionGatewayCase:
     reason: str | None = None
     prerequisite: str | None = None
     boundary: str | None = None
+    optional_indirect_proof: SessionGatewayIndirectProof | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +79,49 @@ class SessionGatewayCaseCoverage:
     reason: str | None
     prerequisite: str | None
     boundary: str | None
+    optional_indirect_proof: SessionGatewayIndirectProof | None
+
+
+@dataclass(frozen=True, slots=True)
+class OperationCoverageClassification:
+    status: CoverageStatus
+    count: int
+    ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioCoverageClassification:
+    status: InventoryStatus
+    count: int
+    ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionGatewayOperationCoverageReport:
+    classifications: tuple[OperationCoverageClassification, ...]
+    rows: tuple[OperationCoverage, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionGatewayScenarioCoverageReport:
+    route_count: int
+    classifications: tuple[ScenarioCoverageClassification, ...]
+    rows: tuple[SessionGatewayCaseCoverage, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionGatewayCoverageClaims:
+    all_known_inbound_routes_inventoried: bool
+    all_currently_executable_public_cases_covered: bool
+    full_session_gateway_behavior_coverage: bool
+    uncovered_executable_case_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionGatewayCoverageReport:
+    claims: SessionGatewayCoverageClaims
+    operation_coverage: SessionGatewayOperationCoverageReport
+    scenario_coverage: SessionGatewayScenarioCoverageReport
 
 
 def load_session_gateway_inventory(path: Path) -> tuple[SessionGatewayRoute, ...]:
@@ -134,6 +193,10 @@ def validate_session_gateway_inventory(
             seen_operation_ids.add(operation.operation_id)
 
         for case in route.cases:
+            if case.status in {"covered", "deferred"} and route.exposure != "public":
+                raise ValueError(
+                    f"{case.status} Session Gateway case {case.case_id} must use public exposure"
+                )
             rows.append(
                 SessionGatewayCaseCoverage(
                     contract="session_gateway",
@@ -149,6 +212,7 @@ def validate_session_gateway_inventory(
                     reason=case.reason,
                     prerequisite=case.prerequisite,
                     boundary=case.boundary,
+                    optional_indirect_proof=case.optional_indirect_proof,
                 )
             )
 
@@ -188,15 +252,122 @@ def validate_session_gateway_contract(openapi_doc: OpenApiDocument) -> None:
         )
 
 
+def build_session_gateway_coverage_report(
+    operation_coverage: Iterable[OperationCoverage],
+    scenario_coverage: Iterable[SessionGatewayCaseCoverage],
+) -> SessionGatewayCoverageReport:
+    operations = tuple(operation_coverage)
+    scenarios = tuple(scenario_coverage)
+    if not operations:
+        raise ValueError("Session Gateway operation report requires at least one operation")
+    if not scenarios:
+        raise ValueError("Session Gateway scenario report requires at least one scenario")
+    wrong_contract_operations = sorted(
+        operation.operation_id
+        for operation in operations
+        if operation.contract != "session_gateway"
+    )
+    if wrong_contract_operations:
+        raise ValueError(
+            "Session Gateway operation report received other contracts: "
+            + ", ".join(wrong_contract_operations)
+        )
+
+    operation_classifications = tuple(
+        _operation_classification(status, operations) for status in _OPERATION_STATUSES
+    )
+    scenario_classifications = tuple(
+        _scenario_classification(status, scenarios) for status in _SCENARIO_STATUSES
+    )
+    uncovered_executable_case_ids = tuple(
+        sorted(
+            case.case_id
+            for case in scenarios
+            if case.status == "covered" and case.test_marker_count == 0
+        )
+    )
+    all_executable_covered = not uncovered_executable_case_ids
+    full_behavior_coverage = (
+        all_executable_covered
+        and all(operation.status == "covered" for operation in operations)
+        and all(case.status == "covered" for case in scenarios)
+    )
+    route_count = len({(case.method, case.path) for case in scenarios})
+
+    return SessionGatewayCoverageReport(
+        claims=SessionGatewayCoverageClaims(
+            all_known_inbound_routes_inventoried=True,
+            all_currently_executable_public_cases_covered=all_executable_covered,
+            full_session_gateway_behavior_coverage=full_behavior_coverage,
+            uncovered_executable_case_ids=uncovered_executable_case_ids,
+        ),
+        operation_coverage=SessionGatewayOperationCoverageReport(
+            classifications=operation_classifications,
+            rows=operations,
+        ),
+        scenario_coverage=SessionGatewayScenarioCoverageReport(
+            route_count=route_count,
+            classifications=scenario_classifications,
+            rows=scenarios,
+        ),
+    )
+
+
 def write_session_gateway_coverage_artifact(
-    path: Path,
-    coverage: Iterable[SessionGatewayCaseCoverage],
+    path: Path, report: SessionGatewayCoverageReport
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps([asdict(row) for row in coverage], indent=2, sort_keys=True) + "\n",
+        json.dumps(asdict(report), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def session_gateway_coverage_lines(report: SessionGatewayCoverageReport) -> tuple[str, ...]:
+    lines: list[str] = []
+    for operation_classification in report.operation_coverage.classifications:
+        ids = ", ".join(operation_classification.ids) if operation_classification.ids else "(none)"
+        lines.append(
+            f"session_gateway_operation_{operation_classification.status}: "
+            f"{operation_classification.count}; ids: {ids}"
+        )
+    lines.append(f"session_gateway_routes: {report.scenario_coverage.route_count}")
+    for scenario_classification in report.scenario_coverage.classifications:
+        ids = ", ".join(scenario_classification.ids) if scenario_classification.ids else "(none)"
+        lines.append(
+            f"session_gateway_scenario_{scenario_classification.status}: "
+            f"{scenario_classification.count}; ids: {ids}"
+        )
+    claims = report.claims
+    lines.extend(
+        (
+            "all_known_session_gateway_inbound_routes_inventoried: "
+            f"{str(claims.all_known_inbound_routes_inventoried).lower()}",
+            "all_currently_executable_public_session_gateway_cases_covered: "
+            f"{str(claims.all_currently_executable_public_cases_covered).lower()}",
+            "full_session_gateway_behavior_coverage: "
+            f"{str(claims.full_session_gateway_behavior_coverage).lower()}",
+        )
+    )
+    return tuple(lines)
+
+
+def _operation_classification(
+    status: CoverageStatus,
+    operations: tuple[OperationCoverage, ...],
+) -> OperationCoverageClassification:
+    ids = tuple(
+        sorted(operation.operation_id for operation in operations if operation.status == status)
+    )
+    return OperationCoverageClassification(status=status, count=len(ids), ids=ids)
+
+
+def _scenario_classification(
+    status: InventoryStatus,
+    scenarios: tuple[SessionGatewayCaseCoverage, ...],
+) -> ScenarioCoverageClassification:
+    ids = tuple(sorted(case.case_id for case in scenarios if case.status == status))
+    return ScenarioCoverageClassification(status=status, count=len(ids), ids=ids)
 
 
 def _load_route(raw_route: object, *, context: str) -> SessionGatewayRoute:
@@ -243,6 +414,7 @@ def _load_case(raw_case: object, *, context: str) -> SessionGatewayCase:
     reason = raw_case.get("reason")
     prerequisite = raw_case.get("prerequisite")
     boundary = raw_case.get("boundary")
+    raw_optional_indirect_proof = raw_case.get("optional_indirect_proof")
     if not isinstance(case_id, str) or not case_id:
         raise ValueError(f"{context} is missing id")
     if not isinstance(behavior, str) or not behavior:
@@ -262,6 +434,11 @@ def _load_case(raw_case: object, *, context: str) -> SessionGatewayCase:
         reason=cast(str | None, reason),
         prerequisite=cast(str | None, prerequisite),
         boundary=cast(str | None, boundary),
+        has_optional_indirect_proof=raw_optional_indirect_proof is not None,
+    )
+    optional_indirect_proof = _load_optional_indirect_proof(
+        raw_optional_indirect_proof,
+        case_id=case_id,
     )
     return SessionGatewayCase(
         case_id=case_id,
@@ -270,6 +447,7 @@ def _load_case(raw_case: object, *, context: str) -> SessionGatewayCase:
         reason=cast(str | None, reason),
         prerequisite=cast(str | None, prerequisite),
         boundary=cast(str | None, boundary),
+        optional_indirect_proof=optional_indirect_proof,
     )
 
 
@@ -280,6 +458,7 @@ def _validate_classification(
     reason: str | None,
     prerequisite: str | None,
     boundary: str | None,
+    has_optional_indirect_proof: bool,
 ) -> None:
     if status == "covered":
         if reason is not None or prerequisite is not None or boundary is not None:
@@ -300,6 +479,43 @@ def _validate_classification(
             raise ValueError(
                 f"untestable Session Gateway case {case_id} must not declare prerequisite"
             )
+    if has_optional_indirect_proof and status != "untestable":
+        raise ValueError(
+            f"only untestable Session Gateway case {case_id} may declare optional_indirect_proof"
+        )
+
+
+def _load_optional_indirect_proof(
+    raw_proof: object,
+    *,
+    case_id: str,
+) -> SessionGatewayIndirectProof | None:
+    if raw_proof is None:
+        return None
+    if not isinstance(raw_proof, dict):
+        raise ValueError(
+            f"Session Gateway case {case_id} optional_indirect_proof must be a mapping"
+        )
+    expected_fields = {"scenario", "prerequisite", "limitation"}
+    extra_fields = sorted(set(raw_proof) - expected_fields)
+    if extra_fields:
+        raise ValueError(
+            f"Session Gateway case {case_id} optional_indirect_proof has unknown fields: "
+            + ", ".join(extra_fields)
+        )
+    values: dict[str, str] = {}
+    for field_name in sorted(expected_fields):
+        value = raw_proof.get(field_name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"Session Gateway case {case_id} optional_indirect_proof requires {field_name}"
+            )
+        values[field_name] = value
+    return SessionGatewayIndirectProof(
+        scenario=values["scenario"],
+        prerequisite=values["prerequisite"],
+        limitation=values["limitation"],
+    )
 
 
 def _validate_route_matches_operation(

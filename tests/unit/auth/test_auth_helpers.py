@@ -8,15 +8,26 @@ from typing import Self, TypedDict, cast
 
 import httpx
 import pytest
-from playwright.sync_api import BrowserContext, Route
+from playwright.sync_api import BrowserContext, CDPSession, Page, Response
 
 import api_tests.browser_login as browser_login_module
 from api_tests.assertions import assert_status
-from api_tests.auth import AuthConfigurationError, acquire_browser_session, load_supplied_session
-from api_tests.browser_login import BrowserLoginCredentials, read_session_cookie, verify_session
+from api_tests.auth import (
+    AuthConfigurationError,
+    acquire_browser_session,
+    load_existing_browser_credentials,
+    load_supplied_session,
+)
+from api_tests.browser_login import (
+    BrowserFlowObserver,
+    BrowserLoginCredentials,
+    BrowserLoginError,
+    read_session_cookie,
+    verify_session,
+)
 from api_tests.client import GatewayClient
-from api_tests.config import load_environment
-from api_tests.logging import MAX_BODY_BYTES
+from api_tests.config import load_environment, with_session_mode
+from api_tests.logging import MAX_BODY_BYTES, _redact_headers, _redact_url
 from api_tests.run_state import RUN_ID_PATTERN, generate_run_id
 from api_tests.session import (
     IndistinctSessionsError,
@@ -35,17 +46,29 @@ class FakeBrowserCookie(TypedDict, total=False):
 
 
 class FakeBrowserRequest:
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, method: str = "GET") -> None:
         self.url = url
+        self.method = method
 
 
-class FakeRoute:
-    def __init__(self, url: str) -> None:
-        self.request = FakeBrowserRequest(url)
-        self.continued = False
+class FakeCdpSession:
+    def __init__(self) -> None:
+        self.handlers: dict[str, object] = {}
+        self.commands: list[tuple[str, object | None]] = []
 
-    def continue_(self) -> None:
-        self.continued = True
+    def on(self, event: str, handler: object) -> None:
+        self.handlers[event] = handler
+
+    def send(self, method: str, params: object | None = None) -> dict[str, object]:
+        self.commands.append((method, params))
+        return {}
+
+
+class FakeBrowserResponse:
+    def __init__(self, url: str, *, method: str = "GET", status: int = 302) -> None:
+        self.url = url
+        self.request = FakeBrowserRequest(url, method)
+        self.status = status
 
 
 def test_generate_run_id_uses_required_format() -> None:
@@ -111,47 +134,120 @@ def test_session_verification_uses_gateway_client(
     assert calls == [(config, session, "GET", "/auth/v1/user")]
 
 
-def test_browser_route_interception_paces_only_same_origin_and_strips_queries(
+def test_browser_request_interception_paces_only_same_origin_and_strips_queries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gateway_origin = "https://app.budgetanalyzer.localhost"
     paced_paths: list[str] = []
-    routes = [
-        FakeRoute(f"{gateway_origin}/assets/app.js?cache=public"),
-        FakeRoute(f"{gateway_origin}/login/oauth2/code/idp?probe=callback"),
-        FakeRoute("https://identity.example.test/auth/v1/user?probe=provider"),
+    request_urls = [
+        f"{gateway_origin}/assets/app.js?cache=public",
+        f"{gateway_origin}/login/oauth2/code/idp?probe=callback",
+        "https://identity.example.test/auth/v1/user?probe=provider",
     ]
+    session = FakeCdpSession()
     monkeypatch.setattr(
         GatewayClient,
         "pace_shared_request",
         staticmethod(paced_paths.append),
     )
 
-    for route in routes:
+    for index, request_url in enumerate(request_urls):
         browser_login_module._continue_paced_gateway_request(
-            cast(Route, route),
+            cast(CDPSession, session),
+            {"requestId": f"request-{index}", "request": {"url": request_url}},
             gateway_origin=gateway_origin,
         )
 
     assert paced_paths == ["/assets/app.js", "/login/oauth2/code/idp"]
-    assert all(route.continued for route in routes)
+    assert session.commands == [
+        ("Fetch.continueRequest", {"requestId": "request-0"}),
+        ("Fetch.continueRequest", {"requestId": "request-1"}),
+        ("Fetch.continueRequest", {"requestId": "request-2"}),
+    ]
 
 
-def test_browser_registers_one_interceptor_for_same_origin_and_external_requests() -> None:
-    registered: list[tuple[str, object]] = []
+def test_browser_registers_request_stage_same_origin_interceptor() -> None:
+    session = FakeCdpSession()
 
     class FakeContext:
-        def route(self, url: str, handler: object) -> None:
-            registered.append((url, handler))
+        def new_cdp_session(self, page: Page) -> CDPSession:
+            del page
+            return cast(CDPSession, session)
 
     browser_login_module._pace_public_gateway_requests(
         cast(BrowserContext, FakeContext()),
+        cast(Page, object()),
         load_environment("local"),
     )
 
-    assert len(registered) == 1
-    assert registered[0][0] == "**/*"
-    assert callable(registered[0][1])
+    assert callable(session.handlers["Fetch.requestPaused"])
+    assert session.commands == [
+        (
+            "Fetch.enable",
+            {
+                "patterns": [
+                    {
+                        "urlPattern": "https://app.budgetanalyzer.localhost/*",
+                        "requestStage": "Request",
+                    }
+                ]
+            },
+        )
+    ]
+
+
+def test_browser_flow_observations_drop_queries_and_classify_external_hosts() -> None:
+    config = load_environment("local")
+    observer = BrowserFlowObserver(config)
+
+    observer.record_response(
+        cast(
+            Response,
+            FakeBrowserResponse(
+                f"{config.origin}/login/oauth2/code/idp?code=sensitive&state=sensitive"
+            ),
+        )
+    )
+    observer.record_response(
+        cast(
+            Response,
+            FakeBrowserResponse(
+                "https://tenant.us.auth0.com/authorize?state=sensitive",
+            ),
+        )
+    )
+
+    observations = observer.result()
+    assert observations[0].same_origin_path == "/login/oauth2/code/idp"
+    assert observations[0].external_host_classification is None
+    assert observations[1].same_origin_path is None
+    assert observations[1].external_host_classification == "identity-provider"
+    rendered = repr(observations)
+    assert "sensitive" not in rendered
+    assert "tenant.us.auth0.com" not in rendered
+
+
+def test_browser_flow_observer_rejects_an_unpaced_auth_sensitive_response() -> None:
+    config = load_environment("local")
+    observer = BrowserFlowObserver(config)
+    observer.record_response(
+        cast(
+            Response,
+            FakeBrowserResponse(f"{config.origin}/login/oauth2/code/idp?code=sensitive"),
+        )
+    )
+
+    with pytest.raises(BrowserLoginError, match="bypassed shared pacing"):
+        observer.assert_auth_sensitive_responses_were_paced()
+
+
+@pytest.mark.parametrize(
+    "unsafe_path",
+    ["https://attacker.example/path", "//attacker.example/path", "/safe#fragment"],
+)
+def test_expected_browser_return_path_rejects_unsafe_values(unsafe_path: str) -> None:
+    with pytest.raises(BrowserLoginError, match="safe same-origin path"):
+        browser_login_module._validate_expected_return_path(unsafe_path)
 
 
 def test_browser_acquisition_logs_in_only_requested_user() -> None:
@@ -224,6 +320,32 @@ def test_supplied_sessions_load_primary_and_secondary_independently() -> None:
 
     assert primary == Session(cookie_name="BA_SESSION", cookie_value="primary-cookie")
     assert secondary == Session(cookie_name="BA_SESSION", cookie_value="secondary-cookie")
+
+
+def test_isolated_lifecycle_rejects_supplied_session_mode() -> None:
+    config = with_session_mode(load_environment("local"), "supplied_sessions")
+
+    with pytest.raises(AuthConfigurationError, match="cannot create a test-owned session"):
+        load_existing_browser_credentials(config, "primary", environ={})
+
+
+def test_isolated_lifecycle_loads_only_an_existing_local_identity(tmp_path: Path) -> None:
+    credential_path = tmp_path / ".env.local"
+    credential_path.write_text(
+        "BA_PRIMARY_TEST_USERNAME=existing@test.com\n"
+        "BA_PRIMARY_TEST_PASSWORD=existing-password\n"
+        "BA_PRIMARY_TEST_ACCOUNT_STATE=complete\n",
+        encoding="utf-8",
+    )
+
+    credentials = load_existing_browser_credentials(
+        load_environment("local"),
+        "primary",
+        environ={},
+        credential_path=credential_path,
+    )
+
+    assert credentials == BrowserLoginCredentials("existing@test.com", "existing-password")
 
 
 def test_authorization_sessions_must_be_distinct() -> None:
@@ -356,6 +478,23 @@ def test_status_failure_context_redacts_sensitive_response_values() -> None:
     assert "secret-payload" not in message
     assert "ba-api-test-sensitive@test.com" not in message
     assert "[REDACTED]" in message
+
+
+def test_oauth_diagnostics_redact_query_values_and_location_header() -> None:
+    url = (
+        "https://app.example/login/oauth2/code/idp?code=secret-code&state=secret-state"
+        "&returnUrl=%2Fsettings"
+    )
+
+    redacted_url = _redact_url(url)
+    redacted_headers = _redact_headers(
+        httpx.Headers({"location": "https://tenant.auth0.com/authorize?state=secret-state"})
+    )
+
+    assert "secret-code" not in redacted_url
+    assert "secret-state" not in redacted_url
+    assert "returnUrl=%2Fsettings" in redacted_url
+    assert redacted_headers["location"] == "[REDACTED]"
 
 
 def test_oversized_json_is_redacted_before_artifact_and_failure_context_truncation(

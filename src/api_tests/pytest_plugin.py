@@ -170,6 +170,11 @@ def session_gateway_openapi_snapshot() -> OpenApiDocument:
 
 
 @pytest.fixture(scope="session")
+def request_log_path(pytestconfig: pytest.Config) -> Path | None:
+    return _request_log_path(pytestconfig)
+
+
+@pytest.fixture(scope="session")
 def primary_session(env_config: EnvironmentConfig) -> Session:
     try:
         return acquire_session(env_config, "primary")
@@ -204,11 +209,11 @@ def distinct_user_sessions(
 def gateway_client(
     primary_session: Session,
     env_config: EnvironmentConfig,
-    pytestconfig: pytest.Config,
+    request_log_path: Path | None,
 ) -> Generator[GatewayClient, None, None]:
     with GatewayClient(
         env_config,
-        artifact_path=_request_log_path(pytestconfig),
+        artifact_path=request_log_path,
         session=primary_session,
     ) as client:
         yield client
@@ -218,11 +223,11 @@ def gateway_client(
 def secondary_gateway_client(
     secondary_session: Session,
     env_config: EnvironmentConfig,
-    pytestconfig: pytest.Config,
+    request_log_path: Path | None,
 ) -> Generator[GatewayClient, None, None]:
     with GatewayClient(
         env_config,
-        artifact_path=_request_log_path(pytestconfig),
+        artifact_path=request_log_path,
         session=secondary_session,
     ) as client:
         yield client
@@ -231,16 +236,16 @@ def secondary_gateway_client(
 @pytest.fixture(scope="session")
 def unauthenticated_gateway_client(
     env_config: EnvironmentConfig,
-    pytestconfig: pytest.Config,
+    request_log_path: Path | None,
 ) -> Generator[GatewayClient, None, None]:
-    with GatewayClient(env_config, artifact_path=_request_log_path(pytestconfig)) as client:
+    with GatewayClient(env_config, artifact_path=request_log_path) as client:
         yield client
 
 
 @pytest.fixture
 def invalid_session_gateway_client(
     env_config: EnvironmentConfig,
-    pytestconfig: pytest.Config,
+    request_log_path: Path | None,
 ) -> Generator[GatewayClient, None, None]:
     invalid_session = Session(
         cookie_name=env_config.session_cookie_name,
@@ -248,7 +253,7 @@ def invalid_session_gateway_client(
     )
     with GatewayClient(
         env_config,
-        artifact_path=_request_log_path(pytestconfig),
+        artifact_path=request_log_path,
         session=invalid_session,
     ) as client:
         yield client

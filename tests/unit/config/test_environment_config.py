@@ -11,6 +11,8 @@ def test_committed_environment_config_loads(environment_name: str) -> None:
     config = load_environment(environment_name)
 
     assert config.name == environment_name
+    assert config.browser_auth_contract.callback_path == "/login/oauth2/code/idp"
+    assert config.browser_auth_contract.session_cookie_same_site == "Strict"
     if config.environment_type == "production":
         assert config.allow_mutation is False
         assert config.allow_destructive is False

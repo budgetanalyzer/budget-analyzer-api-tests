@@ -32,7 +32,9 @@ from api_tests.openapi import (
 )
 from api_tests.session_gateway_inventory import (
     SessionGatewayCaseCoverage,
+    build_session_gateway_coverage_report,
     load_session_gateway_inventory,
+    session_gateway_coverage_lines,
     validate_session_gateway_contract,
     validate_session_gateway_inventory,
     write_session_gateway_coverage_artifact,
@@ -91,10 +93,12 @@ def _run_coverage_command(
     try:
         coverage = build_coverage(env_name=env_name, source=source)
         session_gateway_coverage = build_session_gateway_coverage()
-        write_coverage_artifact(output_path, coverage)
-        write_session_gateway_coverage_artifact(
-            session_gateway_output_path, session_gateway_coverage
+        session_gateway_report = build_session_gateway_coverage_report(
+            (row for row in coverage if row.contract == "session_gateway"),
+            session_gateway_coverage,
         )
+        write_coverage_artifact(output_path, coverage)
+        write_session_gateway_coverage_artifact(session_gateway_output_path, session_gateway_report)
     except (FileNotFoundError, ValueError, ValidationError, httpx.RequestError) as exc:
         print(f"OpenAPI coverage failed: {exc}", file=sys.stderr)
         return 1
@@ -107,21 +111,21 @@ def _run_coverage_command(
     print(f"missing: {len(missing)}")
     print(f"placeholder: {len(placeholders)}")
     print(f"deferred_admin: {sum(1 for operation in coverage if operation.deferred_admin)}")
-    print(f"session_gateway_cases: {len(session_gateway_coverage)}")
-    print(
-        "session_gateway_deferred: "
-        f"{sum(1 for case in session_gateway_coverage if case.status == 'deferred')}"
-    )
-    print(
-        "session_gateway_untestable: "
-        f"{sum(1 for case in session_gateway_coverage if case.status == 'untestable')}"
-    )
+    for line in session_gateway_coverage_lines(session_gateway_report):
+        print(line)
 
     if missing:
         print(f"missing OpenAPI markers: {', '.join(missing)}", file=sys.stderr)
         return 1
     if placeholders:
         print(f"placeholder OpenAPI coverage remains: {', '.join(placeholders)}", file=sys.stderr)
+        return 1
+    uncovered_cases = session_gateway_report.claims.uncovered_executable_case_ids
+    if uncovered_cases:
+        print(
+            "Session Gateway executable cases missing markers: " + ", ".join(uncovered_cases),
+            file=sys.stderr,
+        )
         return 1
     return 0
 

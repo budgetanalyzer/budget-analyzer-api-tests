@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from api_tests import local_runner
+from api_tests.coverage import OperationCoverage
 
 
 @pytest.mark.parametrize("argument", ["--env", "--env=production", "--env=local"])
@@ -79,3 +80,45 @@ def test_runner_without_arguments_uses_full_validation(
 
     assert local_runner.main([]) == 9
     assert observed[0][1] == artifact_dir
+
+
+def test_unified_coverage_summary_excludes_session_gateway_operations() -> None:
+    coverage = (
+        OperationCoverage(
+            contract="unified",
+            operation_id="covered",
+            method="GET",
+            path="/covered",
+            source="snapshot",
+            deferred_admin=False,
+            marker_count=1,
+            placeholder_marker_count=0,
+            status="covered",
+        ),
+        OperationCoverage(
+            contract="unified",
+            operation_id="deferred",
+            method="GET",
+            path="/deferred",
+            source="snapshot",
+            deferred_admin=True,
+            marker_count=0,
+            placeholder_marker_count=0,
+            status="deferred",
+        ),
+        OperationCoverage(
+            contract="session_gateway",
+            operation_id="logout",
+            method="GET",
+            path="/logout",
+            source="snapshot",
+            deferred_admin=False,
+            marker_count=1,
+            placeholder_marker_count=0,
+            status="covered",
+        ),
+    )
+
+    assert local_runner._unified_coverage_summary(coverage) == (
+        "Unified OpenAPI operation coverage passed: 2 operations (1 covered, 1 deferred admin)."
+    )

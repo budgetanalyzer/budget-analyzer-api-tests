@@ -95,6 +95,11 @@ replace missing prerequisites with test-harness workarounds.
 - Do not broaden production permissions to reach coverage targets.
 - Keep admin/global operations deferred until a separate admin identity,
   cleanup, and global-state safety plan exists.
+- Keep mesh-internal Session Gateway behavior classified as untestable by this
+  public harness. Do not add pod-specific requests, forge or delegate workload
+  identity, or imply that a trusted service-to-service runner is planned. An
+  optional future admin deactivation scenario may prove end-to-end revocation,
+  but it must not reclassify the internal hop.
 - Do not add generic cleanup callbacks or janitors. Use the pytest session's
   run id and resources created by the current test as the user-data boundary.
 
@@ -154,11 +159,22 @@ replace missing prerequisites with test-harness workarounds.
   This command writes `artifacts/openapi-coverage.json` and
   `artifacts/session-gateway-coverage.json`. It fails for unrecognized or
   malformed namespaced markers, missing or placeholder-only non-deferred
-  operation coverage, stale deferred entries, incomplete route/case
-  classifications, and Session Gateway inventory/snapshot conflicts. Keep
-  snapshot refresh separate and intentional. The normal no-argument
+  operation coverage, executable Session Gateway cases without markers, stale
+  deferred entries, incomplete route/case classifications, and Session Gateway
+  inventory/snapshot conflicts. The Session Gateway artifact and CLI report
+  operation and scenario classifications separately, including counts and ids.
+  Keep snapshot refresh separate and intentional. The normal no-argument
   `./run-tests` workflow performs coverage and unified live structural drift
   checks itself; do not require operators to invoke either tool first.
+
+  The reviewed Session Gateway baseline is 3 covered filtered OpenAPI
+  operations and 34 scenarios: 14 covered, 11 deferred, and 9 untestable across
+  14 inbound routes. Treat `schemas/session-gateway-inbound-inventory.yaml` and
+  the generated artifact as the source of truth; update this summary in the
+  same change when classifications change. Say “all known inbound routes
+  inventoried” and “all currently executable public cases covered.” Never claim
+  full Session Gateway behavior coverage while deferred or untestable cases
+  remain.
 
 - Live API tests require the selected environment, runtime-provided HTTPS
   trust, Playwright system dependencies, and network access. Exact-local tests
