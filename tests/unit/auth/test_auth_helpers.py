@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
@@ -9,6 +10,7 @@ from typing import Self, TypedDict, cast
 import httpx
 import pytest
 from playwright.sync_api import BrowserContext, CDPSession, Page, Response
+from playwright.sync_api import Error as PlaywrightError
 
 import api_tests.browser_login as browser_login_module
 from api_tests.assertions import assert_status
@@ -394,6 +396,32 @@ def test_secret_value_representations_are_redacted() -> None:
     assert "secret-password" not in rendered
     assert "secret-cookie" not in rendered
     assert "BA_SESSION" in rendered
+
+
+def test_browser_login_failure_traceback_does_not_expose_original_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    credentials = BrowserLoginCredentials(username="user@example.test", password="secret-password")
+    code = "secret-code"
+    state = "secret-state"
+    diagnostic = (
+        f"navigation failed: https://app.example/login/oauth2/code/idp?code={code}&state={state}"
+        f" username={credentials.username} password={credentials.password}"
+    )
+
+    def fail_playwright() -> None:
+        raise PlaywrightError(diagnostic)
+
+    monkeypatch.setattr(browser_login_module, "sync_playwright", fail_playwright)
+
+    with pytest.raises(BrowserLoginError, match="browser login failed") as exc_info:
+        browser_login_module.login_flow_with_browser(load_environment("local"), credentials)
+
+    rendered = "".join(traceback.format_exception(exc_info.value))
+    assert "browser login failed" in rendered
+    assert "[REDACTED]" in rendered
+    for secret in (credentials.username, credentials.password, code, state):
+        assert secret not in rendered
 
 
 def test_environment_serialization_contains_names_not_secret_values(

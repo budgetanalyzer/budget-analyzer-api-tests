@@ -202,6 +202,8 @@ HTTP method, response status, same-origin path, or an external host
 classification. Callback query values, credentials, provider tokens, and
 cookies cannot enter their representations. HTTP request artifacts additionally
 redact OAuth query values and every redirect `Location` header.
+Browser login failures report redacted diagnostics and suppress the original
+Playwright exception chain so tracebacks and JUnit reports preserve that redaction.
 
 Chromium request-stage interception pauses selected-origin browser requests
 before network dispatch and reserves them from the same process-wide pacer as

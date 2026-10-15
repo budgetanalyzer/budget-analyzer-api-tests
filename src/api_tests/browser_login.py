@@ -204,7 +204,7 @@ def login_flow_with_browser(
             _cleanup_failed_browser_session(config, session)
         raise BrowserLoginError(
             f"browser login failed: {_redact_browser_error(str(exc), credentials)}"
-        ) from exc
+        ) from None
     except BrowserLoginError:
         if session is not None:
             _cleanup_failed_browser_session(config, session)
