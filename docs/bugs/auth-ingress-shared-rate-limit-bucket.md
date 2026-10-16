@@ -1,8 +1,9 @@
 # Shared Auth-Ingress Rate-Limit Bucket
 
-- **Status:** Open
+- **Status:** Resolved
 - **Severity:** High availability risk
 - **Discovered:** 2026-10-14
+- **Resolved:** 2026-10-15
 - **Owning area:** Orchestration / Istio ingress
 - **Observed by:** Budget Analyzer public black-box API tests
 
@@ -19,6 +20,51 @@ load balancing.
 
 The issue is an availability and fairness defect. It is not an authentication bypass or direct
 data-confidentiality defect.
+
+## Resolution
+
+Istio ingress now applies four independent `(rate_limit_policy, remote_address)` local descriptor
+buckets for login initiation, login completion, session operations, and API requests. The policies
+refill incrementally each second, are inserted before `ext_authz`, and emit distinct
+`x-local-rate-limit-policy` markers. NGINX's blanket API limiter was removed after the ingress
+replacement passed focused verification. The canonical capacities, path boundaries, identity
+model, and operational limitations are in the orchestration
+[security architecture](../../../orchestration/docs/architecture/security-architecture.md#ingress-per-client-rate-limiting);
+the [executable policy](../../../orchestration/kubernetes/istio/ingress-rate-limit.yaml) owns the
+exact matchers and capacities.
+
+The accepted semantics are deliberately local to each ingress Envoy process. Client allowances
+are independent within one proxy, while replicas and proxy restarts create independent fresh
+allowances. If consistent enforcement across replicas becomes necessary, the documented future
+option is Envoy's global filter backed by a shared rate-limit service and shared storage. That
+service, new Redis state, per-user quotas, and a generic policy framework are not part of this fix.
+
+The orchestration
+[isolation proof](../../../orchestration/scripts/smoketest/verify-ingress-rate-limits.sh) owns the
+live behavioral checks, with a focused
+[configuration verifier](../../../orchestration/scripts/smoketest/verify-ingress-rate-limit-config.sh).
+On 2026-10-15, the final orchestration verifier passed 28 of 28 checks, including two-client
+isolation, forged forwarding-header resistance, independent policy buckets, callback
+availability, incremental refill, and deterministic two-replica isolation.
+
+The public harness now shares four conservative fixed-rate pacers across all `GatewayClient`
+instances and same-origin browser requests in one process. It does not model Envoy bursts, wait on
+first use, or add callback-timeout padding. Independent processes and external callers behind the
+same public IP remain outside its coordination boundary.
+
+The exact focused command
+`./run-tests tests/api/session_gateway tests/api/currencies/test_currencies.py` passed twice
+consecutively without a cooldown: 18 passed in 39.04 seconds, then 18 passed in 38.41 seconds.
+Both runs exercised primary and secondary authentication, OAuth authorization and callback,
+session/user reads, heartbeat, logout, routing boundaries, and an authenticated currency API
+regression. Neither run skipped a scenario, returned an unexpected `429`, or recorded a local
+rate-limit rejection marker. Unit tests (239 passed), local and production-safe API collection,
+coverage checks, Ruff format/lint, and strict mypy also passed. These results and run artifacts
+contain no credentials, cookies, OAuth codes, or state values.
+
+The remaining sections preserve the original pre-remediation evidence and design handoff. Their
+present-tense descriptions refer to the defective policy observed on 2026-10-14, not the resolved
+deployment.
 
 ## Current Request Paths
 

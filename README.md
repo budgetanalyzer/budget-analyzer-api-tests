@@ -60,32 +60,33 @@ network access, and Playwright system libraries. The repository reports missing
 runtime prerequisites but does not administer the deployment, install trust
 anchors, or weaken certificate verification.
 
-Public ingress has two independent rate policies. NGINX owns one per-client-IP
-bucket shared by rate-limited API routes: 10 requests/second with `burst=50` and
-`nodelay`. Every `GatewayClient` in a test process shares a monotonic,
-fixed-interval pacer capped at 8 requests/second, and every same-origin browser
-request uses that general pacer too. Browser traffic is paused at Chromium's
-request stage for the selected origin before it reaches the network. This
-includes the cross-origin identity-provider redirect back to
-`/login/oauth2/code/idp`, which ordinary Playwright route interception does not
-observe as a second redirect-chain request.
+Istio ingress owns four independent per-client, per-ingress-instance policies:
+login initiation at 1 request/second, login completion at 2 requests/second,
+session operations at 5 requests/second, and API requests at 10 requests/second.
+The canonical path boundaries, bursts, browser-concurrency assumptions, and
+local replica semantics are in the orchestration
+[security architecture](../orchestration/docs/architecture/security-architecture.md#ingress-per-client-rate-limiting),
+with executable matchers in
+`../orchestration/kubernetes/istio/ingress-rate-limit.yaml`. NGINX no longer
+owns a blanket API limiter.
 
-Istio separately owns a discrete 10-token bucket that refills all 10 tokens
-every 60 seconds for exact `/login` and for `/logout`, `/auth`, `/oauth2`, and
-`/login/oauth2` with their descendants. Matching `GatewayClient` and same-origin
-browser requests share one process budget in addition to general pacing. The
-first matching request in each process waits one full refill interval, so a
-fresh run does not assume that an immediately preceding process left ingress
-tokens available. Exhausting 10 local reservations causes another wait until
-the next discrete refill. Browser timeout accounting includes one such planned
-wait; external identity-provider requests consume neither local-ingress budget.
+The harness uses four fixed-interval paces below those sustained allowances:
+0.8, 1.6, 4, and 8 starts per second respectively. It does not reproduce
+Envoy's burst buckets. Every `GatewayClient` and same-origin browser request in
+one process shares the applicable policy pacer, regardless of account, cookie,
+or authentication state. Bare `/login`, its query variants, and unrelated
+same-origin assets match no rate policy. External identity-provider requests
+also consume no application-ingress reservation. Browser traffic is paused at
+Chromium's request stage, including the provider redirect back to
+`/login/oauth2/code/idp`, before a classified request reaches the network.
+Separate test processes and external callers behind the same public IP are not
+coordinated by this in-memory pacing.
 
 Individual tests do not sleep or implement their own throttling. HTTP `429` is
-returned directly and never retried. An auth-edge response carrying
-`x-local-rate-limit: auth-sensitive` is either a shared-pacing regression or
-evidence of concurrent traffic outside this harness; it is not a transient test
-response to hide with a retry. The conservative startup wait means selectors
-that touch Session Gateway take at least one additional minute per process.
+returned directly and never retried. A response carrying
+`x-local-rate-limit-policy` is either a shared-pacing regression or evidence of
+concurrent traffic outside this harness; it is not a transient response to hide
+with a retry. There is no first-use cooldown or callback-timeout padding.
 
 The first test that needs each normal user generates its credentials and signs
 up through the public hosted flow; no credential editing or separate bootstrap
@@ -331,7 +332,7 @@ Browser observations retain only method, response status, same-origin path, or
 an external host classification. Request artifacts redact redirect `Location`
 headers and OAuth query values such as code, state, nonce, client id, and PKCE
 challenge. They never record passwords, provider tokens, or session cookies.
-Each completed same-origin auth-sensitive browser response must also match a
+Each completed same-origin rate-limited browser response must also match a
 request-stage pacing reservation; an unmatched callback fails the flow as a
 pacing regression before later requests can exhaust ingress capacity.
 
@@ -487,8 +488,8 @@ or broadly removes prior test data.
 
 Related create/read/update/delete assertions are grouped into lifecycle
 scenarios, and transaction import scenarios share one run-owned statement
-format. Together with centralized 8-requests/second gateway pacing, this keeps
-the full suite within the public ingress contract without retries,
+format. Together with centralized per-policy gateway pacing, this keeps the
+full suite within the public ingress contract without retries,
 environment-specific exceptions, or weakened assertions.
 
 ## Markers And Focused Regression Runs

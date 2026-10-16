@@ -10,8 +10,8 @@ from playwright.sync_api import BrowserContext, CDPSession, Page, Response, sync
 from playwright.sync_api import Error as PlaywrightError
 
 from api_tests.client import (
-    AUTH_SENSITIVE_RATE_POLICY,
     GatewayClient,
+    classify_public_rate_policy,
     is_same_origin,
     request_path_from_url,
 )
@@ -107,17 +107,17 @@ class BrowserFlowObserver:
     def result(self) -> tuple[BrowserFlowObservation, ...]:
         return tuple(self._observations)
 
-    def assert_auth_sensitive_responses_were_paced(self) -> None:
+    def assert_rate_limited_responses_were_paced(self) -> None:
         paced_paths = list(self._paced_same_origin_paths)
         for observation in self._observations:
             path = observation.same_origin_path
-            if path is None or not AUTH_SENSITIVE_RATE_POLICY.matches(path):
+            if path is None or classify_public_rate_policy(path) is None:
                 continue
             try:
                 paced_paths.remove(path)
             except ValueError as exc:
                 raise BrowserLoginError(
-                    f"same-origin auth-sensitive browser response bypassed shared pacing: {path}"
+                    f"same-origin rate-limited browser response bypassed shared pacing: {path}"
                 ) from exc
 
 
@@ -180,7 +180,7 @@ def login_flow_with_browser(
                         )
                     )
                     observations = observer.result()
-                    observer.assert_auth_sensitive_responses_were_paced()
+                    observer.assert_rate_limited_responses_were_paced()
                     final_path = _same_origin_page_path(page.url, config)
                     if final_path != expected_path:
                         raise BrowserLoginError(
@@ -493,8 +493,7 @@ def _external_host_classification(
 
 
 def _browser_timeout_ms(config: EnvironmentConfig) -> int:
-    pacing_allowance_seconds = AUTH_SENSITIVE_RATE_POLICY.fill_interval_seconds + 1.0
-    return int((config.timeouts.eventually_seconds + pacing_allowance_seconds) * 1000)
+    return int(config.timeouts.eventually_seconds * 1000)
 
 
 def _cleanup_failed_browser_session(config: EnvironmentConfig, session: Session) -> None:

@@ -70,15 +70,14 @@ replace missing prerequisites with test-harness workarounds.
   Redis, RabbitMQ, Kubernetes, service-DNS, or service-internal setup paths.
 - Compose API requests as `{origin}{api_base_path}{openapi path}` through
   `GatewayClient`.
-- Treat both public rate policies as fixed. Rate-limited NGINX API routes share
-  one per-client-IP bucket at 10 requests/second with `burst=50` and `nodelay`;
-  pace all same-origin harness and browser requests at no more than 8 starts per
-  second. Istio separately applies a non-continuous 10-token/60-second bucket to
-  `/login`, `/logout`, `/auth`, `/oauth2`, and `/login/oauth2` route families.
-  Reserve matching `GatewayClient` and same-origin browser requests from one
-  process-wide auth-sensitive budget, including a conservative first-use wait.
-  Read `../orchestration/kubernetes/istio/ingress-rate-limit.yaml` before
-  changing pacing constants or path matching.
+- Treat Istio ingress as the sole owner of the four public per-client rate
+  policies. Share each applicable pacer across all `GatewayClient` instances and
+  same-origin browser requests in one process; do not partition pacing by
+  account or cookie. Do not classify bare `/login` or identity-provider origins
+  as application policy traffic. Read
+  `../orchestration/docs/architecture/security-architecture.md` and
+  `../orchestration/kubernetes/istio/ingress-rate-limit.yaml` before changing
+  pacing constants or path matching.
 - Treat each namespaced OpenAPI document and the Session Gateway inbound-route
   inventory as executable coverage manifests.
 - Keep environment YAML declarative and non-secret. Read secrets only from
@@ -318,12 +317,14 @@ Use pytest for tests.
 
 - Use `GatewayClient` for API requests so base origin, API prefix, TLS policy,
   timeout, cookies, request logging, and public-gateway pacing stay centralized.
-- Preserve both the shared 8-requests/second general pace and the discrete
-  auth-sensitive 10-token/60-second pace as deliberate compliance with public
-  ingress. Do not retry HTTP 429 responses, add test-level sleeps, bypass
-  ingress, forge client identity headers, or add environment-specific
-  exceptions. Treat `x-local-rate-limit: auth-sensitive` as a pacing regression
-  or an external concurrent-traffic prerequisite failure.
+- Preserve the four independent conservative paces for login initiation, login
+  completion, session operations, and API requests as deliberate compliance
+  with public ingress. Do not retry HTTP 429 responses, add test-level sleeps,
+  bypass ingress, forge client identity headers, or add environment-specific
+  exceptions. Treat any `x-local-rate-limit-policy` rejection as a pacing
+  regression or an external concurrent-traffic prerequisite failure. Remember
+  that independent harness processes and external callers sharing the same
+  public IP are not coordinated by the in-process pacers.
 - Preserve HTTPS certificate verification for live tests in every environment,
   including local Tilt targets. Do not add insecure runner flags, environment
   switches, `verify=False`, Playwright `ignore_https_errors`, or equivalent

@@ -4,6 +4,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Final, Self
@@ -15,36 +16,63 @@ from api_tests.config import EnvironmentConfig
 from api_tests.logging import request_response_hooks
 from api_tests.session import Session
 
-MAX_GATEWAY_REQUESTS_PER_SECOND: Final = 8.0
-AUTH_SENSITIVE_MAX_TOKENS: Final = 10
-AUTH_SENSITIVE_TOKENS_PER_FILL: Final = 10
-AUTH_SENSITIVE_FILL_INTERVAL_SECONDS: Final = 60.0
+LOGIN_INITIATION_REQUESTS_PER_SECOND: Final = 0.8
+LOGIN_COMPLETION_REQUESTS_PER_SECOND: Final = 1.6
+SESSION_OPERATIONS_REQUESTS_PER_SECOND: Final = 4.0
+API_REQUESTS_PER_SECOND: Final = 8.0
+
+
+class PublicRatePolicyName(StrEnum):
+    LOGIN_INITIATION = "login-initiation"
+    LOGIN_COMPLETION = "login-completion"
+    SESSION_OPERATIONS = "session-operations"
+    API_REQUESTS = "api-requests"
 
 
 @dataclass(frozen=True)
-class AuthSensitiveRatePolicy:
-    """Public Istio descriptor matched before Session Gateway routing."""
+class PublicRatePolicy:
+    """One public Istio per-client path class and its conservative harness pace."""
 
-    exact_paths: tuple[str, ...]
+    name: PublicRatePolicyName
     path_families: tuple[str, ...]
-    max_tokens: int
-    tokens_per_fill: int
-    fill_interval_seconds: float
+    requests_per_second: float
 
     def matches(self, request_target: str) -> bool:
         path = urlsplit(request_target).path
-        if path in self.exact_paths:
-            return True
         return any(path == family or path.startswith(f"{family}/") for family in self.path_families)
 
 
-AUTH_SENSITIVE_RATE_POLICY: Final = AuthSensitiveRatePolicy(
-    exact_paths=("/login",),
-    path_families=("/logout", "/auth", "/oauth2", "/login/oauth2"),
-    max_tokens=AUTH_SENSITIVE_MAX_TOKENS,
-    tokens_per_fill=AUTH_SENSITIVE_TOKENS_PER_FILL,
-    fill_interval_seconds=AUTH_SENSITIVE_FILL_INTERVAL_SECONDS,
+LOGIN_INITIATION_RATE_POLICY: Final = PublicRatePolicy(
+    name=PublicRatePolicyName.LOGIN_INITIATION,
+    path_families=("/oauth2",),
+    requests_per_second=LOGIN_INITIATION_REQUESTS_PER_SECOND,
 )
+LOGIN_COMPLETION_RATE_POLICY: Final = PublicRatePolicy(
+    name=PublicRatePolicyName.LOGIN_COMPLETION,
+    path_families=("/login/oauth2",),
+    requests_per_second=LOGIN_COMPLETION_REQUESTS_PER_SECOND,
+)
+SESSION_OPERATIONS_RATE_POLICY: Final = PublicRatePolicy(
+    name=PublicRatePolicyName.SESSION_OPERATIONS,
+    path_families=("/auth", "/logout"),
+    requests_per_second=SESSION_OPERATIONS_REQUESTS_PER_SECOND,
+)
+API_RATE_POLICY: Final = PublicRatePolicy(
+    name=PublicRatePolicyName.API_REQUESTS,
+    path_families=("/api",),
+    requests_per_second=API_REQUESTS_PER_SECOND,
+)
+PUBLIC_RATE_POLICIES: Final = (
+    LOGIN_INITIATION_RATE_POLICY,
+    LOGIN_COMPLETION_RATE_POLICY,
+    SESSION_OPERATIONS_RATE_POLICY,
+    API_RATE_POLICY,
+)
+
+
+def classify_public_rate_policy(request_target: str) -> PublicRatePolicy | None:
+    """Return the single public ingress policy applicable to a request target."""
+    return next((policy for policy in PUBLIC_RATE_POLICIES if policy.matches(request_target)), None)
 
 
 class RequestPacer:
@@ -76,91 +104,41 @@ class RequestPacer:
             self._next_request_at = self._monotonic() + self._minimum_interval
 
 
-class DiscreteTokenBucketPacer:
-    """Reserve from a fixed-capacity bucket with non-continuous refills."""
-
-    def __init__(
-        self,
-        *,
-        max_tokens: int,
-        tokens_per_fill: int,
-        fill_interval_seconds: float,
-        conservative_initial_wait: bool,
-        monotonic: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], None] = time.sleep,
-    ) -> None:
-        if max_tokens <= 0:
-            raise ValueError("max_tokens must be greater than zero")
-        if tokens_per_fill <= 0:
-            raise ValueError("tokens_per_fill must be greater than zero")
-        if fill_interval_seconds <= 0:
-            raise ValueError("fill_interval_seconds must be greater than zero")
-
-        self._max_tokens = max_tokens
-        self._tokens_per_fill = tokens_per_fill
-        self._fill_interval_seconds = fill_interval_seconds
-        self._tokens = 0 if conservative_initial_wait else max_tokens
-        self._monotonic = monotonic
-        self._sleep = sleep
-        self._next_fill_at: float | None = None
-        self._lock = threading.Lock()
-
-    def wait(self) -> None:
-        with self._lock:
-            now = self._monotonic()
-            if self._next_fill_at is None:
-                self._next_fill_at = now + self._fill_interval_seconds
-
-            self._refill(now)
-            while self._tokens == 0:
-                delay = self._next_fill_at - now
-                if delay > 0:
-                    self._sleep(delay)
-                now = self._monotonic()
-                self._refill(now)
-
-            self._tokens -= 1
-
-    def _refill(self, now: float) -> None:
-        if self._next_fill_at is None or now < self._next_fill_at:
-            return
-
-        elapsed_fill_intervals = int((now - self._next_fill_at) // self._fill_interval_seconds) + 1
-        self._tokens = min(
-            self._max_tokens,
-            self._tokens + (elapsed_fill_intervals * self._tokens_per_fill),
-        )
-        self._next_fill_at += elapsed_fill_intervals * self._fill_interval_seconds
-
-
 class GatewayRequestPacing:
-    """Apply all public-ingress reservations to one request start."""
+    """Share four independent public-ingress request paces process-wide."""
 
     def __init__(
         self,
         *,
-        gateway_pacer: RequestPacer,
-        auth_sensitive_pacer: DiscreteTokenBucketPacer,
-        auth_sensitive_policy: AuthSensitiveRatePolicy = AUTH_SENSITIVE_RATE_POLICY,
+        login_initiation_pacer: RequestPacer,
+        login_completion_pacer: RequestPacer,
+        session_operations_pacer: RequestPacer,
+        api_requests_pacer: RequestPacer,
     ) -> None:
-        self._gateway_pacer = gateway_pacer
-        self._auth_sensitive_pacer = auth_sensitive_pacer
-        self._auth_sensitive_policy = auth_sensitive_policy
+        self._pacers = {
+            PublicRatePolicyName.LOGIN_INITIATION: login_initiation_pacer,
+            PublicRatePolicyName.LOGIN_COMPLETION: login_completion_pacer,
+            PublicRatePolicyName.SESSION_OPERATIONS: session_operations_pacer,
+            PublicRatePolicyName.API_REQUESTS: api_requests_pacer,
+        }
 
     def wait(self, request_target: str) -> None:
-        if self._auth_sensitive_policy.matches(request_target):
-            self._auth_sensitive_pacer.wait()
-        self._gateway_pacer.wait()
+        policy = classify_public_rate_policy(request_target)
+        if policy is not None:
+            self._pacers[policy.name].wait()
 
 
 _SHARED_GATEWAY_REQUEST_PACING = GatewayRequestPacing(
-    gateway_pacer=RequestPacer(requests_per_second=MAX_GATEWAY_REQUESTS_PER_SECOND),
-    auth_sensitive_pacer=DiscreteTokenBucketPacer(
-        max_tokens=AUTH_SENSITIVE_RATE_POLICY.max_tokens,
-        tokens_per_fill=AUTH_SENSITIVE_RATE_POLICY.tokens_per_fill,
-        fill_interval_seconds=AUTH_SENSITIVE_RATE_POLICY.fill_interval_seconds,
-        conservative_initial_wait=True,
+    login_initiation_pacer=RequestPacer(
+        requests_per_second=LOGIN_INITIATION_RATE_POLICY.requests_per_second
     ),
+    login_completion_pacer=RequestPacer(
+        requests_per_second=LOGIN_COMPLETION_RATE_POLICY.requests_per_second
+    ),
+    session_operations_pacer=RequestPacer(
+        requests_per_second=SESSION_OPERATIONS_RATE_POLICY.requests_per_second
+    ),
+    api_requests_pacer=RequestPacer(requests_per_second=API_RATE_POLICY.requests_per_second),
 )
 
 

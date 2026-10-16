@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import httpx
@@ -8,11 +7,15 @@ import pytest
 
 import api_tests.client as client_module
 from api_tests.client import (
-    AUTH_SENSITIVE_RATE_POLICY,
-    DiscreteTokenBucketPacer,
+    API_RATE_POLICY,
+    LOGIN_COMPLETION_RATE_POLICY,
+    LOGIN_INITIATION_RATE_POLICY,
+    SESSION_OPERATIONS_RATE_POLICY,
     GatewayClient,
     GatewayRequestPacing,
+    PublicRatePolicyName,
     RequestPacer,
+    classify_public_rate_policy,
     is_same_origin,
 )
 from api_tests.config import load_environment
@@ -34,20 +37,25 @@ class FakeTiming:
 
 def _request_pacing(
     timing: FakeTiming,
-    *,
-    conservative_initial_wait: bool = True,
 ) -> GatewayRequestPacing:
     return GatewayRequestPacing(
-        gateway_pacer=RequestPacer(
-            requests_per_second=8,
+        login_initiation_pacer=RequestPacer(
+            requests_per_second=LOGIN_INITIATION_RATE_POLICY.requests_per_second,
             monotonic=timing.monotonic,
             sleep=timing.sleep,
         ),
-        auth_sensitive_pacer=DiscreteTokenBucketPacer(
-            max_tokens=AUTH_SENSITIVE_RATE_POLICY.max_tokens,
-            tokens_per_fill=AUTH_SENSITIVE_RATE_POLICY.tokens_per_fill,
-            fill_interval_seconds=AUTH_SENSITIVE_RATE_POLICY.fill_interval_seconds,
-            conservative_initial_wait=conservative_initial_wait,
+        login_completion_pacer=RequestPacer(
+            requests_per_second=LOGIN_COMPLETION_RATE_POLICY.requests_per_second,
+            monotonic=timing.monotonic,
+            sleep=timing.sleep,
+        ),
+        session_operations_pacer=RequestPacer(
+            requests_per_second=SESSION_OPERATIONS_RATE_POLICY.requests_per_second,
+            monotonic=timing.monotonic,
+            sleep=timing.sleep,
+        ),
+        api_requests_pacer=RequestPacer(
+            requests_per_second=API_RATE_POLICY.requests_per_second,
             monotonic=timing.monotonic,
             sleep=timing.sleep,
         ),
@@ -91,11 +99,11 @@ def test_non_httpx_gateway_requests_use_shared_pacer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     timing = FakeTiming()
-    pacing = _request_pacing(timing, conservative_initial_wait=False)
+    pacing = _request_pacing(timing)
     monkeypatch.setattr(client_module, "_SHARED_GATEWAY_REQUEST_PACING", pacing)
 
-    GatewayClient.pace_shared_request("/assets/app.js")
     GatewayClient.pace_shared_request("/api/v1/transactions")
+    GatewayClient.pace_shared_request("/api/v1/currencies?base=USD")
 
     assert timing.now == pytest.approx(100.125)
     assert timing.sleeps == pytest.approx([0.125])
@@ -119,41 +127,45 @@ def test_gateway_clients_share_one_default_pacer(
         GatewayClient(config, transport=transport) as primary_client,
         GatewayClient(config, transport=transport) as secondary_client,
     ):
-        for request_number in range(11):
-            client = primary_client if request_number % 2 == 0 else secondary_client
-            client.raw_request("GET", f"/auth/v1/user?request={request_number}")
+        primary_client.raw_request("GET", "/auth/v1/user?client=primary")
+        GatewayClient.pace_shared_request("/auth/v1/session?source=browser")
+        secondary_client.raw_request("GET", "/logout?client=secondary")
 
-    assert request_started_at[:10] == pytest.approx(
-        [160.0 + (request_number * 0.125) for request_number in range(10)]
-    )
-    assert request_started_at[10] == pytest.approx(220.0)
-    assert timing.sleeps == pytest.approx([60.0, *([0.125] * 9), 58.875])
+    assert request_started_at == pytest.approx([100.0, 100.5])
+    assert timing.sleeps == pytest.approx([0.25, 0.25])
 
 
 @pytest.mark.parametrize(
     ("request_target", "expected"),
     [
-        ("/login", True),
-        ("/login?next=%2F", True),
-        ("/login/", False),
-        ("/logout", True),
-        ("/logout/complete?returnTo=%2F", True),
-        ("/auth", True),
-        ("/auth/v1/user?probe=1", True),
-        ("/oauth2", True),
-        ("/oauth2/authorization/idp", True),
-        ("/login/oauth2", True),
-        ("/login/oauth2/code/idp?code=redacted", True),
-        ("/api/v1/transactions", False),
-        ("/api-docs", False),
-        ("/authentication", False),
+        ("/oauth2", PublicRatePolicyName.LOGIN_INITIATION),
+        ("/oauth2/authorization/idp?returnUrl=%2F", PublicRatePolicyName.LOGIN_INITIATION),
+        ("/login/oauth2", PublicRatePolicyName.LOGIN_COMPLETION),
+        ("/login/oauth2/code/idp?code=redacted", PublicRatePolicyName.LOGIN_COMPLETION),
+        ("/auth", PublicRatePolicyName.SESSION_OPERATIONS),
+        ("/auth/v1/user?probe=1", PublicRatePolicyName.SESSION_OPERATIONS),
+        ("/logout", PublicRatePolicyName.SESSION_OPERATIONS),
+        ("/logout/complete?returnTo=%2F", PublicRatePolicyName.SESSION_OPERATIONS),
+        ("/api", PublicRatePolicyName.API_REQUESTS),
+        ("/api/v1/transactions?probe=1", PublicRatePolicyName.API_REQUESTS),
+        ("/login", None),
+        ("/login?next=%2F", None),
+        ("/login/", None),
+        ("/api-docs", None),
+        ("/oauth2ish", None),
+        ("/login/oauth2ish", None),
+        ("/authentication", None),
+        ("/logoutish", None),
+        ("/apiv1", None),
     ],
 )
-def test_auth_sensitive_policy_matches_exact_ingress_path_families(
+def test_request_targets_match_exact_ingress_policy_families(
     request_target: str,
-    expected: bool,
+    expected: PublicRatePolicyName | None,
 ) -> None:
-    assert AUTH_SENSITIVE_RATE_POLICY.matches(request_target) is expected
+    policy = classify_public_rate_policy(request_target)
+
+    assert (policy.name if policy is not None else None) is expected
 
 
 @pytest.mark.parametrize(
@@ -173,67 +185,27 @@ def test_same_origin_classification_excludes_external_identity_provider_urls(
     assert is_same_origin(request_url, "https://app.budgetanalyzer.localhost") is expected
 
 
-def test_auth_sensitive_pacer_waits_on_first_use_and_refills_all_tokens_together() -> None:
+def test_public_policy_pacers_are_independent_and_have_no_first_use_wait() -> None:
     timing = FakeTiming()
-    pacer = DiscreteTokenBucketPacer(
-        max_tokens=10,
-        tokens_per_fill=10,
-        fill_interval_seconds=60,
-        conservative_initial_wait=True,
-        monotonic=timing.monotonic,
-        sleep=timing.sleep,
-    )
+    pacing = _request_pacing(timing)
 
-    for _ in range(10):
-        pacer.wait()
+    for target in (
+        "/api/v1/transactions",
+        "/api/v1/currencies",
+        "/auth/v1/user",
+        "/auth/v1/session",
+        "/login/oauth2/code/idp",
+        "/login/oauth2/code/idp?state=redacted",
+        "/oauth2/authorization/idp",
+        "/oauth2/authorization/idp?returnUrl=%2F",
+    ):
+        pacing.wait(target)
 
-    assert timing.now == pytest.approx(160.0)
-    assert timing.sleeps == pytest.approx([60.0])
-
-    pacer.wait()
-
-    assert timing.now == pytest.approx(220.0)
-    assert timing.sleeps == pytest.approx([60.0, 60.0])
+    assert timing.now == pytest.approx(102.25)
+    assert timing.sleeps == pytest.approx([0.125, 0.25, 0.625, 1.25])
 
 
-def test_independent_consecutive_process_budgets_each_use_conservative_first_wait() -> None:
-    timing = FakeTiming()
-
-    for _ in range(2):
-        pacer = DiscreteTokenBucketPacer(
-            max_tokens=10,
-            tokens_per_fill=10,
-            fill_interval_seconds=60,
-            conservative_initial_wait=True,
-            monotonic=timing.monotonic,
-            sleep=timing.sleep,
-        )
-        pacer.wait()
-
-    assert timing.now == pytest.approx(220.0)
-    assert timing.sleeps == pytest.approx([60.0, 60.0])
-
-
-def test_auth_sensitive_pacer_serializes_concurrent_callers() -> None:
-    timing = FakeTiming()
-    pacer = DiscreteTokenBucketPacer(
-        max_tokens=10,
-        tokens_per_fill=10,
-        fill_interval_seconds=60,
-        conservative_initial_wait=False,
-        monotonic=timing.monotonic,
-        sleep=timing.sleep,
-    )
-
-    with ThreadPoolExecutor(max_workers=11) as executor:
-        completed = list(executor.map(lambda _: pacer.wait(), range(11)))
-
-    assert completed == [None] * 11
-    assert timing.now == pytest.approx(160.0)
-    assert timing.sleeps == pytest.approx([60.0])
-
-
-def test_non_auth_api_requests_do_not_consume_auth_sensitive_capacity() -> None:
+def test_api_requests_do_not_consume_session_operations_pace() -> None:
     config = load_environment("local")
     timing = FakeTiming()
     pacing = _request_pacing(timing)
@@ -247,8 +219,8 @@ def test_non_auth_api_requests_do_not_consume_auth_sensitive_capacity() -> None:
         gateway_client.api_request("GET", "/v1/currencies")
         gateway_client.raw_request("GET", "/auth/v1/user")
 
-    assert timing.now == pytest.approx(160.125)
-    assert timing.sleeps == pytest.approx([0.125, 60.0])
+    assert timing.now == pytest.approx(100.125)
+    assert timing.sleeps == pytest.approx([0.125])
 
 
 def test_gateway_client_returns_429_without_retrying() -> None:
@@ -265,7 +237,7 @@ def test_gateway_client_returns_429_without_retrying() -> None:
     with GatewayClient(
         config,
         transport=httpx.MockTransport(handler),
-        request_pacing=_request_pacing(timing, conservative_initial_wait=False),
+        request_pacing=_request_pacing(timing),
     ) as gateway_client:
         response = gateway_client.api_request("GET", "/v1/transactions")
 
@@ -286,7 +258,7 @@ def test_gateway_client_without_session_sends_no_authentication_headers() -> Non
     with GatewayClient(
         config,
         transport=httpx.MockTransport(handler),
-        request_pacing=_request_pacing(timing, conservative_initial_wait=False),
+        request_pacing=_request_pacing(timing),
     ) as gateway_client:
         gateway_client.raw_request("GET", "/auth/v1/user")
 
