@@ -63,6 +63,7 @@ testpaths = ["tests"]
 addopts = "--strict-config --strict-markers --import-mode=importlib"
 markers = [
   "openapi(operation_id, contract='unified'): associate a test with a namespaced OpenAPI operation id",
+  "forbidden_response(operation_id): provide executable unified-contract HTTP 403 evidence",
   "session_gateway_case(case_id): associate a test with an exact Session Gateway inventory case",
   "gateway_routing: test a public gateway route or method boundary outside OpenAPI operations",
   "placeholder: marker-only placeholder for planned endpoint coverage",
@@ -74,4 +75,7 @@ markers = [
   "production_safe: test is allowed to run against production defaults",
   "auth_smoke: focused live browser/session integration smoke test",
   "secondary_auth_smoke: focused live secondary-browser/session integration smoke test",
+  "admin: scenarios that require the validated reusable admin identity",
+  "admin_auth_smoke: reusable admin authentication, role, and permission smoke",
+  "admin_deactivation: exact-local disposable-user deactivation and public revocation lifecycle",
 ]

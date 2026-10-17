@@ -13,10 +13,13 @@ from api_tests.client import (
     RequestPacer,
 )
 from api_tests.config import load_environment, repository_root
-from api_tests.coverage import load_deferred_admin_operations
+from api_tests.coverage import (
+    MarkerCounts,
+    build_forbidden_response_coverage,
+    collect_forbidden_response_markers_from_tests,
+)
 from api_tests.openapi import (
     ForbiddenResponseDeferral,
-    ForbiddenResponseDeferralReason,
     JsonValue,
     OpenApiDocument,
     OpenApiRequestCase,
@@ -28,7 +31,6 @@ from api_tests.openapi import (
     operation_response_schema,
     operations_documenting_response,
     unauthenticated_request_safety_markers,
-    validate_forbidden_response_deferrals,
 )
 
 API_ERROR_SCHEMA: dict[str, JsonValue] = {"$ref": "#/components/schemas/ApiErrorResponse"}
@@ -236,28 +238,29 @@ def test_path_materialization_rejects_unsupported_templates(
         build_operation_request_cases(document)
 
 
-def test_forbidden_response_manifest_exhausts_inventory_and_classifies_admin() -> None:
+def test_forbidden_response_inventory_partitions_covered_and_deferred_cases() -> None:
     document = _snapshot()
     deferrals = _deferrals()
-    admin_operation_ids = _admin_operation_ids()
-
-    validate_forbidden_response_deferrals(
-        document,
+    coverage = build_forbidden_response_coverage(
+        operations_documenting_response(document, 403),
         deferrals,
-        deferred_admin_operation_ids=admin_operation_ids,
+        collect_forbidden_response_markers_from_tests(repository_root() / "tests"),
     )
 
-    assert len(deferrals) == 40
+    assert len(coverage) == 40
+    assert {row.operation_id for row in coverage if row.status == "covered"} == {
+        "countTransactionsAcrossUsers",
+        "deactivateUser",
+        "getUser",
+        "getUsers",
+        "searchTransactions",
+    }
+    assert sum(row.status == "deferred" for row in coverage) == 35
     assert {
-        deferral.operation_id
-        for deferral in deferrals
-        if deferral.reason == "admin_identity_and_safety_plan_required"
-    } == admin_operation_ids
-    assert all(
-        deferral.reason == "no_restricted_normal_user_scenario"
-        for deferral in deferrals
-        if deferral.operation_id not in admin_operation_ids
-    )
+        row.operation_id
+        for row in coverage
+        if row.deferral_reason == "global_mutation_not_authorized"
+    } == {"create", "importLatestExchangeRates", "update"}
 
 
 @pytest.mark.parametrize(
@@ -289,66 +292,113 @@ def test_forbidden_response_manifest_rejects_stale_method_or_path(
             f"{manifest_value}, OpenAPI has {openapi_value}"
         ),
     ):
-        validate_forbidden_response_deferrals(
-            _snapshot(),
+        build_forbidden_response_coverage(
+            operations_documenting_response(_snapshot(), 403),
             deferrals,
-            deferred_admin_operation_ids=_admin_operation_ids(),
+            collect_forbidden_response_markers_from_tests(repository_root() / "tests"),
         )
 
 
-def test_forbidden_response_manifest_rejects_missing_operation() -> None:
+def test_forbidden_response_inventory_rejects_partition_gap() -> None:
     deferrals = tuple(
         deferral for deferral in _deferrals() if deferral.operation_id != "getExchangeRates"
     )
 
     with pytest.raises(
         ValueError,
-        match="OpenAPI operations missing forbidden-response deferrals: getExchangeRates",
+        match=(
+            "documented 403 responses have neither executable evidence nor deferrals: "
+            "getExchangeRates"
+        ),
     ):
-        validate_forbidden_response_deferrals(
-            _snapshot(),
+        build_forbidden_response_coverage(
+            operations_documenting_response(_snapshot(), 403),
             deferrals,
-            deferred_admin_operation_ids=_admin_operation_ids(),
+            collect_forbidden_response_markers_from_tests(repository_root() / "tests"),
         )
 
 
-@pytest.mark.parametrize(
-    ("operation_id", "reason", "expected_reason"),
-    [
-        (
-            "getAll",
-            "admin_identity_and_safety_plan_required",
-            "no_restricted_normal_user_scenario",
-        ),
-        (
-            "getUsers",
-            "no_restricted_normal_user_scenario",
-            "admin_identity_and_safety_plan_required",
-        ),
-    ],
-)
-def test_forbidden_response_manifest_rejects_wrong_classification(
-    operation_id: str,
-    reason: ForbiddenResponseDeferralReason,
-    expected_reason: ForbiddenResponseDeferralReason,
-) -> None:
+def test_forbidden_response_inventory_rejects_deferral_and_executable_overlap() -> None:
     deferrals = list(_deferrals())
-    index = next(
-        index for index, deferral in enumerate(deferrals) if deferral.operation_id == operation_id
+    deferrals.append(
+        ForbiddenResponseDeferral(
+            operation_id="getUsers",
+            method="GET",
+            path="/v1/users",
+            reason="no_restricted_normal_user_scenario",
+        )
     )
-    deferrals[index] = replace(deferrals[index], reason=reason)
+
+    with pytest.raises(
+        ValueError,
+        match="both executable evidence and deferrals: getUsers",
+    ):
+        build_forbidden_response_coverage(
+            operations_documenting_response(_snapshot(), 403),
+            deferrals,
+            collect_forbidden_response_markers_from_tests(repository_root() / "tests"),
+        )
+
+
+def test_forbidden_response_inventory_rejects_duplicate_deferral() -> None:
+    deferrals = (*_deferrals(), _deferrals()[0])
+
+    with pytest.raises(ValueError, match="duplicate forbidden-response deferral operationId"):
+        build_forbidden_response_coverage(
+            operations_documenting_response(_snapshot(), 403),
+            deferrals,
+            collect_forbidden_response_markers_from_tests(repository_root() / "tests"),
+        )
+
+
+def test_forbidden_response_inventory_rejects_stale_deferral() -> None:
+    deferrals = (
+        *_deferrals(),
+        ForbiddenResponseDeferral(
+            operation_id="removedOperation",
+            method="GET",
+            path="/v1/removed",
+            reason="no_restricted_normal_user_scenario",
+        ),
+    )
 
     with pytest.raises(
         ValueError,
         match=(
-            f"forbidden-response deferral reason mismatch for {operation_id}: "
-            f"expected {expected_reason}, found {reason}"
+            "stale forbidden-response deferral is absent from documented OpenAPI 403 "
+            "responses: removedOperation"
         ),
     ):
-        validate_forbidden_response_deferrals(
-            _snapshot(),
+        build_forbidden_response_coverage(
+            operations_documenting_response(_snapshot(), 403),
             deferrals,
-            deferred_admin_operation_ids=_admin_operation_ids(),
+            collect_forbidden_response_markers_from_tests(repository_root() / "tests"),
+        )
+
+
+def test_forbidden_response_inventory_rejects_unknown_marker() -> None:
+    with pytest.raises(
+        ValueError,
+        match=r"unrecognized pytest\.mark\.forbidden_response operations: removedOperation",
+    ):
+        build_forbidden_response_coverage(
+            operations_documenting_response(_snapshot(), 403),
+            _deferrals(),
+            {"removedOperation": MarkerCounts(marker_count=1)},
+        )
+
+
+def test_forbidden_response_inventory_rejects_placeholder_only_evidence() -> None:
+    with pytest.raises(
+        ValueError,
+        match="forbidden-response evidence has only placeholder tests: getUsers",
+    ):
+        build_forbidden_response_coverage(
+            operations_documenting_response(_snapshot(), 403),
+            _deferrals(),
+            {
+                "getUsers": MarkerCounts(marker_count=1, placeholder_marker_count=1),
+            },
         )
 
 
@@ -360,13 +410,6 @@ def _deferrals() -> tuple[ForbiddenResponseDeferral, ...]:
     return load_forbidden_response_deferrals(
         repository_root() / "schemas" / "deferred-forbidden-responses.yaml"
     )
-
-
-def _admin_operation_ids() -> set[str]:
-    operations = load_deferred_admin_operations(
-        repository_root() / "schemas" / "deferred-admin-operations.yaml"
-    )
-    return {operation.operation_id for operation in operations}
 
 
 def _document(

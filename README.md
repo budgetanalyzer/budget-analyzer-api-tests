@@ -88,10 +88,11 @@ returned directly and never retried. A response carrying
 concurrent traffic outside this harness; it is not a transient response to hide
 with a retry. There is no first-use cooldown or callback-timeout padding.
 
-The first test that needs each normal user generates its credentials and signs
-up through the public hosted flow; no credential editing or separate bootstrap
-command is needed. Preserve the resulting gitignored `.env.local` so later runs
-log in as the same users.
+The first test that needs a local primary, secondary, or admin identity generates
+its credentials and signs up through the public hosted flow; no credential
+editing or separate bootstrap command is needed. Preserve the resulting
+gitignored `.env.local` so later runs log in as the same users. The admin account
+still requires one manual database role assignment after signup.
 
 Environment files under `environments/` are validated, declarative, and
 non-secret. They contain only public target settings and names of environment
@@ -196,26 +197,27 @@ Run the unit suite with:
 
 ## Authentication
 
-Each requested user produces one redacted session value. The primary and
-secondary session-scoped fixtures acquire independently, so tests that only use
-the primary client do not request secondary credentials or start a secondary
-browser login.
+Each requested user produces one redacted session value. The primary, secondary,
+and admin session-scoped fixtures acquire independently, so a focused selection
+does not request credentials or start browser login for identities it does not
+use.
 
-On first use, a local browser fixture generates a normal-user email and strong
-password, saves the pair to gitignored `.env.local` with owner-only
+On first use, a local browser fixture generates an email and strong password,
+saves the pair to gitignored `.env.local` with owner-only
 permissions, and signs up through the hosted page reached from the public
 application login flow. Later runs reuse the identity and perform a fresh
 browser login. Preserve `.env.local` between runs; losing it loses automatic
-account reuse. A primary-only selection does not generate or log in the
-secondary account.
+account reuse. Primary and secondary stay normal users. The admin starts as a
+normal user and is promoted externally while retaining `USER`.
 
-`.env.example` documents the four credential slots but contains no working
-values. A complete process-environment pair may override one saved identity:
+`.env.example` documents the six browser credential slots and three optional
+session slots but contains no working values. A complete process-environment
+pair may override one saved identity:
 `BA_PRIMARY_TEST_USERNAME` with `BA_PRIMARY_TEST_PASSWORD`, or the equivalent
-secondary pair. Partial pairs fail clearly and are never mixed with file
-values. Failed login or interrupted signup preserves the same saved identity
-for diagnosis and retry. Passwords and session cookies are not written to test
-artifacts.
+secondary or admin pair. Partial pairs fail clearly and are never mixed with
+file values. Failed login or interrupted signup preserves the same saved
+identity for diagnosis and retry. Reusing one username across slots is rejected.
+Passwords and session cookies are not written to test artifacts.
 
 Authentication smokes are identifiable as `auth_smoke` and
 `secondary_auth_smoke`, run as ordinary outcomes in the full local suite, and
@@ -232,8 +234,78 @@ reusable identities. In both browser and supplied-session modes, each smoke
 verifies its own session with an explicit public `GET /auth/v1/user` request
 and requires HTTP 200; invalid or redirected sessions fail the smoke.
 
+The reusable admin has a separate readiness smoke:
+
+```bash
+./run-tests -m admin_auth_smoke
+```
+
+Its first exact-local run lazily signs up one account, saves
+`BA_ADMIN_TEST_USERNAME`, `BA_ADMIN_TEST_PASSWORD`, and provisioning state in
+owner-only `.env.local`, then exits with code 2 and an instruction to assign
+`ADMIN` in the permission-service database while retaining `USER`. This
+repository never performs that assignment. Rerun the same command after the
+manual change; browser mode performs a fresh login so the new grants are loaded.
+Run it a third time to verify the same account is reused.
+
+The smoke validates the public `/auth/v1/user` schema, requires both roles, and
+requires `transactions:read:any`, `users:read`, `users:write`,
+`statementformats:read:any`, and `statementformats:write:any`. An account with
+`ADMIN` but incomplete effective permissions is an authorization configuration
+failure, not a promotion stop. HTTP, TLS, browser, malformed-response, and
+expired-session failures also retain their original failure category. The
+public `sub` identifies the account when an external credential or supplied
+session source needs disambiguation; email is not treated as a unique database
+identity.
+
+Run all current and future admin scenarios with:
+
+```bash
+./run-tests -m admin
+```
+
+Admin-only selection does not acquire primary or secondary identities. Scenarios
+that compare admin behavior with a normal-user denial must request the normal
+identity explicitly; the harness validates `USER` without `ADMIN` and compares
+public subjects before relying on the denial. See
+[docs/admin-authentication.md](docs/admin-authentication.md) for the fixture and
+environment contract.
+
+The destructive deactivation lifecycle is exact-local only:
+
+```bash
+./run-tests -m admin_deactivation
+```
+
+It requires `browser_preprovisioned` mode plus enabled mutation and destructive
+policy. Staging, production, and supplied-session selections skip at collection
+before network fixtures run because an opaque target cookie cannot establish
+account ownership. Admin readiness is validated before the lifecycle provisions
+anything.
+
+Each selected pytest execution writes one run/scenario-scoped disposable
+credential record to owner-only `.env.local` before hosted signup. It then binds
+the authenticated public subject and exact admin-resolved canonical user id to
+that record before any deactivation request. Pending signup retries in the same
+execution reuse the saved credentials. Earlier records are preserved, never
+reused as a later target, and never swept. A completed lifecycle leaves the
+account deactivated; an interrupted run may retain an active account because no
+public reactivation or delete API exists.
+
+The consolidated scenario proves normal-user denial, successful role removal,
+audit actor/time, ACTIVE/DEACTIVATED filtering, idempotent replay, missing-target
+`404`, and bulk revocation of two distinct sessions. It restores each original
+cookie into a fresh client for current-user, protected API, and heartbeat
+rejection checks. A `503` is reported without retry because account deactivation
+may already have committed. Run the command twice to prove reuse of the same
+admin with a distinct disposable target on each execution. Internal revocation,
+the inactive-account heartbeat fallback with a still-present session, dependency
+faults, and deleted-account fallback remain outside this public scenario.
+
 Authorization scenarios request both users lazily and reject reused local
-usernames or session values before relying on cross-user results. Each
+usernames, session values, or public subjects before relying on cross-user
+results. They also require both ordinary identities to have `USER` without
+`ADMIN`. Each
 browser-backed session is verified through the public `/auth/v1/user` route
 during acquisition. Run the scenarios twice to exercise first-use provisioning
 followed by reuse of the same two identities:
@@ -251,8 +323,10 @@ A missing or indistinct secondary identity fails local authorization execution;
 production-safe collection does not request it.
 
 Automatic credential-file access and signup are restricted to the exact local
-target. Staging remains pre-provisioned, and production remains
-supplied-session-only and read-only.
+target. Staging uses pre-provisioned primary, secondary, and admin browser
+credentials (or explicitly selected supplied sessions). Production remains
+supplied-session-only and read-only; collection skips `admin` and
+`admin_auth_smoke` before any admin fixture can acquire credentials.
 
 Opaque supplied sessions can bypass browser startup:
 
@@ -261,6 +335,10 @@ BA_PRIMARY_SESSION=... BA_SECONDARY_SESSION=... \
   .venv/bin/python -m pytest tests/api --env local \
   --session-mode supplied_sessions
 ```
+
+For a local or staging admin selection in supplied mode, provide
+`BA_ADMIN_SESSION`. After changing database grants, replace it with a refreshed
+external session; the harness never falls back to signup in supplied mode.
 
 Production remains supplied-session-only and read-only. Run only the explicit
 production-safe selection:
@@ -302,12 +380,13 @@ read. Heartbeat is intentionally a `mutation` despite using `GET`. Unknown
 regressions rather than OpenAPI operations.
 
 The same suite owns the browser-visible OAuth and logout lifecycle. Environment
-YAML declares only non-secret browser contract data: callback/default/logout
-paths, accepted identity-provider DNS suffixes, the provider logout path, and
-the expected SameSite policy. Browser-backed lifecycle tests are available only
-in `browser_preprovisioned` mode. They first preserve the reusable primary
-session, then use the same configured identity to create one additional opaque
-session for a single scenario and explicitly log out that exact session.
+YAML declares only non-secret browser contract data: callback, normal default,
+admin default, and logout paths; accepted identity-provider DNS suffixes; the
+provider logout path; and the expected SameSite policy. Browser-backed lifecycle
+tests are available only in `browser_preprovisioned` mode. They first preserve
+the reusable primary session, then use the same configured identity to create
+one additional opaque session for a single scenario and explicitly log out that
+exact session.
 `supplied_sessions` runs skip these scenarios because an opaque cookie cannot
 prove ownership of a newly created session.
 
@@ -348,23 +427,22 @@ service-to-service runner. The operation is therefore untestable in this
 harness's current execution boundary and must be reported as such, not silently
 omitted or treated as covered by an ingress-denial request.
 
-The optional public proof is deliberately different: create an active session
-for a disposable target identity, use a separately approved admin identity to
-call `deactivateUser`, then require both the target's user and heartbeat requests
-to return `401`. That would prove the deployed deactivation-to-revocation
-workflow, but it would not isolate the internal hop and must not change the
-internal case from `untestable`. The required admin identity and disposable-user
-cleanup model do not exist yet, so `deactivateUser` remains in the unchanged
-admin/global deferral manifest.
+The exact-local public proof is deliberately different: it creates two active
+sessions for a fresh disposable normal identity, uses the separately validated
+admin identity to call `deactivateUser`, and replays both original cookies
+against current-user, protected API, and heartbeat routes. Schema-backed `401`
+responses plus heartbeat cookie clearing prove the deployed
+deactivation-to-revocation workflow. They do not isolate the internal hop, so
+`internal-user-session-revocation` remains `untestable`.
 
 The current reviewed matrix is:
 
 | Coverage layer | Covered | Deferred | Untestable | Meaning |
 | --- | ---: | ---: | ---: | --- |
 | Session Gateway OpenAPI operations | 3 | 0 | n/a | Every operation in the filtered public snapshot has a non-placeholder marker. |
-| Inbound behavior scenarios | 14 | 11 | 9 | Every currently executable public case has a marker; dependency/time cases and non-public boundaries remain explicit. |
+| Inbound behavior scenarios | 15 | 11 | 9 | Every currently executable public case has a marker; dependency/time cases and non-public boundaries remain explicit. |
 
-The 34 scenarios span 14 known inbound routes: five public routes, one
+The 35 scenarios span 14 known inbound routes: five public routes, one
 mesh-internal route, four deployment-operational routes, and four
 development-only routes. Accurate status is therefore “all known inbound routes
 inventoried” and “all currently executable public cases covered,” with 11 cases
@@ -380,7 +458,8 @@ inbound route/case inventory is
 `schemas/session-gateway-inbound-inventory.yaml`. One command validates both
 contract namespaces, every route/case classification, and the existing admin
 and forbidden-response manifests. It writes
-`artifacts/openapi-coverage.json` and
+`artifacts/openapi-coverage.json`,
+`artifacts/forbidden-response-coverage.json`, and
 `artifacts/session-gateway-coverage.json`:
 
 ```bash
@@ -442,14 +521,24 @@ count as execution of the mesh-only controller.
 Literal `session_gateway_case` markers bind executable tests to covered case
 ids, and `artifacts/session-gateway-coverage.json` reports their marker counts.
 
+Literal `forbidden_response` markers bind executable unified-contract `403`
+evidence to exact operation ids. The separate forbidden-response artifact
+reports covered and deferred counts, sorted ids, resolved method/path rows,
+marker counts, and deferral reasons. Unknown or malformed markers,
+placeholder-only evidence, stale or duplicate deferrals, overlap, and gaps fail
+the offline gate.
+
 Response-level security coverage is distinct from operation-marker coverage.
 The snapshot must provide schema-backed `401` and `403` responses for every
 operation, and the typed request-case inventory must materialize every path
 without generating query values or request bodies. A documented `403` is not
 treated as live-covered unless a safe principal and reproducible request exist.
-All current `403` cases are explicitly classified in
-`schemas/deferred-forbidden-responses.yaml`; the eight admin/global operations
-remain deferred regardless of HTTP method. See
+Five administrative denials now have normal-user executable evidence; the
+other 35 documented `403` responses remain explicitly classified in
+`schemas/deferred-forbidden-responses.yaml`. Administrative transaction search
+and count, user list/detail, and user deactivation now also have successful
+admin coverage. The three remaining admin/global operation deferrals are the
+global currency/rate writes. See
 [docs/openapi-coverage.md](docs/openapi-coverage.md) for the coverage policy.
 
 An authenticated unknown path under the API prefix must return a non-HTML 404;
@@ -462,14 +551,39 @@ Statement-format wizard routes retain their separate `file` plus JSON
 `request` multipart contract. Ordinary transaction and saved-view setup uses
 direct manual transaction creation; static saved views contain explicit
 transaction IDs and support rename, membership delta, and clone operations.
-Eight admin/global operations are explicitly deferred. This includes both
-cross-user transaction search and count, which the current contract describes
-as administrative and which normal browser users cannot execute.
+Three admin/global operations remain explicitly deferred for successful
+behavior: the global currency/rate writes. Normal-user `403` evidence for
+cross-user transaction search/count, user list/detail, and deactivation is
+accounted for separately from success behavior.
 
 The normal-user transaction collection is intentionally an unpaged snapshot.
 Its regression scenarios verify exact run-owned records and the user-scoped
-count filter binding. Administrative server-side search, sorting, and paging
-remain deferred; browser table sorting and pagination are presentation-only.
+count filter binding. Administrative search/count scenarios create six rows
+across the reusable primary and secondary owners and narrow every assertion with
+a unique run discriminator. They cover every documented filter, both owners,
+inclusive date/amount/timestamp boundaries, documented description matching,
+stored numeric values across USD and EUR without conversion, all supported sort
+fields and directions, compound tie-breakers, default ordering, complete paged
+traversal, empty pages, count/search agreement, unsupported sorting, and
+malformed query values. Setup-producing cases are marked `mutation`; the
+data-independent error cases remain read-only. Re-running the module retains old
+rows intentionally while proving they do not affect exact controlled results.
+
+Administrative user reads resolve the three reusable identities through exact
+public IdP subject filters, then verify their canonical ids, profiles, ACTIVE
+state, roles, timestamps, list/detail consistency, search behavior, sorting,
+paging, invalid queries, and missing-user response. Text checks do not treat
+email as unique, and paging assertions use exact subject filters rather than a
+global account total. The disposable-target deactivation scenario covers
+positive DEACTIVATED search membership and ACTIVE exclusion.
+
+Administrative statement-format coverage creates one USER format for each
+normal identity. The admin reads and updates both test-created records, while
+normal users retain owner isolation and their own hidden preferences. Foreign
+hide/unhide remains unavailable to the admin because those routes are
+caller-owned preference operations. SYSTEM format reads remain read-only;
+SYSTEM creation and updates to seeded catalog entries are explicit deferred
+scenarios and are not implied by general operation markers.
 
 ## Data Isolation
 
@@ -478,7 +592,11 @@ A pytest session owns one UTC run id such as
 generated names and identifiers so assertions do not assume an empty account.
 Delete, hide, and unhide tests target only resources created by that test.
 Manual transaction creation keeps unrelated CRUD and saved-view setup
-independent from the statement import wizard.
+independent from the statement import wizard. Exact-local execution retains the
+three reusable identities plus one fresh disposable target for each selected
+admin-deactivation run. Completed targets remain deactivated; interrupted
+targets and their owner-only provenance records remain available for diagnosis,
+without a generic cleanup callback or cross-run account sweep.
 There is no generic cleanup registry, janitor, or environment reset path;
 leftover user-owned local data is accepted.
 
@@ -495,11 +613,14 @@ environment-specific exceptions, or weakened assertions.
 ## Markers And Focused Regression Runs
 
 An OpenAPI marker has exactly one operation id:
-`@pytest.mark.openapi("operationId")`. Behavioral markers are independent:
-`readonly`, `mutation`, `destructive`, `authentication`, `authorization`,
-`production_safe`, `auth_smoke`, and `secondary_auth_smoke`. Use normal pytest
-marker expressions; the harness does not inspect marker-expression strings to
-change test behavior.
+`@pytest.mark.openapi("operationId")`.
+`@pytest.mark.forbidden_response("operationId")` records unified-contract `403`
+evidence without becoming an operation-success marker. Other behavioral markers
+are independent: `readonly`, `mutation`, `destructive`, `authentication`, `authorization`,
+`production_safe`, `auth_smoke`, `secondary_auth_smoke`, `admin`, and
+`admin_auth_smoke`. Use normal pytest marker expressions; the harness does not
+inspect marker-expression strings to change test behavior. Production policy
+excludes both admin markers during collection, including explicit selection.
 
 Run the complete authentication and user-level authorization selections with:
 
@@ -509,20 +630,21 @@ Run the complete authentication and user-level authorization selections with:
 ```
 
 The authorization selection preserves privacy-safe cross-user `404` responses
-and domain `422` responses; it does not count them as live `403` coverage. All
-documented `403` responses remain in the checked-in deferral inventory until a
-separate authorization plan defines safe restricted and admin principals.
-
-Focused phase-4 scenarios can be run with:
+and domain `422` responses; it does not count them as live `403` coverage. Run
+the focused normal-user admin-read denials with:
 
 ```bash
-./run-tests tests/api/transactions/test_transactions.py
+./run-tests tests/api/authorization/test_admin_read_denials.py
+```
+
+Focused admin user and statement-format scenarios can be run with:
+
+```bash
+./run-tests tests/api/users/test_admin_users.py
+./run-tests tests/api/statement_formats/test_admin_statement_formats.py
 ./run-tests tests/api/statement_formats/test_statement_formats.py
-./run-tests tests/api/views/test_views.py
-./run-tests tests/api/transactions/test_transactions.py \
-  -k "transaction_crud or ordered_preview_and_import or invalid_later_import_token"
-./run-tests tests/api/views/test_views.py \
-  -k "membership or clone or deleted_transaction"
+./run-tests tests/api/authorization/test_cross_user_resources.py \
+  -k "primary_and_secondary_sessions_are_distinct or primary_user_format"
 ```
 
 Run the same focused selector again with the retained `.env.local` identities
@@ -535,13 +657,16 @@ Every `./run-tests` invocation writes to a distinct ignored directory under
 the Python and `uv` versions, lock SHA-256 identity, universal locked graph,
 editable first-party project, selected installed third-party set, and a
 successful exact `uv sync --check` parity result. They also contain unified
-OpenAPI coverage, the structured Session Gateway operation/scenario coverage
-report, unified live-drift evidence, JUnit pytest results, and redacted public
-request diagnostics. Focused runs contain their JUnit result and any request
+OpenAPI operation coverage, forbidden-response coverage, the structured Session
+Gateway operation/scenario coverage report, unified live-drift evidence, JUnit
+pytest results, and redacted public request diagnostics. Focused runs contain
+their JUnit result and any request
 diagnostics. The harness does not persist browser screenshots, traces, storage,
 or provisioning form captures. Artifacts never contain package-index credentials,
-passwords, authorization headers, OAuth code or state values, email values, or
-session-cookie values.
+passwords, authorization headers, OAuth code or state values, email/profile
+values, identity-reference fields, or session-cookie values. User-admin query
+values and detail path ids are redacted after URL decoding, and current-user
+Session Gateway diagnostics redact public subjects and display names.
 
 The dependency-evidence workflow uploads exactly one separate seven-day
 artifact. Its semantic allowlist includes setup diagnostics, runtime and tool

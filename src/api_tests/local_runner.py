@@ -17,6 +17,7 @@ from api_tests.coverage import (
     missing_operation_ids,
     placeholder_operation_ids,
     write_coverage_artifact,
+    write_forbidden_response_coverage_artifact,
 )
 from api_tests.dependency_inventory import DependencyInventoryError, write_dependency_inventory
 from api_tests.local_credentials import LocalCredentialError, ensure_exact_local_target
@@ -27,7 +28,12 @@ from api_tests.session_gateway_inventory import (
     session_gateway_coverage_lines,
     write_session_gateway_coverage_artifact,
 )
-from api_tests.tools.openapi_coverage import build_coverage, build_session_gateway_coverage
+from api_tests.tools.openapi_coverage import (
+    build_coverage,
+    build_forbidden_coverage,
+    build_session_gateway_coverage,
+    forbidden_response_coverage_lines,
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -71,6 +77,14 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
         )
         coverage = build_coverage(env_name="local", source="snapshot")
         write_coverage_artifact(artifact_dir / "openapi-coverage.json", coverage)
+        forbidden_response_coverage = build_forbidden_coverage(
+            env_name="local",
+            source="snapshot",
+        )
+        write_forbidden_response_coverage_artifact(
+            artifact_dir / "forbidden-response-coverage.json",
+            forbidden_response_coverage,
+        )
         session_gateway_coverage = build_session_gateway_coverage()
         session_gateway_operations = tuple(
             row for row in coverage if row.contract == "session_gateway"
@@ -101,6 +115,8 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
             return 1
 
         for line in session_gateway_coverage_lines(session_gateway_report):
+            print(line)
+        for line in forbidden_response_coverage_lines(forbidden_response_coverage):
             print(line)
         print(_unified_coverage_summary(coverage))
         print("Session Gateway reviewed contract and inbound inventory validation passed.")

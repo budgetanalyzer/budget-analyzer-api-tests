@@ -16,9 +16,11 @@ from api_tests.client import (
 )
 from api_tests.config import load_environment
 from api_tests.openapi import OpenApiDocument, load_snapshot
+from api_tests.session_gateway_assertions import REQUIRED_ADMIN_PERMISSIONS, AuthenticatedIdentity
 
-type SessionRole = Literal["primary", "secondary"]
+type SessionRole = Literal["primary", "secondary", "admin"]
 type AuthSmoke = Callable[[GatewayClient, OpenApiDocument], None]
+type AdminAuthSmoke = Callable[[GatewayClient, AuthenticatedIdentity, OpenApiDocument], None]
 
 _AUTH_SMOKE_MODULE = importlib.import_module("tests.api.session_gateway.test_user")
 _PRIMARY_AUTH_SMOKE = cast(
@@ -28,6 +30,10 @@ _PRIMARY_AUTH_SMOKE = cast(
 _SECONDARY_AUTH_SMOKE = cast(
     AuthSmoke,
     _AUTH_SMOKE_MODULE.test_secondary_acquired_session_reaches_session_gateway,
+)
+_ADMIN_AUTH_SMOKE = cast(
+    AdminAuthSmoke,
+    _AUTH_SMOKE_MODULE.test_admin_acquired_session_has_required_authorization,
 )
 _SMOKE_CASES: tuple[tuple[SessionRole, AuthSmoke, str], ...] = (
     ("primary", _PRIMARY_AUTH_SMOKE, "primary-cookie"),
@@ -68,6 +74,22 @@ def test_auth_smoke_rejects_invalid_supplied_session(
         smoke(client, _session_gateway_snapshot())
 
 
+def test_admin_auth_smoke_accepts_matching_validated_identity() -> None:
+    identity = AuthenticatedIdentity(
+        subject="idp|admin",
+        roles=frozenset({"USER", "ADMIN"}),
+        permissions=REQUIRED_ADMIN_PERMISSIONS,
+        display_name="Test User",
+        email="test@example.invalid",
+    )
+    with _mocked_supplied_session_client(
+        "admin",
+        expected_cookie="admin-cookie",
+        response_status=httpx.codes.OK,
+    ) as client:
+        _ADMIN_AUTH_SMOKE(client, identity, _session_gateway_snapshot())
+
+
 def _mocked_supplied_session_client(
     role: SessionRole,
     *,
@@ -81,6 +103,7 @@ def _mocked_supplied_session_client(
         environ={
             "BA_PRIMARY_SESSION": "primary-cookie",
             "BA_SECONDARY_SESSION": "secondary-cookie",
+            "BA_ADMIN_SESSION": "admin-cookie",
         },
     )
 
@@ -92,13 +115,17 @@ def _mocked_supplied_session_client(
             return httpx.Response(
                 response_status,
                 json={
-                    "sub": "idp|subject",
+                    "sub": "idp|admin" if role == "admin" else "idp|subject",
                     "name": "Test User",
                     "email": "test@example.invalid",
                     "picture": "https://example.invalid/picture.png",
                     "authenticated": True,
-                    "roles": ["USER"],
-                    "permissions": ["transactions:read"],
+                    "roles": ["USER", "ADMIN"] if role == "admin" else ["USER"],
+                    "permissions": (
+                        sorted(REQUIRED_ADMIN_PERMISSIONS)
+                        if role == "admin"
+                        else ["transactions:read"]
+                    ),
                 },
             )
         headers = {"location": "/login"} if response_status == httpx.codes.FOUND else None

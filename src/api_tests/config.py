@@ -27,15 +27,16 @@ def validate_env_var_name(value: str) -> str:
 class SuppliedSessionConfig(StrictConfigModel):
     primary_session_env: str
     secondary_session_env: str | None = None
+    admin_session_env: str | None = None
 
     @field_validator("primary_session_env")
     @classmethod
     def validate_primary_session_env(cls, value: str) -> str:
         return validate_env_var_name(value)
 
-    @field_validator("secondary_session_env")
+    @field_validator("secondary_session_env", "admin_session_env")
     @classmethod
-    def validate_secondary_session_env(cls, value: str | None) -> str | None:
+    def validate_optional_session_env(cls, value: str | None) -> str | None:
         if value is None:
             return None
         return validate_env_var_name(value)
@@ -47,12 +48,16 @@ class BrowserConfig(StrictConfigModel):
     primary_password_env: str
     secondary_username_env: str
     secondary_password_env: str
+    admin_username_env: str
+    admin_password_env: str
 
     @field_validator(
         "primary_username_env",
         "primary_password_env",
         "secondary_username_env",
         "secondary_password_env",
+        "admin_username_env",
+        "admin_password_env",
     )
     @classmethod
     def validate_secret_env_name(cls, value: str) -> str:
@@ -68,6 +73,7 @@ class AuthConfig(StrictConfigModel):
 class BrowserAuthContract(StrictConfigModel):
     callback_path: str
     default_return_path: str
+    admin_return_path: str
     logout_return_path: str
     provider_logout_path: str
     provider_host_suffixes: tuple[str, ...]
@@ -76,6 +82,7 @@ class BrowserAuthContract(StrictConfigModel):
     @field_validator(
         "callback_path",
         "default_return_path",
+        "admin_return_path",
         "logout_return_path",
         "provider_logout_path",
     )

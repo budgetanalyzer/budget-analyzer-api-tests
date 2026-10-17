@@ -22,19 +22,34 @@ Coverage has four separate meanings:
    type `UNAUTHORIZED`. It uses only the unauthenticated gateway client.
 3. **Reproducible forbidden-response coverage** requires an authenticated
    principal and request that the public contract defines as forbidden. A
-   documented possible `403` alone is not executable evidence.
+   documented possible `403` alone is not executable evidence. A literal
+   `@pytest.mark.forbidden_response("operationId")` associates that evidence
+   with one unified-contract operation. It does not count as operation-success
+   coverage.
 4. **Explicit forbidden-response deferral** records every documented `403` by
    exact operation id, method, and OpenAPI path in
-   `schemas/deferred-forbidden-responses.yaml`. A regular route is deferred when
-   no restricted normal-user scenario is contract-defined. Admin/global routes
-   use a separate reason because they require an approved admin identity,
-   cleanup, and global-state safety plan.
+   `schemas/deferred-forbidden-responses.yaml` when executable evidence does not
+   exist. A regular route is deferred when no restricted normal-user scenario
+   is contract-defined. Unsafe global writes use
+   `global_mutation_not_authorized`; admin scenarios that still need an approved
+   ownership or safety model remain explicit.
 
-The current forbidden-response manifest exhausts all documented operations.
-This does not claim that those `403` responses are live-covered. Cross-user
-ownership checks that intentionally return non-disclosing `404` or `422`
-responses remain authorization regressions, but they are not reclassified as
-`403` coverage.
+The checker requires an exact partition for all 40 documented `403` responses:
+five have executable normal-user denial evidence and 35 have exact deferrals.
+An operation may never appear in both groups or neither group. Unknown markers,
+placeholder-only evidence, duplicate deferrals, stale method/path entries, and
+partition gaps fail deterministically. Cross-user ownership checks that
+intentionally return non-disclosing `404` or `422` responses remain
+authorization regressions, but they are not reclassified as `403` coverage.
+
+The five covered responses are `searchTransactions`,
+`countTransactionsAcrossUsers`, `getUsers`, `getUser`, and `deactivateUser`.
+Their tests use the validated primary normal identity; the detail denial
+derives its path value from that identity instead of targeting an unrelated
+account, and the deactivation denial targets only the fresh execution-owned
+disposable user. All five operations also have successful admin behavior
+coverage and are no longer operation-deferred. Denial evidence and successful
+behavior remain independently asserted.
 
 Session Gateway operations use the stable `session_gateway` contract key.
 Unified markers retain the one-argument default, while Session Gateway markers
@@ -43,12 +58,19 @@ must be qualified:
 ```python
 @pytest.mark.openapi("operationId")
 @pytest.mark.openapi("getSessionStatus", contract="session_gateway")
+@pytest.mark.forbidden_response("getUsers")
 ```
 
 The contract key and operation id form the identity. An identical operation id
 in two contracts produces two coverage records and never merges marker counts.
 Unknown contract names, nonliteral arguments, extra keywords, and stale
 operation ids fail deterministically.
+
+`artifacts/forbidden-response-coverage.json` reports response-level counts,
+sorted ids, and rows separately from `artifacts/openapi-coverage.json`. Each row
+contains the resolved snapshot method/path, executable and placeholder marker
+counts, status, and optional deferral reason. The CLI prints the same covered
+and deferred counts and ids.
 
 The Session Gateway snapshot declares `GET /logout` as `302 Found` and requires
 the `Location` header schema to be a URI-formatted string. Snapshot validation
@@ -65,15 +87,13 @@ be identified as untestable through this harness rather than omitted or counted
 as covered by an external denial or a service repository's local integration
 test.
 
-An optional public end-to-end proof remains possible only after a separate
-safety decision: provision a disposable target identity with an active session,
-use a separately approved admin identity to call the public permission-service
-`deactivateUser` operation, and require both `/auth/v1/user` and
-`/auth/v1/session` for the target session to return `401`. This proves the
-deactivation-to-revocation workflow, not the isolated internal hop. Adding that
-scenario must leave `internal-user-session-revocation` classified as
-`untestable`; the admin identity plus disposable-target lifecycle and cleanup
-model is a prerequisite only for the optional public scenario.
+The exact-local public end-to-end proof provisions a fresh execution-owned
+disposable target with two active sessions, uses the separately validated admin
+identity to call the public permission-service `deactivateUser` operation, and
+replays both original cookies against `/auth/v1/user`, a protected API read, and
+`/auth/v1/session`. This proves the deactivation-to-revocation workflow, not the
+isolated internal hop. `internal-user-session-revocation` therefore remains
+classified as `untestable`.
 
 ## Session Gateway Route And Case Inventory
 
@@ -101,10 +121,10 @@ The reviewed baseline is:
 | Inventory layer | Covered | Deferred | Untestable | Total |
 | --- | ---: | ---: | ---: | ---: |
 | Filtered Session Gateway OpenAPI operations | 3 | 0 | n/a | 3 |
-| Inbound behavior scenarios | 14 | 11 | 9 | 34 |
+| Inbound behavior scenarios | 15 | 11 | 9 | 35 |
 
 The scenarios cover 14 known inbound routes by inventory: five public, one
-mesh-internal, four deployment-operational, and four development-only. All 14
+mesh-internal, four deployment-operational, and four development-only. All 15
 currently executable public scenarios have literal test markers. The 11
 deferred scenarios have one concrete reason and one enabling prerequisite each;
 the 9 untestable scenarios name an enforced boundary and carry no planned
@@ -119,7 +139,7 @@ The deferred gaps are intentionally narrow:
 | `oauth-authorization-state-store-failure`, `oauth-callback-redis-failure`, `logout-redis-delete-failure`, `current-user-redis-failure`, `heartbeat-redis-failure` | The exact `/oops`, 5xx/500/503, cookie, redirect, and no-session-extension behavior recorded on each case. | Approved Redis fault injection in a controllable test deployment, scoped to test-owned state or sessions. |
 | `oauth-callback-idp-failure` | `302` to `/login?error=auth_failed` without a new public session. | Approved identity-provider fault injection in a controllable test deployment. |
 | `oauth-callback-permission-service-failure`, `heartbeat-permission-service-failure` | `/oops` without a public session, or JSON `503` without extending the existing session. | Approved permission-service fault injection in a controllable test deployment and scoped test identity. |
-| `heartbeat-account-inactive` | Session deletion, cookie clearing, and `401` for a deactivated or missing account. | Disposable target identity plus approved admin deactivation and cleanup safety model. |
+| `heartbeat-account-inactive` | Session deletion, cookie clearing, and `401` for a deactivated or missing account whose session still exists. | Controllable account transition that leaves the exact test-owned Redis session present; successful public deactivation bulk-revokes it and cannot isolate this fallback. |
 | `heartbeat-refresh-race` | Cookie clearing and `401` when the session disappears during refresh. | Controllable test deployment with a synchronization point scoped to the test-owned session. |
 | `heartbeat-natural-ttl-expiry` | Cookie clearing and `401` after natural expiry. | Configurable short-lived test session in a controllable test deployment. |
 
@@ -174,9 +194,13 @@ required to receive a scoped `Max-Age=0` clearing response. The independent
 secondary-account smoke is supporting session-acquisition evidence and does
 not add a second operation or behavior-contract claim.
 
-Account deactivation, permission-service and Redis faults, refresh races, and
-natural TTL expiry remain deferred under their inventory prerequisites. The
-suite does not manipulate internal state or wait for the configured TTL.
+The public admin-deactivation lifecycle now proves bulk revocation. The
+heartbeat-specific inactive-account fallback remains deferred because the
+successful bulk operation removes both target sessions before heartbeat can
+observe an inactive account with a still-present session. Permission-service
+and Redis faults, refresh races, and natural TTL expiry remain deferred under
+their inventory prerequisites. The suite does not manipulate internal state or
+wait for the configured TTL.
 
 Session Gateway execution is subject to the independent Istio login-initiation,
 login-completion, and session-operations policies. The shared client and browser
@@ -247,12 +271,73 @@ skips unsafe methods before client fixture setup. These generated security cases
 do not carry `openapi` markers, so response-security coverage cannot mask a
 missing general behavioral test.
 
-The eight admin/global operations in `schemas/deferred-admin-operations.yaml`
-remain outside authenticated execution: `searchTransactions`,
-`countTransactionsAcrossUsers`, `create`, `update`,
-`importLatestExchangeRates`, `getUsers`, `getUser`, and `deactivateUser`. This
-includes their read-only operations; HTTP method alone does not make an admin
-request safe.
+Three admin/global operations in `schemas/deferred-admin-operations.yaml` remain
+outside successful authenticated execution: currency `create`, currency
+`update`, and `importLatestExchangeRates`. These global writes remain untouched,
+including negative authenticated requests.
+
+`searchTransactions` and `countTransactionsAcrossUsers` are covered by
+schema-backed admin scenarios over six test-created rows split across distinct
+primary and secondary owners. The scenarios use owner ids returned by public
+transaction responses and a unique description discriminator, so retained rows
+from prior runs cannot change exact result sets. Coverage includes all 15
+filters, documented text semantics, inclusive boundaries, combined criteria,
+stored cross-currency numeric comparisons, all 11 sort fields in both
+directions, default and compound ordering, paging metadata and traversal, empty
+pages, and count/search consistency. Unsupported-sort `400`, unauthenticated
+`401`, and normal-user `403` behavior have schema-backed executable evidence.
+Malformed date and enum bindings also have stable `400 VALIDATION_ERROR` field
+evidence, but their scalar `fieldErrors.rejectedValue` currently conflicts with
+the shared snapshot's object type; those tests deliberately do not claim schema
+conformance for that diagnostic field. The documented `500` and `503`
+dependency-failure responses remain gaps because this public harness has no
+approved fault-injection control; no direct service or deployment path is
+introduced to manufacture them.
+
+`getUsers` and `getUser` resolve the reusable primary, secondary, and admin
+identities by exact public IdP subject and then use the canonical internal ids
+returned by the public API. Coverage checks every filter, inclusive timestamp
+boundaries, case-insensitive and multi-word OR text matching, escaped wildcard
+characters, combinations, empty results, all supported sort directions with an
+explicit id tie-breaker, exact-filter pagination metadata, invalid bindings,
+list/detail consistency, active roles and audit state, and a schema-backed
+missing-user `404`. Assertions do not rely on email uniqueness, a fixed global
+user total, or database quiescence. The disposable-user lifecycle covers
+positive `DEACTIVATED` membership and exclusion from the `ACTIVE` filter.
+Dependency-driven `500` and `503` responses still require unavailable fault
+controls.
+
+`deactivateUser` uses one fresh exact-local normal target per selected
+execution. Before mutation, the target's saved run/scenario provenance is bound
+to its public subject and exact canonical id and checked against all reusable
+identities. The lifecycle proves normal-user `403` without state change, admin
+success and role count, actor/time audit state, two-session public revocation,
+idempotent replay with unchanged audit data, and a confirmed-missing target
+`404`. A schema-backed `503` is treated as potentially committed partial state:
+the harness reads the retained target status for diagnostics and sends no hidden
+retry.
+
+Admin statement-format scenarios create one primary-owned and one
+secondary-owned `USER` format per execution. The admin can list, get, and
+update both, while normal-user ownership visibility and caller-specific hidden
+preferences remain intact. Hide and unhide deliberately stay owner-only even
+for `statementformats:write:any`; the scenario restores the owner preference
+after proving that boundary. Only those run-created formats are updated.
+Existing `SYSTEM` formats are read-only: creating a global catalog entry and
+updating a seeded `SYSTEM` format remain deferred scenarios until an explicit
+catalog data-safety lifecycle exists. General `createFormat` and `updateFormat`
+operation markers do not claim those deferred scenarios. Invalid USER-format
+updates assert stable `400 VALIDATION_ERROR` fields, but the rejected scalar
+values have the same shared `fieldErrors.rejectedValue` object-schema mismatch
+documented for malformed transaction query bindings.
+
+User-admin request URLs redact arbitrary `id`, `idpSub`, email, and display-name
+query values after URL decoding, user detail path ids, and profile fields in
+response diagnostics. Session Gateway current-user diagnostics also redact the
+subject and display name. Identity-reference response fields are redacted in
+every response. The same response context feeds assertion failures and JUnit
+output; tests use non-rendering comparisons for profile consistency so
+arbitrary pre-provisioned identity values are not copied into artifacts.
 
 Run the offline validation with:
 
@@ -264,13 +349,14 @@ Run the offline validation with:
 The coverage command validates both deferred manifests against the selected
 OpenAPI inventory. Stale methods or paths, duplicate entries, missing
 deferrals, unsupported path templates, and incomplete response documentation
-are deterministic failures. It also requires every operation in the admin
-deferral inventory to use `admin_identity_and_safety_plan_required` and every
-other operation to use `no_restricted_normal_user_scenario`; moving an
-operation across that boundary requires an explicit update to both manifests.
-It also writes the stable Session Gateway case artifact and validates the
-Session Gateway snapshot and inventory regardless of whether the unified source
-is the snapshot or live public document.
+are deterministic failures. The remaining currency/rate writes use
+`global_mutation_not_authorized`; other deferred responses retain their exact
+reviewed reason. Moving an operation from deferral to executable evidence
+requires an explicit update to the forbidden-response manifest, while successful
+operation coverage is accounted for independently in the admin deferral
+manifest. The command also writes the stable Session Gateway case artifact and
+validates the Session Gateway snapshot and inventory regardless of whether the
+unified source is the snapshot or live public document.
 
 Refresh the unified snapshot only through `tools/refresh-openapi.py`. Refresh
 the Session Gateway snapshot explicitly from the repository root only after its

@@ -3,9 +3,13 @@ from __future__ import annotations
 import pytest
 
 from api_tests import pytest_plugin
-from api_tests.config import load_environment
+from api_tests.config import EnvironmentConfig, load_environment
 from api_tests.pytest_plugin import marker_policy_skip_reason
 from api_tests.session import Session
+from api_tests.session_gateway_assertions import (
+    REQUIRED_ADMIN_PERMISSIONS,
+    AuthenticatedIdentity,
+)
 
 
 def test_mutation_marker_is_blocked_when_environment_disables_mutation() -> None:
@@ -22,6 +26,104 @@ def test_destructive_marker_is_blocked_when_environment_disables_destructive() -
 
     assert reason is not None
     assert f"{config.name} disables destructive tests" in reason
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        (
+            load_environment("staging"),
+            "admin deactivation runs only against the exact local target",
+        ),
+        (
+            load_environment("production"),
+            "admin deactivation runs only against the exact local target",
+        ),
+    ],
+    ids=["staging", "production"],
+)
+def test_admin_deactivation_policy_rejects_non_local_targets(
+    config: EnvironmentConfig,
+    expected: str,
+) -> None:
+    assert marker_policy_skip_reason(config, ["admin_deactivation"]) == expected
+
+
+def test_admin_deactivation_policy_rejects_opaque_local_sessions() -> None:
+    config = load_environment("local").model_copy(
+        update={"auth": load_environment("production").auth}
+    )
+
+    assert marker_policy_skip_reason(config, ["admin_deactivation"]) == (
+        "admin deactivation requires browser_preprovisioned mode; opaque supplied sessions "
+        "cannot prove disposable ownership"
+    )
+
+
+def test_admin_deactivation_policy_requires_destructive_and_mutation_permissions() -> None:
+    config = load_environment("local").model_copy(update={"allow_destructive": False})
+
+    reason = marker_policy_skip_reason(
+        config,
+        ["admin_deactivation", "admin", "authorization", "mutation", "destructive"],
+    )
+
+    assert reason is not None
+    assert "disables destructive tests" in reason
+
+
+def test_admin_deactivation_skip_precedes_network_fixture_setup(
+    pytester: pytest.Pytester,
+) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.fixture
+        def admin_gateway_client():
+            raise AssertionError("network-capable fixture should not run")
+
+        @pytest.mark.admin_deactivation
+        @pytest.mark.admin
+        @pytest.mark.authorization
+        @pytest.mark.mutation
+        @pytest.mark.destructive
+        def test_deactivation_is_blocked(admin_gateway_client):
+            raise AssertionError("test body should not run")
+        """
+    )
+
+    result = pytester.runpytest("--env", "staging", "-m", "admin_deactivation")
+
+    result.assert_outcomes(skipped=1)
+
+
+def test_admin_deactivation_marker_requires_all_safety_markers(
+    pytester: pytest.Pytester,
+) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.admin_deactivation
+        def test_missing_safety_markers():
+            pass
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "--collect-only")
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*admin_deactivation requires markers:*"])
+
+
+@pytest.mark.parametrize("marker", ["admin", "admin_auth_smoke"])
+def test_production_policy_excludes_admin_markers(marker: str) -> None:
+    assert marker_policy_skip_reason(load_environment("production"), [marker]) == (
+        "production excludes admin scenarios"
+    )
 
 
 def test_mutation_and_destructive_tests_skip_before_request_fixture_setup(
@@ -168,6 +270,151 @@ def test_primary_fixture_does_not_eagerly_acquire_secondary_session(
     assert acquired_roles == ["primary"]
 
 
+def test_admin_only_fixture_acquires_no_ordinary_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    pytester: pytest.Pytester,
+) -> None:
+    acquired_roles: list[str] = []
+
+    def record_acquisition(config: object, role: str) -> Session:
+        del config
+        acquired_roles.append(role)
+        return Session(cookie_name="BA_SESSION", cookie_value=f"{role}-cookie")
+
+    monkeypatch.setattr(pytest_plugin, "acquire_session", record_acquisition)
+    monkeypatch.setattr(
+        pytest_plugin,
+        "_request_authenticated_identity",
+        lambda client, snapshot: AuthenticatedIdentity(
+            subject="idp|admin",
+            roles=frozenset({"USER", "ADMIN"}),
+            permissions=REQUIRED_ADMIN_PERMISSIONS,
+        ),
+    )
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.admin
+        @pytest.mark.admin_auth_smoke
+        def test_admin_only(admin_gateway_client):
+            assert admin_gateway_client is not None
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "-m", "admin_auth_smoke")
+
+    result.assert_outcomes(passed=1)
+    assert acquired_roles == ["admin"]
+
+
+def test_missing_admin_role_exits_with_actionable_code_two(
+    monkeypatch: pytest.MonkeyPatch,
+    pytester: pytest.Pytester,
+) -> None:
+    monkeypatch.setattr(
+        pytest_plugin,
+        "acquire_session",
+        lambda config, role: Session(cookie_name="BA_SESSION", cookie_value="admin-cookie"),
+    )
+    monkeypatch.setattr(
+        pytest_plugin,
+        "_request_authenticated_identity",
+        lambda client, snapshot: AuthenticatedIdentity(
+            subject="idp|admin-subject",
+            roles=frozenset({"USER"}),
+            permissions=frozenset(),
+        ),
+    )
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.admin
+        @pytest.mark.admin_auth_smoke
+        def test_admin_promotion_stop(admin_gateway_client):
+            raise AssertionError("test body must not run")
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "-m", "admin_auth_smoke")
+
+    assert result.ret == 2
+    result.stdout.fnmatch_lines(
+        [
+            "*Please promote the test admin user to the ADMIN role in the database.*",
+            "*Add ADMIN while retaining USER.*BA_ADMIN_TEST_USERNAME in .env.local.*",
+            "*Then rerun the same command.*",
+        ]
+    )
+
+
+def test_admin_missing_permissions_fails_without_promotion_message(
+    monkeypatch: pytest.MonkeyPatch,
+    pytester: pytest.Pytester,
+) -> None:
+    monkeypatch.setattr(
+        pytest_plugin,
+        "acquire_session",
+        lambda config, role: Session(cookie_name="BA_SESSION", cookie_value="admin-cookie"),
+    )
+    monkeypatch.setattr(
+        pytest_plugin,
+        "_request_authenticated_identity",
+        lambda client, snapshot: AuthenticatedIdentity(
+            subject="idp|admin-subject",
+            roles=frozenset({"USER", "ADMIN"}),
+            permissions=REQUIRED_ADMIN_PERMISSIONS - {"users:write"},
+        ),
+    )
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.admin
+        def test_admin_configuration(admin_gateway_client):
+            raise AssertionError("test body must not run")
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "-m", "admin")
+
+    result.assert_outcomes(errors=1)
+    assert "admin authorization configuration failed" in result.stdout.str()
+    assert "users:write" in result.stdout.str()
+    assert "Please promote" not in result.stdout.str()
+
+
+def test_production_admin_skip_happens_before_session_fixture(
+    monkeypatch: pytest.MonkeyPatch,
+    pytester: pytest.Pytester,
+) -> None:
+    def unexpected_acquisition(*args: object, **kwargs: object) -> Session:
+        del args, kwargs
+        raise AssertionError("production must not acquire an admin session")
+
+    monkeypatch.setattr(pytest_plugin, "acquire_session", unexpected_acquisition)
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.admin
+        @pytest.mark.admin_auth_smoke
+        def test_admin_is_excluded(admin_gateway_client):
+            raise AssertionError("test body must not run")
+        """
+    )
+
+    result = pytester.runpytest("--env", "production", "-m", "admin_auth_smoke", "-rs")
+
+    result.assert_outcomes(skipped=1)
+    result.stdout.fnmatch_lines(["*production excludes admin scenarios*"])
+
+
 def test_auth_smoke_is_not_silently_skipped_without_marker_expression(
     pytester: pytest.Pytester,
 ) -> None:
@@ -301,6 +548,53 @@ def test_session_gateway_case_marker_collects(pytester: pytest.Pytester) -> None
     result = pytester.runpytest("--env", "local", "--collect-only")
 
     assert result.ret == pytest.ExitCode.OK
+
+
+def test_forbidden_response_marker_collects(pytester: pytest.Pytester) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.forbidden_response("getUsers")
+        def test_forbidden_response_marker():
+            pass
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "--collect-only")
+
+    assert result.ret == pytest.ExitCode.OK
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "@pytest.mark.forbidden_response()",
+        '@pytest.mark.forbidden_response("getUsers", contract="unified")',
+        "@pytest.mark.forbidden_response(7)",
+        '@pytest.mark.forbidden_response("")',
+    ],
+)
+def test_invalid_forbidden_response_marker_fails_collection(
+    pytester: pytest.Pytester,
+    marker: str,
+) -> None:
+    pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
+    pytester.makepyfile(
+        f"""
+        import pytest
+
+        {marker}
+        def test_invalid_marker():
+            pass
+        """
+    )
+
+    result = pytester.runpytest("--env", "local", "--collect-only")
+
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*pytest.mark.forbidden_response*"])
 
 
 @pytest.mark.parametrize(

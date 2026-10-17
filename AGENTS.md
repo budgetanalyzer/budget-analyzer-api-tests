@@ -92,13 +92,17 @@ replace missing prerequisites with test-harness workarounds.
 - Production defaults must remain read-only: `allow_mutation: false` and
   `allow_destructive: false`.
 - Do not broaden production permissions to reach coverage targets.
-- Keep admin/global operations deferred until a separate admin identity,
-  cleanup, and global-state safety plan exists.
+- Use only the separately validated admin identity for admin scenarios. Require
+  `admin_identity` before admin business setup, preserve `USER` when assigning
+  `ADMIN`, and never substitute the admin for primary or secondary. Keep global
+  currency/rate writes and SYSTEM statement-format writes deferred. Deactivate
+  only a fresh exact-local disposable user whose current-run provenance has been
+  bound to its public subject and canonical user id.
 - Keep mesh-internal Session Gateway behavior classified as untestable by this
   public harness. Do not add pod-specific requests, forge or delegate workload
-  identity, or imply that a trusted service-to-service runner is planned. An
-  optional future admin deactivation scenario may prove end-to-end revocation,
-  but it must not reclassify the internal hop.
+  identity, or imply that a trusted service-to-service runner is planned. The
+  public admin deactivation lifecycle proves end-to-end revocation, but it does
+  not reclassify or directly cover the internal hop.
 - Do not add generic cleanup callbacks or janitors. Use the pytest session's
   run id and resources created by the current test as the user-data boundary.
 
@@ -155,19 +159,22 @@ replace missing prerequisites with test-harness workarounds.
   .venv/bin/python tools/check-openapi-coverage.py --env local
   ```
 
-  This command writes `artifacts/openapi-coverage.json` and
+  This command writes `artifacts/openapi-coverage.json`,
+  `artifacts/forbidden-response-coverage.json`, and
   `artifacts/session-gateway-coverage.json`. It fails for unrecognized or
   malformed namespaced markers, missing or placeholder-only non-deferred
-  operation coverage, executable Session Gateway cases without markers, stale
-  deferred entries, incomplete route/case classifications, and Session Gateway
-  inventory/snapshot conflicts. The Session Gateway artifact and CLI report
-  operation and scenario classifications separately, including counts and ids.
+  operation coverage, malformed or placeholder-only forbidden-response
+  evidence, forbidden-response gaps or overlap, executable Session Gateway
+  cases without markers, stale deferred entries, incomplete route/case
+  classifications, and Session Gateway inventory/snapshot conflicts. The
+  forbidden-response and Session Gateway artifacts and CLI report their
+  classifications separately from operation markers, including counts and ids.
   Keep snapshot refresh separate and intentional. The normal no-argument
   `./run-tests` workflow performs coverage and unified live structural drift
   checks itself; do not require operators to invoke either tool first.
 
   The reviewed Session Gateway baseline is 3 covered filtered OpenAPI
-  operations and 34 scenarios: 14 covered, 11 deferred, and 9 untestable across
+  operations and 35 scenarios: 15 covered, 11 deferred, and 9 untestable across
   14 inbound routes. Treat `schemas/session-gateway-inbound-inventory.yaml` and
   the generated artifact as the source of truth; update this summary in the
   same change when classifications change. Say “all known inbound routes
@@ -177,10 +184,13 @@ replace missing prerequisites with test-harness workarounds.
 
 - Live API tests require the selected environment, runtime-provided HTTPS
   trust, Playwright system dependencies, and network access. Exact-local tests
-  create and reuse at most one primary and one secondary normal browser account
-  in `.env.local`; other environments require pre-provisioned users or supplied
-  sessions. Pytest does not run inferred prerequisite probes; failures occur at
-  the request, signup, or login that needs the missing prerequisite.
+  create and reuse one primary normal account, one secondary normal account,
+  and one separately promoted admin account in `.env.local`. Each selected
+  admin-deactivation execution also creates and retains one fresh disposable
+  normal account, with interrupted current-run records preserved for retry.
+  Other environments require pre-provisioned users or supplied sessions. Pytest
+  does not run inferred prerequisite probes; failures occur at the request,
+  signup, login, or authorization check that needs the missing prerequisite.
 - Production smoke execution requires a supplied read-only primary session and
   must use:
 
@@ -283,29 +293,35 @@ Use pytest for tests.
   ```python
   @pytest.mark.openapi("operationId")
   @pytest.mark.openapi("getCurrentUser", contract="session_gateway")
+  @pytest.mark.forbidden_response("getUsers")
   @pytest.mark.session_gateway_case("current-user-authenticated")
   ```
 
   Keep the one-argument form as the unified contract default. Always qualify
   Session Gateway operations so equal operation ids cannot merge coverage.
+  Use `forbidden_response` only for executable unified-contract `403` evidence;
+  it does not satisfy operation-success coverage.
   Use `session_gateway_case` only for exact `covered` ids in the inbound
   inventory; use `gateway_routing` for public route/method boundaries that are
   not OpenAPI operations.
 
 - Keep browser/session smoke outcomes identifiable. Use `auth_smoke` for the
   primary account and `secondary_auth_smoke` for the independently lazy
-  secondary account. They run in the full local suite and remain directly
-  selectable with ordinary pytest marker expressions.
+  secondary account. Use both `admin` and `admin_auth_smoke` for the reusable
+  admin readiness smoke. They run in the full local suite and remain directly
+  selectable with ordinary pytest marker expressions. Production must skip
+  both admin markers during collection before fixtures run.
 - Use `placeholder` only while a phase is under construction. Placeholder
   coverage is not an acceptable local regression baseline.
 - Mark mutating tests with `mutation`, destructive tests with `destructive`,
   read-only tests with `readonly`, missing or invalid identity tests with
   `authentication`, authorization or ownership-isolation tests with
   `authorization`, and production-safe tests with `production_safe`.
-- Keep all documented `403` responses in
-  `schemas/deferred-forbidden-responses.yaml` until a separate authorization
-  plan defines a safe restricted principal. Do not reinterpret privacy-safe
-  cross-user `404` or domain `422` responses as `403` coverage.
+- Partition every documented `403` response between literal executable
+  `forbidden_response` evidence and an exact entry in
+  `schemas/deferred-forbidden-responses.yaml`; never allow overlap or a gap. Do
+  not reinterpret privacy-safe cross-user `404` or domain `422` responses as
+  `403` coverage.
 - Production execution should select only explicitly production-safe read-only
   tests.
 - Mutation and destructive markers must be blocked by environment policy before
@@ -358,10 +374,11 @@ Use pytest for tests.
   untestable with an enforced architectural boundary; do not silently omit it.
 - Keep deferred admin/global operations explicit in
   `schemas/deferred-admin-operations.yaml` once the coverage phase is active.
-- Classify every documented `403` by exact operation id, method, path, and
-  deferral reason in `schemas/deferred-forbidden-responses.yaml`. Keep admin
-  operations deferred regardless of HTTP method until an admin identity,
-  cleanup, and global-state safety model is approved.
+- Resolve every documented `403` classification to exact operation id, method,
+  and path. Keep uncovered responses in
+  `schemas/deferred-forbidden-responses.yaml` with an exact reason, and remove a
+  response deferral only in the phase that adds executable public evidence.
+  Keep operation-success deferrals independent from response evidence.
 - Make JSON artifacts stable and readable with indentation where they are meant
   for review.
 - Preserve OpenAPI operation ids exactly. Do not rename them in test markers.

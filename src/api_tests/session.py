@@ -13,6 +13,10 @@ class MissingSecondarySessionError(RuntimeError):
     pass
 
 
+class MissingAdminSessionError(RuntimeError):
+    pass
+
+
 class IndistinctSessionsError(RuntimeError):
     pass
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Literal, TypedDict, cast
 from urllib.parse import urlencode, urlsplit
@@ -124,8 +125,14 @@ class BrowserFlowObserver:
 def login_with_browser(
     config: EnvironmentConfig,
     credentials: BrowserLoginCredentials,
+    *,
+    expected_return_paths: Sequence[str] | None = None,
 ) -> Session:
-    result = login_flow_with_browser(config, credentials)
+    result = login_flow_with_browser(
+        config,
+        credentials,
+        expected_return_paths=expected_return_paths,
+    )
     try:
         verify_session(config, result.session)
     except BrowserLoginError:
@@ -140,13 +147,17 @@ def login_flow_with_browser(
     *,
     return_url: str | None = None,
     expected_return_path: str | None = None,
+    expected_return_paths: Sequence[str] | None = None,
 ) -> BrowserLoginResult:
     timeout_ms = _browser_timeout_ms(config)
     browser_config = config.auth.browser
     if browser_config is None:
         raise BrowserLoginError("browser login requires browser settings")
-    expected_path = expected_return_path or config.browser_auth_contract.default_return_path
-    _validate_expected_return_path(expected_path)
+    allowed_return_paths = _resolve_expected_return_paths(
+        config,
+        expected_return_path=expected_return_path,
+        expected_return_paths=expected_return_paths,
+    )
     session: Session | None = None
 
     try:
@@ -182,10 +193,10 @@ def login_flow_with_browser(
                     observations = observer.result()
                     observer.assert_rate_limited_responses_were_paced()
                     final_path = _same_origin_page_path(page.url, config)
-                    if final_path != expected_path:
+                    if final_path not in allowed_return_paths:
                         raise BrowserLoginError(
                             "browser login returned to an unexpected same-origin path: "
-                            f"{final_path!r}"
+                            f"{final_path!r}; expected one of {allowed_return_paths!r}"
                         )
                     callback_observed = any(
                         observation.same_origin_path == config.browser_auth_contract.callback_path
@@ -477,6 +488,30 @@ def _validate_expected_return_path(value: str) -> None:
         or parsed.fragment
     ):
         raise BrowserLoginError("expected browser return path must be a safe same-origin path")
+
+
+def _resolve_expected_return_paths(
+    config: EnvironmentConfig,
+    *,
+    expected_return_path: str | None,
+    expected_return_paths: Sequence[str] | None,
+) -> tuple[str, ...]:
+    if expected_return_path is not None and expected_return_paths is not None:
+        raise BrowserLoginError(
+            "expected_return_path and expected_return_paths cannot both be provided"
+        )
+    paths: tuple[str, ...]
+    if expected_return_paths is None:
+        paths = (expected_return_path or config.browser_auth_contract.default_return_path,)
+    elif isinstance(expected_return_paths, str):
+        paths = (expected_return_paths,)
+    else:
+        paths = tuple(dict.fromkeys(expected_return_paths))
+        if not paths:
+            raise BrowserLoginError("expected browser return paths must not be empty")
+    for path in paths:
+        _validate_expected_return_path(path)
+    return paths
 
 
 def _external_host_classification(

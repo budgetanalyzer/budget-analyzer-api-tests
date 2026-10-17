@@ -34,6 +34,7 @@ from api_tests.schemas import assert_response_matches_openapi
 
 
 @pytest.mark.openapi("listFormats")
+@pytest.mark.openapi("getFormat")
 @pytest.mark.readonly
 @pytest.mark.production_safe
 def test_list_formats_returns_visible_formats(
@@ -50,8 +51,15 @@ def test_list_formats_returns_visible_formats(
     formats = json_array_response(response, httpx.codes.OK)
     for item in formats:
         statement_format = object_item(item)
-        int_field(statement_format, "id")
+        statement_format_id = int_field(statement_format, "id")
         string_field(statement_format, "createdAt")
+        if statement_format.get("scope") == "SYSTEM":
+            persisted = _get_statement_format(
+                gateway_client,
+                statement_format_id,
+                openapi_snapshot,
+            )
+            assert persisted.get("scope") == "SYSTEM"
 
 
 @pytest.mark.openapi("createFormat")
