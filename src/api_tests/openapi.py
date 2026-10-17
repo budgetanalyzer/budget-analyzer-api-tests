@@ -23,12 +23,14 @@ type RequestSafetyMarker = Literal["readonly", "production_safe", "mutation", "d
 type ForbiddenResponseDeferralReason = Literal[
     "no_restricted_normal_user_scenario",
     "admin_identity_and_safety_plan_required",
+    "global_mutation_not_authorized",
 ]
 
 FORBIDDEN_RESPONSE_DEFERRAL_REASONS: frozenset[str] = frozenset(
     {
         "no_restricted_normal_user_scenario",
         "admin_identity_and_safety_plan_required",
+        "global_mutation_not_authorized",
     }
 )
 _PATH_PARAMETER_PATTERN = re.compile(r"{([^{}]+)}")
@@ -215,63 +217,6 @@ def load_forbidden_response_deferrals(path: Path) -> tuple[ForbiddenResponseDefe
             )
         )
     return tuple(deferrals)
-
-
-def validate_forbidden_response_deferrals(
-    openapi_doc: OpenApiDocument,
-    deferrals: Iterable[ForbiddenResponseDeferral],
-    *,
-    deferred_admin_operation_ids: Iterable[str],
-) -> None:
-    operations = tuple(iter_operations(openapi_doc))
-    operations_by_id = {operation.operation_id: operation for operation in operations}
-    deferred_admin_ids = set(deferred_admin_operation_ids)
-    documented_forbidden_ids = {
-        operation.operation_id for operation in operations_documenting_response(openapi_doc, 403)
-    }
-    all_operation_ids = set(operations_by_id)
-    if documented_forbidden_ids != all_operation_ids:
-        missing = sorted(all_operation_ids - documented_forbidden_ids)
-        raise ValueError(
-            "OpenAPI operations missing documented 403 responses: " + ", ".join(missing)
-        )
-
-    seen_ids: set[str] = set()
-    for deferral in deferrals:
-        if deferral.operation_id in seen_ids:
-            raise ValueError(
-                f"duplicate forbidden-response deferral operationId: {deferral.operation_id}"
-            )
-        seen_ids.add(deferral.operation_id)
-        operation = operations_by_id.get(deferral.operation_id)
-        if operation is None:
-            raise ValueError(
-                "stale forbidden-response deferral is absent from OpenAPI: "
-                f"{deferral.operation_id} ({deferral.method} {deferral.path})"
-            )
-        if operation.method != deferral.method or operation.path != deferral.path:
-            raise ValueError(
-                f"stale forbidden-response method/path for {deferral.operation_id}: manifest has "
-                f"{deferral.method} {deferral.path}, OpenAPI has "
-                f"{operation.method} {operation.path}"
-            )
-        expected_reason: ForbiddenResponseDeferralReason = (
-            "admin_identity_and_safety_plan_required"
-            if deferral.operation_id in deferred_admin_ids
-            else "no_restricted_normal_user_scenario"
-        )
-        if deferral.reason != expected_reason:
-            raise ValueError(
-                f"forbidden-response deferral reason mismatch for {deferral.operation_id}: "
-                f"expected {expected_reason}, found {deferral.reason}"
-            )
-
-    missing_deferrals = sorted(all_operation_ids - seen_ids)
-    if missing_deferrals:
-        raise ValueError(
-            "OpenAPI operations missing forbidden-response deferrals: "
-            + ", ".join(missing_deferrals)
-        )
 
 
 def _validated_operation_entries(

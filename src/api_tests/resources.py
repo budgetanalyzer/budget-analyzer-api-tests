@@ -8,6 +8,7 @@ import httpx
 
 from api_tests.assertions import JsonObject, int_field, json_object_response, string_field
 from api_tests.builders.statement_formats import (
+    create_statement_format_request,
     csv_sample_bytes,
     csv_save_request,
     multipart_json,
@@ -24,23 +25,45 @@ from api_tests.run_state import RunState
 from api_tests.schemas import assert_response_matches_openapi
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class CreatedStatementFormat:
     id: int
     body: JsonObject
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class CreatedTransaction:
     id: int
     account_id: str
     body: JsonObject
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class CreatedSavedView:
     id: str
     body: JsonObject
+
+
+def create_statement_format(
+    client: GatewayClient,
+    run_state: RunState,
+    label: str,
+    *,
+    openapi_snapshot: OpenApiDocument | None = None,
+) -> CreatedStatementFormat:
+    response = client.api_request(
+        "POST",
+        "/v1/statement-formats",
+        json=create_statement_format_request(run_state, label),
+    )
+    _assert_response_matches_snapshot(
+        response,
+        "createFormat",
+        httpx.codes.CREATED,
+        openapi_snapshot,
+    )
+    body = json_object_response(response, httpx.codes.CREATED)
+    return CreatedStatementFormat(id=int_field(body, "id"), body=body)
 
 
 def save_csv_wizard_statement_format(
@@ -108,7 +131,10 @@ def create_manual_transaction(
     *,
     account_id: str | None = None,
     include_bank_name: bool = True,
+    bank_name: str | None = None,
+    description: str | None = None,
     amount: float = 12.34,
+    currency_iso_code: str = "USD",
     transaction_type: Literal["CREDIT", "DEBIT"] = "DEBIT",
     date: str = "2026-01-15",
     openapi_snapshot: OpenApiDocument | None = None,
@@ -121,8 +147,12 @@ def create_manual_transaction(
             run_state,
             label,
             account_id=transaction_account_id,
-            bank_name=generated_bank_name(run_state, label) if include_bank_name else None,
+            bank_name=(bank_name or generated_bank_name(run_state, label))
+            if include_bank_name
+            else None,
+            description=description,
             amount=amount,
+            currency_iso_code=currency_iso_code,
             transaction_type=transaction_type,
             date=date,
         ),

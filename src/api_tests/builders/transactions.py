@@ -84,15 +84,17 @@ def manual_transaction_request(
     *,
     account_id: str | None = None,
     bank_name: str | None = None,
+    description: str | None = None,
     amount: float = 12.34,
+    currency_iso_code: str = "USD",
     transaction_type: TransactionType = "DEBIT",
     date: str = "2026-01-15",
 ) -> CreateTransactionRequest:
     request: CreateTransactionRequest = {
         "date": date,
-        "description": f"{run_state.run_id} {label} transaction",
+        "description": description or f"{run_state.run_id} {label} transaction",
         "amount": amount,
-        "currencyIsoCode": "USD",
+        "currencyIsoCode": currency_iso_code,
         "type": transaction_type,
         "accountId": account_id or generated_account_id(run_state, label),
     }

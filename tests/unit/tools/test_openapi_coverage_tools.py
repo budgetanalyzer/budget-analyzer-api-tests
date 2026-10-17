@@ -19,6 +19,7 @@ def test_check_openapi_coverage_writes_artifact(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     output_path = tmp_path / "openapi-coverage.json"
+    forbidden_response_output_path = tmp_path / "forbidden-response-coverage.json"
     session_gateway_output_path = tmp_path / "session-gateway-coverage.json"
 
     exit_code = check_main(
@@ -27,6 +28,8 @@ def test_check_openapi_coverage_writes_artifact(
             "local",
             "--output",
             str(output_path),
+            "--forbidden-response-output",
+            str(forbidden_response_output_path),
             "--session-gateway-output",
             str(session_gateway_output_path),
         ]
@@ -36,6 +39,8 @@ def test_check_openapi_coverage_writes_artifact(
     assert exit_code == 0
     assert captured.err == ""
     assert "wrote OpenAPI coverage artifact:" in captured.out
+    assert "forbidden_response_covered: 5; ids:" in captured.out
+    assert "forbidden_response_deferred: 35; ids:" in captured.out
     assert "session_gateway_operation_covered: 3; ids:" in captured.out
     assert "session_gateway_scenario_deferred: 11; ids:" in captured.out
     assert "session_gateway_scenario_untestable: 9; ids:" in captured.out
@@ -55,6 +60,24 @@ def test_check_openapi_coverage_writes_artifact(
         "placeholder_marker_count",
         "status",
     }.issubset(rows[0])
+    forbidden_report = json.loads(forbidden_response_output_path.read_text(encoding="utf-8"))
+    assert forbidden_report["counts"] == {"covered": 5, "deferred": 35, "total": 40}
+    assert forbidden_report["ids"]["covered"] == [
+        "countTransactionsAcrossUsers",
+        "deactivateUser",
+        "getUser",
+        "getUsers",
+        "searchTransactions",
+    ]
+    assert {
+        "operation_id",
+        "method",
+        "path",
+        "status",
+        "marker_count",
+        "placeholder_marker_count",
+        "deferral_reason",
+    }.issubset(forbidden_report["rows"][0])
     session_report = json.loads(session_gateway_output_path.read_text(encoding="utf-8"))
     assert isinstance(session_report, dict)
     assert set(session_report) == {"claims", "operation_coverage", "scenario_coverage"}

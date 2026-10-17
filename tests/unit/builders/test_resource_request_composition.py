@@ -8,7 +8,7 @@ from email.parser import BytesParser
 
 import httpx
 
-from api_tests.builders.statement_formats import csv_save_request
+from api_tests.builders.statement_formats import create_statement_format_request, csv_save_request
 from api_tests.builders.transactions import (
     generated_account_id,
     generated_bank_name,
@@ -25,6 +25,7 @@ from api_tests.config import load_environment
 from api_tests.resources import (
     create_manual_transaction,
     create_saved_view,
+    create_statement_format,
     preview_transaction_files,
     save_csv_wizard_statement_format,
 )
@@ -55,6 +56,26 @@ def test_save_csv_wizard_statement_format_composes_documented_multipart_request(
         b"Date,Description,Amount,Type,Category\n2026-01-15,ba-api-test-"
     )
     assert _json_part(parts["request"][0]) == csv_save_request(run_state, "save-format")
+
+
+def test_create_statement_format_composes_explicit_user_scoped_request() -> None:
+    run_state = RunState("ba-api-test-20260605T123456Z-1a2b3c4d")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        body = _json_body(request)
+        assert isinstance(body, dict)
+        return httpx.Response(201, json={"id": 124, "createdAt": "2026-06-05T12:35:00Z", **body})
+
+    with _mock_gateway_client(handler) as client:
+        created = create_statement_format(client, run_state, "admin-format")
+
+    assert created.id == 124
+    request = requests[0]
+    assert request.method == "POST"
+    assert request.url.path == "/api/v1/statement-formats"
+    assert _json_body(request) == create_statement_format_request(run_state, "admin-format")
 
 
 def test_preview_transaction_files_composes_repeated_ordered_file_parts() -> None:
@@ -137,6 +158,42 @@ def test_create_manual_transaction_can_omit_optional_bank_name() -> None:
     request_body = _json_body(requests[0])
     assert isinstance(request_body, dict)
     assert "bankName" not in request_body
+
+
+def test_create_manual_transaction_accepts_controlled_search_fields() -> None:
+    run_state = RunState("ba-api-test-20260605T123456Z-1a2b3c4d")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        body = _json_body(request)
+        assert isinstance(body, dict)
+        return httpx.Response(201, json={"id": 791, **body})
+
+    with _mock_gateway_client(handler) as client:
+        created = create_manual_transaction(
+            client,
+            run_state,
+            "controlled",
+            account_id="controlled-account",
+            bank_name="Controlled Bank",
+            description="controlled description",
+            amount=98.76,
+            currency_iso_code="EUR",
+            transaction_type="CREDIT",
+            date="2026-02-03",
+        )
+
+    assert created.id == 791
+    assert _json_body(requests[0]) == {
+        "accountId": "controlled-account",
+        "amount": 98.76,
+        "bankName": "Controlled Bank",
+        "currencyIsoCode": "EUR",
+        "date": "2026-02-03",
+        "description": "controlled description",
+        "type": "CREDIT",
+    }
 
 
 def test_create_saved_view_composes_explicit_transaction_ids() -> None:

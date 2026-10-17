@@ -12,11 +12,13 @@ import pytest
 from playwright.sync_api import BrowserContext, CDPSession, Page, Response
 from playwright.sync_api import Error as PlaywrightError
 
+import api_tests.auth as auth_module
 import api_tests.browser_login as browser_login_module
 from api_tests.assertions import assert_status
 from api_tests.auth import (
     AuthConfigurationError,
     acquire_browser_session,
+    admin_promotion_message,
     load_existing_browser_credentials,
     load_supplied_session,
 )
@@ -29,10 +31,16 @@ from api_tests.browser_login import (
 )
 from api_tests.client import GatewayClient
 from api_tests.config import load_environment, with_session_mode
-from api_tests.logging import MAX_BODY_BYTES, _redact_headers, _redact_url
+from api_tests.logging import (
+    MAX_BODY_BYTES,
+    _redact_headers,
+    _redact_url,
+    redacted_response_context,
+)
 from api_tests.run_state import RUN_ID_PATTERN, generate_run_id
 from api_tests.session import (
     IndistinctSessionsError,
+    MissingAdminSessionError,
     MissingSecondarySessionError,
     Session,
     ensure_distinct_sessions,
@@ -252,6 +260,94 @@ def test_expected_browser_return_path_rejects_unsafe_values(unsafe_path: str) ->
         browser_login_module._validate_expected_return_path(unsafe_path)
 
 
+def test_admin_browser_acquisition_accepts_pre_and_post_promotion_destinations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_environment("staging")
+    observed_return_paths: list[tuple[str, ...] | None] = []
+
+    def fake_browser_login(
+        environment_config: object,
+        credentials: BrowserLoginCredentials,
+        *,
+        expected_return_paths: tuple[str, ...] | None = None,
+    ) -> Session:
+        assert environment_config is config
+        assert credentials.username == "staging-admin@example.invalid"
+        observed_return_paths.append(expected_return_paths)
+        return Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+
+    monkeypatch.setattr(auth_module, "login_with_browser", fake_browser_login)
+
+    session = acquire_browser_session(
+        config,
+        "admin",
+        environ={
+            "BA_ADMIN_TEST_USERNAME": "staging-admin@example.invalid",
+            "BA_ADMIN_TEST_PASSWORD": "admin-password",
+        },
+    )
+
+    assert session == Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+    assert observed_return_paths == [("/", "/admin")]
+
+
+def test_primary_browser_acquisition_accepts_only_normal_default_destination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_environment("staging")
+    observed_return_paths: list[tuple[str, ...] | None] = []
+
+    def fake_browser_login(
+        environment_config: object,
+        credentials: BrowserLoginCredentials,
+        *,
+        expected_return_paths: tuple[str, ...] | None = None,
+    ) -> Session:
+        assert environment_config is config
+        assert credentials.username == "staging-primary@example.invalid"
+        observed_return_paths.append(expected_return_paths)
+        return Session(cookie_name="BA_SESSION", cookie_value="primary-cookie")
+
+    monkeypatch.setattr(auth_module, "login_with_browser", fake_browser_login)
+
+    session = acquire_browser_session(
+        config,
+        "primary",
+        environ={
+            "BA_PRIMARY_TEST_USERNAME": "staging-primary@example.invalid",
+            "BA_PRIMARY_TEST_PASSWORD": "primary-password",
+        },
+    )
+
+    assert session == Session(cookie_name="BA_SESSION", cookie_value="primary-cookie")
+    assert observed_return_paths == [("/",)]
+
+
+def test_expected_browser_return_paths_accept_configured_admin_destination() -> None:
+    config = load_environment("local")
+
+    paths = browser_login_module._resolve_expected_return_paths(
+        config,
+        expected_return_path=None,
+        expected_return_paths=(
+            config.browser_auth_contract.default_return_path,
+            config.browser_auth_contract.admin_return_path,
+        ),
+    )
+
+    assert paths == ("/", "/admin")
+
+
+def test_expected_browser_return_paths_reject_conflicting_arguments() -> None:
+    with pytest.raises(BrowserLoginError, match="cannot both be provided"):
+        browser_login_module._resolve_expected_return_paths(
+            load_environment("local"),
+            expected_return_path="/",
+            expected_return_paths=("/admin",),
+        )
+
+
 def test_browser_acquisition_logs_in_only_requested_user() -> None:
     config = load_environment("local")
     login_credentials: list[BrowserLoginCredentials] = []
@@ -310,18 +406,47 @@ def test_browser_acquisition_fails_before_login_for_partial_environment_pair() -
     assert login_called is False
 
 
-def test_supplied_sessions_load_primary_and_secondary_independently() -> None:
+def test_supplied_sessions_load_all_roles_independently() -> None:
     config = load_environment("local")
     source = {
         "BA_PRIMARY_SESSION": "primary-cookie",
         "BA_SECONDARY_SESSION": "secondary-cookie",
+        "BA_ADMIN_SESSION": "admin-cookie",
     }
 
     primary = load_supplied_session(config, "primary", environ=source)
     secondary = load_supplied_session(config, "secondary", environ=source)
+    admin = load_supplied_session(config, "admin", environ=source)
 
     assert primary == Session(cookie_name="BA_SESSION", cookie_value="primary-cookie")
     assert secondary == Session(cookie_name="BA_SESSION", cookie_value="secondary-cookie")
+    assert admin == Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+
+
+def test_staging_browser_admin_uses_explicit_admin_credential_names() -> None:
+    config = load_environment("staging")
+    observed: list[BrowserLoginCredentials] = []
+
+    def login(
+        environment_config: object,
+        credentials: BrowserLoginCredentials,
+    ) -> Session:
+        assert environment_config is config
+        observed.append(credentials)
+        return Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+
+    session = acquire_browser_session(
+        config,
+        "admin",
+        environ={
+            "BA_ADMIN_TEST_USERNAME": "staging-admin@example.invalid",
+            "BA_ADMIN_TEST_PASSWORD": "admin-password",
+        },
+        login=login,
+    )
+
+    assert observed == [BrowserLoginCredentials("staging-admin@example.invalid", "admin-password")]
+    assert session == Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
 
 
 def test_isolated_lifecycle_rejects_supplied_session_mode() -> None:
@@ -377,6 +502,8 @@ def test_production_allows_primary_without_configuring_secondary() -> None:
     )
     with pytest.raises(MissingSecondarySessionError, match="does not configure"):
         load_supplied_session(config, "secondary", environ={})
+    with pytest.raises(MissingAdminSessionError, match="does not configure"):
+        load_supplied_session(config, "admin", environ={})
 
 
 def test_supplied_session_requires_requested_cookie() -> None:
@@ -384,6 +511,51 @@ def test_supplied_session_requires_requested_cookie() -> None:
 
     with pytest.raises(AuthConfigurationError, match="BA_PRIMARY_SESSION"):
         load_supplied_session(config, "primary", environ={})
+
+
+def test_local_admin_promotion_message_uses_saved_slot_without_credentials() -> None:
+    message = admin_promotion_message(
+        load_environment("local"),
+        "idp|stable-subject",
+        environ={},
+    )
+
+    assert message == (
+        "Please promote the test admin user to the ADMIN role in the database.\n"
+        "Add ADMIN while retaining USER. The local account username is stored as "
+        "BA_ADMIN_TEST_USERNAME in .env.local.\n"
+        "Then rerun the same command."
+    )
+    assert "stable-subject" not in message
+
+
+def test_external_admin_promotion_message_names_source_and_redacts_secrets() -> None:
+    password = "secret-admin-password"
+    username = "external-admin@example.invalid"
+    message = admin_promotion_message(
+        load_environment("local"),
+        "idp|stable-subject",
+        environ={
+            "BA_ADMIN_TEST_USERNAME": username,
+            "BA_ADMIN_TEST_PASSWORD": password,
+        },
+    )
+
+    assert "BA_ADMIN_TEST_USERNAME" in message
+    assert "BA_ADMIN_TEST_PASSWORD" in message
+    assert "idp|stable-subject" in message
+    assert username not in message
+    assert password not in message
+
+
+def test_supplied_admin_promotion_requires_a_refreshed_external_session() -> None:
+    config = with_session_mode(load_environment("local"), "supplied_sessions")
+
+    message = admin_promotion_message(config, "idp|stable-subject", environ={})
+
+    assert "BA_ADMIN_SESSION" in message
+    assert "idp|stable-subject" in message
+    assert "refreshed session" in message
 
 
 def test_secret_value_representations_are_redacted() -> None:
@@ -461,6 +633,7 @@ def test_gateway_client_uses_origin_api_prefix_session_and_request_log(
                 "username": "sensitive-username",
                 "password": "secret-password",
                 "access_token": "secret-token",
+                "userId": "usr-sensitive-target",
             },
         )
 
@@ -485,6 +658,7 @@ def test_gateway_client_uses_origin_api_prefix_session_and_request_log(
     assert "sensitive-username" not in log_entry["response_body_prefix"]
     assert "secret-password" not in log_entry["response_body_prefix"]
     assert "secret-token" not in log_entry["response_body_prefix"]
+    assert "usr-sensitive-target" not in log_entry["response_body_prefix"]
 
 
 def test_status_failure_context_redacts_sensitive_response_values() -> None:
@@ -523,6 +697,133 @@ def test_oauth_diagnostics_redact_query_values_and_location_header() -> None:
     assert "secret-state" not in redacted_url
     assert "returnUrl=%2Fsettings" in redacted_url
     assert redacted_headers["location"] == "[REDACTED]"
+
+
+def test_user_admin_diagnostics_redact_arbitrary_profiles_and_encoded_queries(
+    tmp_path: Path,
+) -> None:
+    email = "real.person+phase4@corp.example"
+    display_name = "Real Profile Name"
+    subject = "idp|arbitrary-profile-subject"
+    user_id = "usr_arbitrary_internal_id"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            500,
+            headers={"content-type": "application/json"},
+            json={
+                "content": [
+                    {
+                        "id": user_id,
+                        "idpSub": subject,
+                        "email": email,
+                        "displayName": display_name,
+                        "status": "ACTIVE",
+                    }
+                ]
+            },
+        )
+
+    artifact_path = tmp_path / "request-log.jsonl"
+    with GatewayClient(
+        load_environment("local"),
+        artifact_path=artifact_path,
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.api_request(
+            "GET",
+            f"/v1/users/{user_id}",
+            params={"email": email, "displayName": display_name, "idpSub": subject},
+        )
+
+    log_entry = json.loads(artifact_path.read_text(encoding="utf-8"))
+    rendered_log = json.dumps(log_entry, sort_keys=True)
+    with pytest.raises(AssertionError) as exc_info:
+        assert_status(response, httpx.codes.OK)
+    rendered_failure = str(exc_info.value)
+
+    for sensitive_value in (email, display_name, subject, user_id):
+        assert sensitive_value not in rendered_log
+        assert sensitive_value not in rendered_failure
+    assert "real.person%2Bphase4%40corp.example" not in rendered_log
+    assert rendered_log.count("REDACTED") >= 4
+
+
+def test_session_gateway_user_diagnostics_redact_subject_and_name() -> None:
+    subject = "idp|arbitrary-session-subject"
+    display_name = "Arbitrary Session Profile"
+    response = httpx.Response(
+        500,
+        request=httpx.Request("GET", "https://app.example/auth/v1/user"),
+        headers={"content-type": "application/json"},
+        json={
+            "authenticated": True,
+            "sub": subject,
+            "name": display_name,
+            "email": "session.profile@corp.example",
+            "roles": ["USER"],
+        },
+    )
+
+    context = redacted_response_context(response)
+
+    assert subject not in context
+    assert display_name not in context
+    assert "session.profile@corp.example" not in context
+    assert context.count("[REDACTED]") == 3
+
+
+def test_user_profile_failure_is_redacted_from_junit_output(
+    pytester: pytest.Pytester,
+) -> None:
+    pytester.makepyfile(
+        """
+        import httpx
+
+        from api_tests.assertions import assert_status
+
+
+        def test_profile_failure():
+            user_id = "usr_" + "junit_secret"
+            subject = "idp|" + "junit-secret"
+            email = "junit.person" + "@corp.example"
+            display_name = "JUnit " + "Secret Name"
+            response = httpx.Response(
+                500,
+                request=httpx.Request(
+                    "GET",
+                    "https://app.example/api/v1/users/" + user_id,
+                    params={
+                        "email": email,
+                        "displayName": display_name,
+                        "idpSub": subject,
+                    },
+                ),
+                headers={"content-type": "application/json"},
+                json={
+                    "id": user_id,
+                    "idpSub": subject,
+                    "email": email,
+                    "displayName": display_name,
+                },
+            )
+            assert_status(response, httpx.codes.OK)
+        """
+    )
+    junit_path = pytester.path / "profile-results.xml"
+
+    result = pytester.runpytest("--junitxml", str(junit_path))
+
+    result.assert_outcomes(failed=1)
+    junit = junit_path.read_text(encoding="utf-8")
+    for sensitive_value in (
+        "usr_junit_secret",
+        "idp|junit-secret",
+        "junit.person@corp.example",
+        "JUnit Secret Name",
+    ):
+        assert sensitive_value not in junit
+    assert "REDACTED" in junit
 
 
 def test_oversized_json_is_redacted_before_artifact_and_failure_context_truncation(

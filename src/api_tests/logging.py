@@ -24,13 +24,21 @@ SENSITIVE_OAUTH_QUERY_NAMES = {
     "nonce",
     "state",
 }
+SENSITIVE_PROFILE_QUERY_NAMES = {"displayname", "email", "id", "idpsub"}
 SENSITIVE_KEY_RE = re.compile(
     r"(authorization|cookie|email|username|password|client_secret|access_token|refresh_token|"
     r"id_token|token)",
     re.IGNORECASE,
 )
-GENERATED_ACCOUNT_RE = re.compile(r"ba-api-test-[A-Za-z0-9_-]+@test\.com", re.IGNORECASE)
+EMAIL_RE = re.compile(
+    r"(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![A-Z0-9.-])",
+    re.IGNORECASE,
+)
 PREVIEW_TOKEN_RE = re.compile(r"\bv2\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
+USER_PROFILE_KEYS = frozenset({"displayname", "email", "id", "idpsub", "name", "sub"})
+IDENTITY_REFERENCE_KEYS = frozenset(
+    {"createdby", "deactivatedby", "deletedby", "ownerid", "updatedby", "userid"}
+)
 HttpxEventHook = Callable[..., object]
 DEFAULT_REQUEST_LOG_PATH = (
     repository_root()
@@ -124,7 +132,10 @@ def _redact_body_prefix(response: httpx.Response) -> str:
     except json.JSONDecodeError:
         sanitized = _redact_sensitive_text(text)
     else:
-        sanitized = json.dumps(_redact_json(payload), sort_keys=True)
+        sanitized = json.dumps(
+            _redact_json(payload, redact_user_profile=_is_user_profile_response(response)),
+            sort_keys=True,
+        )
 
     return _utf8_prefix(sanitized, MAX_BODY_BYTES)
 
@@ -136,21 +147,27 @@ def _utf8_prefix(value: str, byte_limit: int) -> str:
     return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
-def _redact_json(value: object) -> object:
+def _redact_json(value: object, *, redact_user_profile: bool = False) -> object:
     if isinstance(value, dict):
         return {
-            str(key): "[REDACTED]" if SENSITIVE_KEY_RE.search(str(key)) else _redact_json(item)
+            str(key): (
+                "[REDACTED]"
+                if SENSITIVE_KEY_RE.search(str(key))
+                or str(key).casefold() in IDENTITY_REFERENCE_KEYS
+                or (redact_user_profile and str(key).casefold() in USER_PROFILE_KEYS)
+                else _redact_json(item, redact_user_profile=redact_user_profile)
+            )
             for key, item in value.items()
         }
     if isinstance(value, list):
-        return [_redact_json(item) for item in value]
+        return [_redact_json(item, redact_user_profile=redact_user_profile) for item in value]
     if isinstance(value, str):
         return _redact_sensitive_text(value)
     return value
 
 
 def _redact_sensitive_text(value: str) -> str:
-    redacted = GENERATED_ACCOUNT_RE.sub("[REDACTED]", value)
+    redacted = EMAIL_RE.sub("[REDACTED]", value)
     redacted = PREVIEW_TOKEN_RE.sub("[REDACTED]", redacted)
     redacted = re.sub(
         r"(?i)(authorization:\s*bearer\s+)[^\s,;]+",
@@ -173,13 +190,31 @@ def _redact_sensitive_text(value: str) -> str:
 
 def _redact_url(url: str) -> str:
     parsed = urlsplit(url)
+    path = re.sub(
+        r"(?i)(/v1/users/)[^/?#]+",
+        r"\1[REDACTED]",
+        parsed.path,
+    )
     redacted_query = urlencode(
         [
-            (name, "[REDACTED]" if name.casefold() in SENSITIVE_OAUTH_QUERY_NAMES else value)
+            (
+                name,
+                "[REDACTED]"
+                if name.casefold() in SENSITIVE_OAUTH_QUERY_NAMES | SENSITIVE_PROFILE_QUERY_NAMES
+                else value,
+            )
             for name, value in parse_qsl(parsed.query, keep_blank_values=True)
         ],
         doseq=True,
     )
     return _redact_sensitive_text(
-        urlunsplit((parsed.scheme, parsed.netloc, parsed.path, redacted_query, parsed.fragment))
+        urlunsplit((parsed.scheme, parsed.netloc, path, redacted_query, parsed.fragment))
     )
+
+
+def _is_user_profile_response(response: httpx.Response) -> bool:
+    try:
+        path = response.request.url.path
+    except RuntimeError:
+        return False
+    return bool(re.search(r"(?i)(?:/v1/users(?:/|$)|/auth/v1/user$)", path))

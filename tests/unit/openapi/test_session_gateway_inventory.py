@@ -40,7 +40,7 @@ def test_session_gateway_snapshot_and_inventory_are_complete() -> None:
 
     assert {row.status for row in coverage} == {"covered", "deferred", "untestable"}
     assert Counter(row.status for row in coverage) == {
-        "covered": 14,
+        "covered": 15,
         "deferred": 11,
         "untestable": 9,
     }
@@ -216,7 +216,7 @@ def test_report_keeps_operation_and_scenario_coverage_separate() -> None:
         ("placeholder", 0),
     ]
     assert [(row.status, row.count) for row in report.scenario_coverage.classifications] == [
-        ("covered", 14),
+        ("covered", 15),
         ("deferred", 11),
         ("untestable", 9),
     ]

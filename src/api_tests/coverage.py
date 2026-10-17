@@ -10,10 +10,17 @@ from typing import Literal, cast
 
 import yaml
 
-from api_tests.openapi import HttpMethod, OpenApiContractKey, OpenApiOperation
+from api_tests.openapi import (
+    ForbiddenResponseDeferral,
+    ForbiddenResponseDeferralReason,
+    HttpMethod,
+    OpenApiContractKey,
+    OpenApiOperation,
+)
 
 CoverageSource = Literal["live", "snapshot"]
 CoverageStatus = Literal["covered", "placeholder", "missing", "deferred"]
+ForbiddenResponseCoverageStatus = Literal["covered", "deferred"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +53,17 @@ class OperationCoverage:
     marker_count: int
     placeholder_marker_count: int
     status: CoverageStatus
+
+
+@dataclass(frozen=True, slots=True)
+class ForbiddenResponseCoverage:
+    operation_id: str
+    method: HttpMethod
+    path: str
+    status: ForbiddenResponseCoverageStatus
+    marker_count: int
+    placeholder_marker_count: int
+    deferral_reason: ForbiddenResponseDeferralReason | None
 
 
 def load_deferred_admin_operations(path: Path) -> tuple[DeferredAdminOperation, ...]:
@@ -211,6 +229,116 @@ def write_coverage_artifact(path: Path, coverage: Iterable[OperationCoverage]) -
     )
 
 
+def build_forbidden_response_coverage(
+    operations: Iterable[OpenApiOperation],
+    deferrals: Iterable[ForbiddenResponseDeferral],
+    marker_counts: Mapping[str, MarkerCounts],
+) -> tuple[ForbiddenResponseCoverage, ...]:
+    operation_list = tuple(operations)
+    deferral_list = tuple(deferrals)
+    operations_by_id = {operation.operation_id: operation for operation in operation_list}
+    if len(operations_by_id) != len(operation_list):
+        raise ValueError("documented 403 operations contain duplicate operation ids")
+
+    unrecognized_markers = sorted(set(marker_counts) - operations_by_id.keys())
+    if unrecognized_markers:
+        raise ValueError(
+            "unrecognized pytest.mark.forbidden_response operations: "
+            + ", ".join(unrecognized_markers)
+        )
+
+    placeholder_only = sorted(
+        operation_id
+        for operation_id, counts in marker_counts.items()
+        if counts.marker_count > 0 and counts.marker_count == counts.placeholder_marker_count
+    )
+    if placeholder_only:
+        raise ValueError(
+            "forbidden-response evidence has only placeholder tests: " + ", ".join(placeholder_only)
+        )
+
+    deferrals_by_id: dict[str, ForbiddenResponseDeferral] = {}
+    for deferral in deferral_list:
+        if deferral.operation_id in deferrals_by_id:
+            raise ValueError(
+                f"duplicate forbidden-response deferral operationId: {deferral.operation_id}"
+            )
+        operation = operations_by_id.get(deferral.operation_id)
+        if operation is None:
+            raise ValueError(
+                "stale forbidden-response deferral is absent from documented OpenAPI 403 "
+                f"responses: {deferral.operation_id} ({deferral.method} {deferral.path})"
+            )
+        if operation.method != deferral.method or operation.path != deferral.path:
+            raise ValueError(
+                f"stale forbidden-response method/path for {deferral.operation_id}: manifest has "
+                f"{deferral.method} {deferral.path}, OpenAPI has "
+                f"{operation.method} {operation.path}"
+            )
+        deferrals_by_id[deferral.operation_id] = deferral
+
+    executable_ids = {
+        operation_id
+        for operation_id, counts in marker_counts.items()
+        if counts.marker_count > counts.placeholder_marker_count
+    }
+    deferred_ids = set(deferrals_by_id)
+    overlap = sorted(executable_ids & deferred_ids)
+    if overlap:
+        raise ValueError(
+            "documented 403 responses have both executable evidence and deferrals: "
+            + ", ".join(overlap)
+        )
+    missing = sorted(operations_by_id.keys() - executable_ids - deferred_ids)
+    if missing:
+        raise ValueError(
+            "documented 403 responses have neither executable evidence nor deferrals: "
+            + ", ".join(missing)
+        )
+
+    rows: list[ForbiddenResponseCoverage] = []
+    for operation in sorted(
+        operation_list, key=lambda item: (item.path, item.method, item.operation_id)
+    ):
+        counts = marker_counts.get(operation.operation_id, MarkerCounts())
+        row_deferral = deferrals_by_id.get(operation.operation_id)
+        rows.append(
+            ForbiddenResponseCoverage(
+                operation_id=operation.operation_id,
+                method=operation.method,
+                path=operation.path,
+                status="deferred" if row_deferral is not None else "covered",
+                marker_count=counts.marker_count,
+                placeholder_marker_count=counts.placeholder_marker_count,
+                deferral_reason=row_deferral.reason if row_deferral is not None else None,
+            )
+        )
+    return tuple(rows)
+
+
+def write_forbidden_response_coverage_artifact(
+    path: Path,
+    coverage: Iterable[ForbiddenResponseCoverage],
+) -> None:
+    rows = tuple(coverage)
+    covered_ids = sorted(row.operation_id for row in rows if row.status == "covered")
+    deferred_ids = sorted(row.operation_id for row in rows if row.status == "deferred")
+    report: dict[str, object] = {
+        "counts": {
+            "covered": len(covered_ids),
+            "deferred": len(deferred_ids),
+            "total": len(rows),
+        },
+        "ids": {
+            "covered": covered_ids,
+            "deferred": deferred_ids,
+        },
+        "rows": [asdict(row) for row in rows],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def collect_openapi_markers_from_tests(
     tests_dir: Path,
 ) -> Mapping[OperationKey, MarkerCounts]:
@@ -218,6 +346,39 @@ def collect_openapi_markers_from_tests(
     for test_path in sorted(tests_dir.rglob("test_*.py")):
         marker_entries.extend(_collect_openapi_markers_from_file(test_path))
     return build_marker_counts(marker_entries)
+
+
+def collect_forbidden_response_markers_from_tests(
+    tests_dir: Path,
+) -> Mapping[str, MarkerCounts]:
+    marker_counts: Counter[str] = Counter()
+    placeholder_counts: Counter[str] = Counter()
+    for test_path in sorted(tests_dir.rglob("test_*.py")):
+        module = ast.parse(test_path.read_text(encoding="utf-8"), filename=str(test_path))
+        for node in ast.walk(module):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            operation_ids = [
+                operation_id
+                for decorator in node.decorator_list
+                if (operation_id := _forbidden_response_marker_operation(decorator)) is not None
+            ]
+            is_placeholder = any(
+                _is_pytest_marker(decorator, "placeholder") for decorator in node.decorator_list
+            )
+            for operation_id in operation_ids:
+                marker_counts[operation_id] += 1
+                if is_placeholder:
+                    placeholder_counts[operation_id] += 1
+
+    all_operation_ids = marker_counts.keys() | placeholder_counts.keys()
+    return {
+        operation_id: MarkerCounts(
+            marker_count=marker_counts[operation_id],
+            placeholder_marker_count=placeholder_counts[operation_id],
+        )
+        for operation_id in sorted(all_operation_ids)
+    }
 
 
 def collect_session_gateway_case_markers_from_tests(tests_dir: Path) -> Mapping[str, int]:
@@ -307,6 +468,23 @@ def _session_gateway_case_marker(node: ast.expr) -> str | None:
     if not case_id.value:
         raise ValueError("@pytest.mark.session_gateway_case case id must not be empty")
     return case_id.value
+
+
+def _forbidden_response_marker_operation(node: ast.expr) -> str | None:
+    if not isinstance(node, ast.Call):
+        return None
+    if not _is_pytest_marker(node.func, "forbidden_response"):
+        return None
+    if len(node.args) != 1 or node.keywords:
+        raise ValueError(
+            "@pytest.mark.forbidden_response requires exactly one positional operation id"
+        )
+    operation_id = node.args[0]
+    if not isinstance(operation_id, ast.Constant) or not isinstance(operation_id.value, str):
+        raise ValueError("@pytest.mark.forbidden_response operation id must be a string literal")
+    if not operation_id.value:
+        raise ValueError("@pytest.mark.forbidden_response operation id must not be empty")
+    return operation_id.value
 
 
 def _is_pytest_marker(node: ast.expr, marker_name: str) -> bool:

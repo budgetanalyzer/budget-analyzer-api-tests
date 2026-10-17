@@ -12,7 +12,14 @@ def test_committed_environment_config_loads(environment_name: str) -> None:
 
     assert config.name == environment_name
     assert config.browser_auth_contract.callback_path == "/login/oauth2/code/idp"
+    assert config.browser_auth_contract.default_return_path == "/"
+    assert config.browser_auth_contract.admin_return_path == "/admin"
     assert config.browser_auth_contract.session_cookie_same_site == "Strict"
+    if config.environment_type != "production":
+        assert config.auth.supplied_sessions.admin_session_env == "BA_ADMIN_SESSION"
+        assert config.auth.browser is not None
+        assert config.auth.browser.admin_username_env == "BA_ADMIN_TEST_USERNAME"
+        assert config.auth.browser.admin_password_env == "BA_ADMIN_TEST_PASSWORD"
     if config.environment_type == "production":
         assert config.allow_mutation is False
         assert config.allow_destructive is False
@@ -46,6 +53,8 @@ def test_production_rejects_browser_settings() -> None:
         "primary_password_env": "BA_PRIMARY_TEST_PASSWORD",
         "secondary_username_env": "BA_SECONDARY_TEST_USERNAME",
         "secondary_password_env": "BA_SECONDARY_TEST_PASSWORD",
+        "admin_username_env": "BA_ADMIN_TEST_USERNAME",
+        "admin_password_env": "BA_ADMIN_TEST_PASSWORD",
     }
 
     with pytest.raises(ValidationError, match="must not configure browser acquisition"):

@@ -11,10 +11,12 @@ auth:
   supplied_sessions:
     primary_session_env: BA_PRIMARY_SESSION
     secondary_session_env:
+    admin_session_env:
   browser:
 browser_auth_contract:
   callback_path: /login/oauth2/code/idp
   default_return_path: /
+  admin_return_path: /admin
   logout_return_path: /peace
   provider_logout_path: /v2/logout
   provider_host_suffixes:

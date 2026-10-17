@@ -6,7 +6,7 @@ deferred_forbidden_responses:
   - operationId: create
     method: POST
     path: /v1/currencies
-    reason: admin_identity_and_safety_plan_required
+    reason: global_mutation_not_authorized
   - operationId: getById
     method: GET
     path: /v1/currencies/{id}
@@ -14,7 +14,7 @@ deferred_forbidden_responses:
   - operationId: update
     method: PUT
     path: /v1/currencies/{id}
-    reason: admin_identity_and_safety_plan_required
+    reason: global_mutation_not_authorized
   - operationId: getExchangeRates
     method: GET
     path: /v1/exchange-rates
@@ -22,7 +22,7 @@ deferred_forbidden_responses:
   - operationId: importLatestExchangeRates
     method: POST
     path: /v1/exchange-rates/import
-    reason: admin_identity_and_safety_plan_required
+    reason: global_mutation_not_authorized
   - operationId: listFormats
     method: GET
     path: /v1/statement-formats
@@ -95,14 +95,6 @@ deferred_forbidden_responses:
     method: POST
     path: /v1/transactions/preview
     reason: no_restricted_normal_user_scenario
-  - operationId: searchTransactions
-    method: GET
-    path: /v1/transactions/search
-    reason: admin_identity_and_safety_plan_required
-  - operationId: countTransactionsAcrossUsers
-    method: GET
-    path: /v1/transactions/search/count
-    reason: admin_identity_and_safety_plan_required
   - operationId: deleteTransaction
     method: DELETE
     path: /v1/transactions/{id}
@@ -115,18 +107,6 @@ deferred_forbidden_responses:
     method: PATCH
     path: /v1/transactions/{id}
     reason: no_restricted_normal_user_scenario
-  - operationId: getUsers
-    method: GET
-    path: /v1/users
-    reason: admin_identity_and_safety_plan_required
-  - operationId: getUser
-    method: GET
-    path: /v1/users/{id}
-    reason: admin_identity_and_safety_plan_required
-  - operationId: deactivateUser
-    method: POST
-    path: /v1/users/{id}/deactivate
-    reason: admin_identity_and_safety_plan_required
   - operationId: listViews
     method: GET
     path: /v1/views

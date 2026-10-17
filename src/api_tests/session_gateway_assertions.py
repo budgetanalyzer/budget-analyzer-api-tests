@@ -19,6 +19,39 @@ from api_tests.config import EnvironmentConfig
 from api_tests.openapi import OpenApiDocument
 from api_tests.schemas import assert_response_matches_openapi
 
+REQUIRED_ADMIN_PERMISSIONS = frozenset(
+    {
+        "transactions:read:any",
+        "users:read",
+        "users:write",
+        "statementformats:read:any",
+        "statementformats:write:any",
+    }
+)
+
+
+@dataclass(frozen=True, repr=False)
+class AuthenticatedIdentity:
+    subject: str
+    roles: frozenset[str]
+    permissions: frozenset[str]
+    display_name: str | None = None
+    email: str | None = None
+
+
+class AdminPromotionRequired(RuntimeError):
+    def __init__(self, subject: str) -> None:
+        super().__init__("authenticated normal user does not have the ADMIN role")
+        self.subject = subject
+
+
+class AuthorizationConfigurationError(RuntimeError):
+    pass
+
+
+class IndistinctIdentityError(RuntimeError):
+    pass
+
 
 @dataclass(frozen=True, repr=False)
 class OAuthAuthorizationRedirect:
@@ -44,6 +77,62 @@ def assert_authenticated_user_response(
     string_array_field(body, "roles")
     string_array_field(body, "permissions")
     return body
+
+
+def authenticated_identity(
+    response: httpx.Response,
+    openapi_snapshot: OpenApiDocument,
+) -> AuthenticatedIdentity:
+    body = assert_authenticated_user_response(response, openapi_snapshot)
+    return AuthenticatedIdentity(
+        subject=string_field(body, "sub"),
+        roles=frozenset(string_array_field(body, "roles")),
+        permissions=frozenset(string_array_field(body, "permissions")),
+        display_name=string_field(body, "name"),
+        email=string_field(body, "email"),
+    )
+
+
+def require_normal_identity(identity: AuthenticatedIdentity, *, label: str) -> None:
+    if "USER" not in identity.roles:
+        raise AuthorizationConfigurationError(f"{label} identity is missing the required USER role")
+    if "ADMIN" in identity.roles:
+        raise AuthorizationConfigurationError(
+            f"{label} identity unexpectedly has ADMIN; ordinary denial results would be invalid"
+        )
+
+
+def require_admin_identity(identity: AuthenticatedIdentity) -> None:
+    if "ADMIN" not in identity.roles:
+        if "USER" in identity.roles:
+            raise AdminPromotionRequired(identity.subject)
+        raise AuthorizationConfigurationError(
+            "admin identity is missing both USER and ADMIN; expected a normal account awaiting "
+            "promotion or an account retaining both roles"
+        )
+    if "USER" not in identity.roles:
+        raise AuthorizationConfigurationError(
+            "admin identity has ADMIN but is missing USER; retain USER when assigning ADMIN"
+        )
+    missing_permissions = sorted(REQUIRED_ADMIN_PERMISSIONS - identity.permissions)
+    if missing_permissions:
+        raise AuthorizationConfigurationError(
+            "admin identity has ADMIN but is missing required effective permissions: "
+            + ", ".join(missing_permissions)
+        )
+
+
+def ensure_distinct_identities(
+    identities: tuple[tuple[str, AuthenticatedIdentity], ...],
+) -> None:
+    subjects: dict[str, str] = {}
+    for label, identity in identities:
+        existing_label = subjects.get(identity.subject)
+        if existing_label is not None:
+            raise IndistinctIdentityError(
+                f"{existing_label} and {label} resolve to the same public subject"
+            )
+        subjects[identity.subject] = label
 
 
 def assert_oauth_authorization_redirect(

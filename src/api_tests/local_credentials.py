@@ -21,9 +21,11 @@ ASSIGNMENT_RE: Final = re.compile(
     r"^\s*(?:export\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.*)$"
 )
 
-type SessionRole = Literal["primary", "secondary"]
+type SessionRole = Literal["primary", "secondary", "admin"]
 type CredentialState = Literal["external", "pending", "complete"]
 type CredentialGenerator = Callable[[], BrowserLoginCredentials]
+
+DISPOSABLE_RECORD_PREFIX: Final = "BA_ADMIN_DEACTIVATION_"
 
 
 class LocalCredentialError(RuntimeError):
@@ -34,6 +36,212 @@ class LocalCredentialError(RuntimeError):
 class LocalCredentialRecord:
     credentials: BrowserLoginCredentials
     state: CredentialState
+
+
+@dataclass(frozen=True, repr=False)
+class DisposableCredentialRecord:
+    run_id: str
+    scenario_id: str
+    credentials: BrowserLoginCredentials
+    state: Literal["pending", "complete"]
+    subject: str | None = None
+    user_id: str | None = None
+
+
+def load_or_create_disposable_credentials(
+    config: EnvironmentConfig,
+    run_id: str,
+    scenario_id: str,
+    *,
+    path: Path | None = None,
+    generator: CredentialGenerator | None = None,
+) -> DisposableCredentialRecord:
+    """Load only this execution's target, or persist a fresh target before signup."""
+    ensure_exact_local_target(config)
+    prefix = _disposable_variable_prefix(run_id, scenario_id)
+    credential_path = path or repository_root() / ".env.local"
+    values = _read_credential_file(credential_path)
+    names = _disposable_variable_names(prefix)
+    stored_run_id = values.get(names.run_id, "").strip()
+    stored_scenario_id = values.get(names.scenario_id, "").strip()
+    stored_username = values.get(names.username, "").strip()
+    stored_password = values.get(names.password, "").strip()
+    stored_state = values.get(names.state, "").strip()
+    stored_subject = values.get(names.subject, "").strip()
+    stored_user_id = values.get(names.user_id, "").strip()
+    current_values = (
+        stored_run_id,
+        stored_scenario_id,
+        stored_username,
+        stored_password,
+        stored_state,
+        stored_subject,
+        stored_user_id,
+    )
+
+    if any(current_values):
+        if not all((stored_run_id, stored_scenario_id, stored_username, stored_password)):
+            raise LocalCredentialError(
+                f"{credential_path} contains an incomplete disposable deactivation record; "
+                "preserve it for diagnosis and restore its matching fields"
+            )
+        if stored_run_id != run_id or stored_scenario_id != scenario_id:
+            raise LocalCredentialError(
+                f"{credential_path} disposable deactivation provenance does not match the "
+                "current run and scenario"
+            )
+        if stored_state not in {"pending", "complete"}:
+            raise LocalCredentialError(
+                f"{credential_path} has invalid disposable account state in {names.state}"
+            )
+        if bool(stored_subject) != bool(stored_user_id):
+            raise LocalCredentialError(
+                f"{credential_path} contains a partial disposable identity binding"
+            )
+        if stored_subject and stored_state != "complete":
+            raise LocalCredentialError(
+                f"{credential_path} binds an identity to an incomplete disposable account"
+            )
+        credentials = BrowserLoginCredentials(stored_username, stored_password)
+        _ensure_disposable_username_is_distinct(
+            config,
+            credentials.username,
+            prefix=prefix,
+            values=values,
+        )
+        return DisposableCredentialRecord(
+            run_id=run_id,
+            scenario_id=scenario_id,
+            credentials=credentials,
+            state=cast(Literal["pending", "complete"], stored_state),
+            subject=stored_subject or None,
+            user_id=stored_user_id or None,
+        )
+
+    credentials = (generator or generate_local_credentials)()
+    _ensure_disposable_username_is_distinct(
+        config,
+        credentials.username,
+        prefix=prefix,
+        values=values,
+    )
+    _update_credential_file(
+        credential_path,
+        {
+            names.run_id: run_id,
+            names.scenario_id: scenario_id,
+            names.username: credentials.username,
+            names.password: credentials.password,
+            names.state: "pending",
+        },
+    )
+    return DisposableCredentialRecord(run_id, scenario_id, credentials, "pending")
+
+
+def mark_disposable_credentials_complete(
+    config: EnvironmentConfig,
+    record: DisposableCredentialRecord,
+    *,
+    path: Path | None = None,
+) -> DisposableCredentialRecord:
+    ensure_exact_local_target(config)
+    credential_path = path or repository_root() / ".env.local"
+    prefix = _disposable_variable_prefix(record.run_id, record.scenario_id)
+    names = _disposable_variable_names(prefix)
+    values = _read_credential_file(credential_path)
+    _require_saved_disposable_record(values, names, record, credential_path)
+    _update_credential_file(credential_path, {names.state: "complete"})
+    return DisposableCredentialRecord(
+        record.run_id,
+        record.scenario_id,
+        record.credentials,
+        "complete",
+        record.subject,
+        record.user_id,
+    )
+
+
+def bind_disposable_identity(
+    config: EnvironmentConfig,
+    record: DisposableCredentialRecord,
+    *,
+    current_run_id: str,
+    current_scenario_id: str,
+    subject: str,
+    user_id: str,
+    reusable_subjects: frozenset[str],
+    reusable_user_ids: frozenset[str],
+    path: Path | None = None,
+) -> DisposableCredentialRecord:
+    """Bind public and canonical identity only after exact execution ownership checks."""
+    ensure_exact_local_target(config)
+    _require_current_disposable_provenance(record, current_run_id, current_scenario_id)
+    if record.state != "complete":
+        raise LocalCredentialError("disposable target must complete signup before identity binding")
+    if not subject or not user_id:
+        raise LocalCredentialError("disposable identity binding requires subject and user id")
+    if subject in reusable_subjects or user_id in reusable_user_ids:
+        raise LocalCredentialError("refusing to bind a reusable identity as a disposable target")
+
+    credential_path = path or repository_root() / ".env.local"
+    prefix = _disposable_variable_prefix(record.run_id, record.scenario_id)
+    names = _disposable_variable_names(prefix)
+    values = _read_credential_file(credential_path)
+    _require_saved_disposable_record(values, names, record, credential_path)
+    for name, value in values.items():
+        if (
+            name.startswith(DISPOSABLE_RECORD_PREFIX)
+            and name.endswith("_IDP_SUBJECT")
+            and name != names.subject
+            and value.strip() == subject
+        ):
+            raise LocalCredentialError(
+                "disposable public subject is already bound to another execution record"
+            )
+        if (
+            name.startswith(DISPOSABLE_RECORD_PREFIX)
+            and name.endswith("_USER_ID")
+            and name != names.user_id
+            and value.strip() == user_id
+        ):
+            raise LocalCredentialError(
+                "disposable canonical user id is already bound to another execution record"
+            )
+    if record.subject is not None and record.subject != subject:
+        raise LocalCredentialError("disposable public subject changed after identity binding")
+    if record.user_id is not None and record.user_id != user_id:
+        raise LocalCredentialError("disposable canonical user id changed after identity binding")
+    _update_credential_file(
+        credential_path,
+        {names.subject: subject, names.user_id: user_id},
+    )
+    return DisposableCredentialRecord(
+        record.run_id,
+        record.scenario_id,
+        record.credentials,
+        "complete",
+        subject,
+        user_id,
+    )
+
+
+def require_owned_disposable_identity(
+    record: DisposableCredentialRecord,
+    *,
+    current_run_id: str,
+    current_scenario_id: str,
+    subject: str,
+    user_id: str,
+    reusable_subjects: frozenset[str],
+    reusable_user_ids: frozenset[str],
+) -> None:
+    _require_current_disposable_provenance(record, current_run_id, current_scenario_id)
+    if record.state != "complete" or record.subject is None or record.user_id is None:
+        raise LocalCredentialError("disposable target lacks a completed identity binding")
+    if record.subject != subject or record.user_id != user_id:
+        raise LocalCredentialError("disposable target identity does not match saved provenance")
+    if subject in reusable_subjects or user_id in reusable_user_ids:
+        raise LocalCredentialError("refusing to treat a reusable identity as disposable")
 
 
 def ensure_exact_local_target(config: EnvironmentConfig) -> None:
@@ -177,10 +385,16 @@ def _variable_names(
             browser_config.primary_password_env,
             "BA_PRIMARY_TEST_ACCOUNT_STATE",
         )
+    if role == "secondary":
+        return (
+            browser_config.secondary_username_env,
+            browser_config.secondary_password_env,
+            "BA_SECONDARY_TEST_ACCOUNT_STATE",
+        )
     return (
-        browser_config.secondary_username_env,
-        browser_config.secondary_password_env,
-        "BA_SECONDARY_TEST_ACCOUNT_STATE",
+        browser_config.admin_username_env,
+        browser_config.admin_password_env,
+        "BA_ADMIN_TEST_ACCOUNT_STATE",
     )
 
 
@@ -193,28 +407,129 @@ def _ensure_distinct_role_username(
     path: Path | None,
     values: Mapping[str, str] | None = None,
 ) -> None:
-    other_role: SessionRole = "secondary" if role == "primary" else "primary"
-    other_username_name, other_password_name, _ = _variable_names(config, other_role)
-    external_username = source.get(other_username_name, "").strip()
-    external_password = source.get(other_password_name, "").strip()
-    if external_username and external_password:
-        other_username = external_username
-    elif external_username or external_password:
-        # The other role will report its own partial-pair error if it is requested.
-        return
-    else:
-        credential_path = path or repository_root() / ".env.local"
-        saved_values = values if values is not None else _read_credential_file(credential_path)
-        saved_username = saved_values.get(other_username_name, "").strip()
-        saved_password = saved_values.get(other_password_name, "").strip()
-        if not saved_username or not saved_password:
-            return
-        other_username = saved_username
+    credential_path = path or repository_root() / ".env.local"
+    saved_values = values if values is not None else _read_credential_file(credential_path)
+    for other_role in ("primary", "secondary", "admin"):
+        if other_role == role:
+            continue
+        other_username_name, other_password_name, _ = _variable_names(config, other_role)
+        external_username = source.get(other_username_name, "").strip()
+        external_password = source.get(other_password_name, "").strip()
+        if external_username and external_password:
+            other_username = external_username
+        elif external_username or external_password:
+            # The other role reports its own partial-pair error when requested.
+            continue
+        else:
+            saved_username = saved_values.get(other_username_name, "").strip()
+            saved_password = saved_values.get(other_password_name, "").strip()
+            if not saved_username or not saved_password:
+                continue
+            other_username = saved_username
 
-    if username == other_username:
+        if username == other_username:
+            raise LocalCredentialError(
+                f"{role} and {other_role} local credentials resolve to the same username; "
+                "configure distinct identities for every credential slot"
+            )
+
+
+@dataclass(frozen=True)
+class _DisposableVariableNames:
+    run_id: str
+    scenario_id: str
+    username: str
+    password: str
+    state: str
+    subject: str
+    user_id: str
+
+
+def _disposable_variable_prefix(run_id: str, scenario_id: str) -> str:
+    if not run_id or not scenario_id:
+        raise LocalCredentialError("disposable provenance requires non-empty run and scenario ids")
+    token = re.sub(r"[^A-Za-z0-9]+", "_", f"{run_id}_{scenario_id}").strip("_").upper()
+    if not token:
+        raise LocalCredentialError("disposable provenance did not produce a safe record name")
+    return f"{DISPOSABLE_RECORD_PREFIX}{token}"
+
+
+def _disposable_variable_names(prefix: str) -> _DisposableVariableNames:
+    return _DisposableVariableNames(
+        run_id=f"{prefix}_RUN_ID",
+        scenario_id=f"{prefix}_SCENARIO_ID",
+        username=f"{prefix}_USERNAME",
+        password=f"{prefix}_PASSWORD",
+        state=f"{prefix}_ACCOUNT_STATE",
+        subject=f"{prefix}_IDP_SUBJECT",
+        user_id=f"{prefix}_USER_ID",
+    )
+
+
+def _ensure_disposable_username_is_distinct(
+    config: EnvironmentConfig,
+    username: str,
+    *,
+    prefix: str,
+    values: Mapping[str, str],
+) -> None:
+    for role in ("primary", "secondary", "admin"):
+        username_name, password_name, _ = _variable_names(config, role)
+        external_username = os.environ.get(username_name, "").strip()
+        external_password = os.environ.get(password_name, "").strip()
+        if external_username and external_password:
+            reusable_username = external_username
+        elif external_username or external_password:
+            continue
+        else:
+            saved_username = values.get(username_name, "").strip()
+            saved_password = values.get(password_name, "").strip()
+            if not saved_username or not saved_password:
+                continue
+            reusable_username = saved_username
+        if username == reusable_username:
+            raise LocalCredentialError("disposable username resolves to a reusable credential slot")
+    current_username_name = _disposable_variable_names(prefix).username
+    for name, value in values.items():
+        if (
+            name.startswith(DISPOSABLE_RECORD_PREFIX)
+            and name.endswith("_USERNAME")
+            and name != current_username_name
+            and value.strip() == username
+        ):
+            raise LocalCredentialError(
+                "disposable username is already retained by another execution record"
+            )
+
+
+def _require_saved_disposable_record(
+    values: Mapping[str, str],
+    names: _DisposableVariableNames,
+    record: DisposableCredentialRecord,
+    path: Path,
+) -> None:
+    expected = {
+        names.run_id: record.run_id,
+        names.scenario_id: record.scenario_id,
+        names.username: record.credentials.username,
+        names.password: record.credentials.password,
+        names.state: record.state,
+    }
+    if any(values.get(name, "").strip() != value for name, value in expected.items()):
         raise LocalCredentialError(
-            "primary and secondary local credentials resolve to the same username; "
-            "configure two distinct normal users"
+            f"{path} changed while provisioning the disposable account; retained credentials "
+            "and provenance were not replaced"
+        )
+
+
+def _require_current_disposable_provenance(
+    record: DisposableCredentialRecord,
+    current_run_id: str,
+    current_scenario_id: str,
+) -> None:
+    if record.run_id != current_run_id or record.scenario_id != current_scenario_id:
+        raise LocalCredentialError(
+            "disposable target provenance does not belong to the current run and scenario"
         )
 
 

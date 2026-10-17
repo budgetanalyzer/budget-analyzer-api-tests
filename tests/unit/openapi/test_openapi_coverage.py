@@ -11,6 +11,7 @@ from api_tests.coverage import (
     OperationKey,
     build_marker_counts,
     build_operation_coverage,
+    collect_forbidden_response_markers_from_tests,
     collect_openapi_markers_from_tests,
     collect_session_gateway_case_markers_from_tests,
     load_deferred_admin_operations,
@@ -272,6 +273,57 @@ def test_user():
 
     with pytest.raises(ValueError, match="case id must be a string literal"):
         collect_session_gateway_case_markers_from_tests(tmp_path)
+
+
+def test_static_forbidden_response_marker_collection_counts_exact_ids(tmp_path: Path) -> None:
+    test_path = tmp_path / "test_forbidden.py"
+    test_path.write_text(
+        """
+import pytest
+
+@pytest.mark.forbidden_response("getUsers")
+def test_users_denied():
+    pass
+
+@pytest.mark.forbidden_response("getUsers")
+@pytest.mark.placeholder
+def test_users_placeholder():
+    pass
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    counts = collect_forbidden_response_markers_from_tests(tmp_path)
+
+    assert counts["getUsers"].marker_count == 2
+    assert counts["getUsers"].placeholder_marker_count == 1
+
+
+@pytest.mark.parametrize(
+    ("marker", "message"),
+    [
+        ("@pytest.mark.forbidden_response()", "exactly one positional operation id"),
+        (
+            '@pytest.mark.forbidden_response("getUsers", contract="unified")',
+            "exactly one positional operation id",
+        ),
+        ("@pytest.mark.forbidden_response(OPERATION_ID)", "must be a string literal"),
+        ('@pytest.mark.forbidden_response("")', "must not be empty"),
+    ],
+)
+def test_static_forbidden_response_marker_rejects_invalid_grammar(
+    tmp_path: Path,
+    marker: str,
+    message: str,
+) -> None:
+    test_path = tmp_path / "test_invalid_forbidden.py"
+    test_path.write_text(
+        f'import pytest\nOPERATION_ID = "getUsers"\n{marker}\ndef test_case(): pass\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        collect_forbidden_response_markers_from_tests(tmp_path)
 
 
 @pytest.mark.parametrize(

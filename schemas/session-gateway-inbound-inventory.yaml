@@ -106,8 +106,11 @@ routes:
       - id: heartbeat-account-inactive
         behavior: Deletes the session, clears the cookie, and returns 401 for a deactivated or missing account.
         status: deferred
-        reason: account_state_transition_requires_test_owned_permission_control
-        prerequisite: A disposable target identity plus an approved admin deactivation and cleanup safety model.
+        reason: inactive_account_with_surviving_session_requires_controlled_revocation_bypass
+        prerequisite: A controllable account-state transition that leaves the exact test-owned Redis session present until heartbeat; successful public deactivation bulk-revokes it and cannot isolate this fallback branch.
+      - id: public-admin-deactivation-revokes-sessions
+        behavior: Public admin deactivation bulk-revokes both active sessions of a fresh disposable normal account; original cookies are rejected by current-user, protected API, and heartbeat requests, and heartbeat clears each stale cookie.
+        status: covered
       - id: heartbeat-permission-service-failure
         behavior: Returns JSON 503 without clearing the cookie or extending the session on permission-service timeout, unavailability, or invalid payload.
         status: deferred
@@ -141,7 +144,7 @@ routes:
         boundary: The public HTTPRoute omits /internal and mesh policy admits this DELETE only from permission-service; the harness neither runs trusted service clients nor forges or delegates workload identity.
         optional_indirect_proof:
           scenario: Create an active session for a disposable target identity, deactivate that target through the public permission-service admin operation, then require the target user and heartbeat requests to return 401.
-          prerequisite: A separately approved admin identity plus a disposable-target lifecycle and cleanup safety model.
+          prerequisite: The exact-local public-admin-deactivation-revokes-sessions case uses the separately validated reusable admin identity and a fresh execution-owned disposable target.
           limitation: Proves the public deactivation-to-revocation workflow end to end but does not isolate or directly exercise the internal hop.
 
   - method: GET

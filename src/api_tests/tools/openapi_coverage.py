@@ -13,14 +13,18 @@ from pydantic import ValidationError
 from api_tests.client import GatewayClient
 from api_tests.config import load_environment, repository_root
 from api_tests.coverage import (
+    ForbiddenResponseCoverage,
     OperationCoverage,
+    build_forbidden_response_coverage,
     build_operation_coverage,
+    collect_forbidden_response_markers_from_tests,
     collect_openapi_markers_from_tests,
     collect_session_gateway_case_markers_from_tests,
     load_deferred_admin_operations,
     missing_operation_ids,
     placeholder_operation_ids,
     write_coverage_artifact,
+    write_forbidden_response_coverage_artifact,
 )
 from api_tests.openapi import (
     build_operation_request_cases,
@@ -28,7 +32,7 @@ from api_tests.openapi import (
     iter_operations,
     load_forbidden_response_deferrals,
     load_snapshot,
-    validate_forbidden_response_deferrals,
+    operations_documenting_response,
 )
 from api_tests.session_gateway_inventory import (
     SessionGatewayCaseCoverage,
@@ -49,6 +53,7 @@ def check_main(argv: Sequence[str] | None = None) -> int:
         env_name=str(args.env),
         source=args.source,
         output_path=Path(args.output),
+        forbidden_response_output_path=Path(args.forbidden_response_output),
         session_gateway_output_path=Path(args.session_gateway_output),
     )
 
@@ -70,6 +75,11 @@ def _parse_coverage_args(
         help="Session Gateway route/case coverage artifact path",
     )
     parser.add_argument(
+        "--forbidden-response-output",
+        default=str(repository_root() / "artifacts" / "forbidden-response-coverage.json"),
+        help="documented 403 response coverage artifact path",
+    )
+    parser.add_argument(
         "--output",
         default=str(repository_root() / "artifacts" / "openapi-coverage.json"),
         help="coverage artifact path",
@@ -88,16 +98,25 @@ def _run_coverage_command(
     env_name: str,
     source: CoverageDocumentSource,
     output_path: Path,
+    forbidden_response_output_path: Path,
     session_gateway_output_path: Path,
 ) -> int:
     try:
         coverage = build_coverage(env_name=env_name, source=source)
+        forbidden_response_coverage = build_forbidden_coverage(
+            env_name=env_name,
+            source=source,
+        )
         session_gateway_coverage = build_session_gateway_coverage()
         session_gateway_report = build_session_gateway_coverage_report(
             (row for row in coverage if row.contract == "session_gateway"),
             session_gateway_coverage,
         )
         write_coverage_artifact(output_path, coverage)
+        write_forbidden_response_coverage_artifact(
+            forbidden_response_output_path,
+            forbidden_response_coverage,
+        )
         write_session_gateway_coverage_artifact(session_gateway_output_path, session_gateway_report)
     except (FileNotFoundError, ValueError, ValidationError, httpx.RequestError) as exc:
         print(f"OpenAPI coverage failed: {exc}", file=sys.stderr)
@@ -106,11 +125,13 @@ def _run_coverage_command(
     missing = missing_operation_ids(coverage)
     placeholders = placeholder_operation_ids(coverage)
     print(f"wrote OpenAPI coverage artifact: {output_path}")
+    print(f"wrote forbidden-response coverage artifact: {forbidden_response_output_path}")
     print(f"wrote Session Gateway coverage artifact: {session_gateway_output_path}")
     print(f"operations: {len(coverage)}")
     print(f"missing: {len(missing)}")
     print(f"placeholder: {len(placeholders)}")
     print(f"deferred_admin: {sum(1 for operation in coverage if operation.deferred_admin)}")
+    _print_forbidden_response_coverage(forbidden_response_coverage)
     for line in session_gateway_coverage_lines(session_gateway_report):
         print(line)
 
@@ -150,10 +171,10 @@ def build_coverage(
         root / "schemas" / "deferred-forbidden-responses.yaml"
     )
     build_operation_request_cases(openapi_doc, required_response_statuses=(401, 403))
-    validate_forbidden_response_deferrals(
-        openapi_doc,
+    build_forbidden_response_coverage(
+        operations_documenting_response(openapi_doc, 403),
         forbidden_deferrals,
-        deferred_admin_operation_ids=(operation.operation_id for operation in deferred),
+        collect_forbidden_response_markers_from_tests(root / "tests"),
     )
 
     unified_coverage = build_operation_coverage(
@@ -171,6 +192,45 @@ def build_coverage(
         source="snapshot",
     )
     return unified_coverage + session_gateway_coverage
+
+
+def build_forbidden_coverage(
+    *,
+    env_name: str,
+    source: CoverageDocumentSource,
+) -> tuple[ForbiddenResponseCoverage, ...]:
+    config = load_environment(env_name)
+    root = repository_root()
+    if source == "live":
+        with GatewayClient(config) as client:
+            openapi_doc = fetch_live_openapi(client, config.openapi_path)
+    else:
+        openapi_doc = load_snapshot(root / "schemas" / "openapi.json")
+
+    build_operation_request_cases(openapi_doc, required_response_statuses=(401, 403))
+    return build_forbidden_response_coverage(
+        operations_documenting_response(openapi_doc, 403),
+        load_forbidden_response_deferrals(root / "schemas" / "deferred-forbidden-responses.yaml"),
+        collect_forbidden_response_markers_from_tests(root / "tests"),
+    )
+
+
+def forbidden_response_coverage_lines(
+    coverage: Sequence[ForbiddenResponseCoverage],
+) -> tuple[str, str]:
+    covered_ids = sorted(row.operation_id for row in coverage if row.status == "covered")
+    deferred_ids = sorted(row.operation_id for row in coverage if row.status == "deferred")
+    return (
+        f"forbidden_response_covered: {len(covered_ids)}; ids: {', '.join(covered_ids)}",
+        f"forbidden_response_deferred: {len(deferred_ids)}; ids: {', '.join(deferred_ids)}",
+    )
+
+
+def _print_forbidden_response_coverage(
+    coverage: Sequence[ForbiddenResponseCoverage],
+) -> None:
+    for line in forbidden_response_coverage_lines(coverage):
+        print(line)
 
 
 def build_session_gateway_coverage() -> tuple[SessionGatewayCaseCoverage, ...]:
