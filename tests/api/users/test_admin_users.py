@@ -37,6 +37,7 @@ _SORT_FIELDS = (
     "updatedAt",
     "deactivatedAt",
 )
+_TIMESTAMP_SORT_FIELDS = frozenset({"createdAt", "updatedAt", "deactivatedAt"})
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -139,16 +140,16 @@ def test_admin_user_search_covers_filters_text_matching_and_combinations(
         {"displayName": target.display_name.swapcase()},
     )
     for query in text_filters:
-        page = _search_users(admin_gateway_client, openapi_snapshot, query)
-        _require_users_present(page, (target.id,))
+        records = _search_all_users(admin_gateway_client, openapi_snapshot, query)
+        _require_users_present(records, (target.id,))
 
-    email_or_page = _search_users(
+    email_or_records = _search_all_users(
         admin_gateway_client,
         openapi_snapshot,
         {"email": f"{admin_user_dataset.primary.email} {admin_user_dataset.secondary.email}"},
     )
     _require_users_present(
-        email_or_page,
+        email_or_records,
         (admin_user_dataset.primary.id, admin_user_dataset.secondary.id),
     )
 
@@ -156,22 +157,22 @@ def test_admin_user_search_covers_filters_text_matching_and_combinations(
         record.display_name.split()[0]
         for record in (admin_user_dataset.primary, admin_user_dataset.secondary)
     )
-    display_name_or_page = _search_users(
+    display_name_or_records = _search_all_users(
         admin_gateway_client,
         openapi_snapshot,
         {"displayName": display_name_terms},
     )
     _require_users_present(
-        display_name_or_page,
+        display_name_or_records,
         (admin_user_dataset.primary.id, admin_user_dataset.secondary.id),
     )
 
-    wildcard_page = _search_users(
+    wildcard_records = _search_all_users(
         admin_gateway_client,
         openapi_snapshot,
         {"email": f"%_{run_state.run_id}_literal"},
     )
-    _require_users_absent(wildcard_page, (record.id for record in admin_user_dataset.all))
+    _require_users_absent(wildcard_records, (record.id for record in admin_user_dataset.all))
 
     missing_page = _search_users(
         admin_gateway_client,
@@ -363,6 +364,29 @@ def _search_users(
     )
 
 
+def _search_all_users(
+    client: GatewayClient,
+    openapi_snapshot: OpenApiDocument,
+    query: QueryParams,
+) -> tuple[_UserRecord, ...]:
+    records: list[_UserRecord] = []
+    page_number = 0
+    while True:
+        page = _search_users(
+            client,
+            openapi_snapshot,
+            {**query, "page": page_number, "sort": ["id,asc"]},
+        )
+        if page.page != page_number:
+            raise AssertionError("user search returned unexpected pagination metadata")
+        records.extend(page.content)
+        if page.last:
+            return tuple(records)
+        if page_number + 1 >= page.total_pages:
+            raise AssertionError("user search pagination metadata did not identify a last page")
+        page_number += 1
+
+
 def _user_record(body: JsonObject) -> _UserRecord:
     deactivated_at = body.get("deactivatedAt")
     if deactivated_at is not None and not isinstance(deactivated_at, str):
@@ -386,16 +410,16 @@ def _require_only_user(page: _UserPage, expected_id: str) -> None:
     _safe_equal(page.content[0].id, expected_id, "canonical user id")
 
 
-def _require_users_present(page: _UserPage, expected_ids: Iterable[str]) -> None:
+def _require_users_present(records: Iterable[_UserRecord], expected_ids: Iterable[str]) -> None:
     expected = set(expected_ids)
-    actual = {record.id for record in page.content}
+    actual = {record.id for record in records}
     if not expected.issubset(actual):
         raise AssertionError("a user query omitted an expected reusable identity")
 
 
-def _require_users_absent(page: _UserPage, unexpected_ids: Iterable[str]) -> None:
+def _require_users_absent(records: Iterable[_UserRecord], unexpected_ids: Iterable[str]) -> None:
     unexpected = set(unexpected_ids)
-    actual = {record.id for record in page.content}
+    actual = {record.id for record in records}
     if unexpected & actual:
         raise AssertionError("an escaped text filter unexpectedly matched a reusable identity")
 
@@ -434,7 +458,7 @@ def _assert_sorted(records: tuple[_UserRecord, ...], field: str, direction: str)
             )
 
 
-def _sort_value(record: _UserRecord, field: str) -> str | None:
+def _sort_value(record: _UserRecord, field: str) -> str | datetime | None:
     values = {
         "id": record.id,
         "email": record.email,
@@ -444,11 +468,17 @@ def _sort_value(record: _UserRecord, field: str) -> str | None:
         "updatedAt": record.updated_at,
         "deactivatedAt": record.deactivated_at,
     }
-    return values[field]
+    value = values[field]
+    if value is not None and field in _TIMESTAMP_SORT_FIELDS:
+        return _timestamp(value)
+    return value
 
 
 def _timestamp(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.utcoffset() is None:
+        raise AssertionError("user timestamp was not timezone-aware")
+    return parsed
 
 
 def _optional_string_field(body: JsonObject, field: str) -> str | None:
