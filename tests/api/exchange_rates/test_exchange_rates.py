@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import warnings
+
 import httpx
 import pytest
 
 from api_tests.assertions import (
+    bool_field,
     json_array_response,
     object_item,
     string_field,
@@ -50,14 +53,24 @@ def _first_enabled_target_currency(
     gateway_client: GatewayClient,
     openapi_snapshot: OpenApiDocument,
 ) -> str:
-    response = gateway_client.api_request("GET", "/v1/currencies", params={"enabledOnly": True})
+    response = gateway_client.api_request("GET", "/v1/currencies", params={"enabledOnly": False})
     assert_response_matches_openapi(response, "getAll", httpx.codes.OK, openapi_snapshot)
     currencies = json_array_response(response, httpx.codes.OK)
-    assert currencies, "expected at least one enabled currency series"
+    assert currencies, "expected at least one configured currency series"
+    enabled_codes: list[str] = []
     for item in currencies:
         currency = object_item(item)
-        currency_code = string_field(currency, "currencyCode")
+        if bool_field(currency, "enabled"):
+            enabled_codes.append(string_field(currency, "currencyCode"))
+
+    if not enabled_codes:
+        reason = (
+            "successful getExchangeRates path not tested: no configured currency series is enabled"
+        )
+        warnings.warn(reason, RuntimeWarning, stacklevel=2)
+        pytest.skip(reason)
+
+    for currency_code in enabled_codes:
         if currency_code != "USD":
             return currency_code
-
-    return string_field(object_item(currencies[0]), "currencyCode")
+    return enabled_codes[0]
