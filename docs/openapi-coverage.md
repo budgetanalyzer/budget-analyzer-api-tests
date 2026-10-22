@@ -276,6 +276,19 @@ outside successful authenticated execution: currency `create`, currency
 `update`, and `importLatestExchangeRates`. These global writes remain untouched,
 including negative authenticated requests.
 
+`getExchangeRates` success remains statically inventoried by its operation
+marker, but its live success request depends on environment state. A fresh
+database guarantees a non-empty configured currency catalog, not an enabled
+currency series, and the service rejects disabled targets with `422
+CURRENCY_NOT_ENABLED`. The read-only test therefore lists all configured
+currencies, fails if that catalog is empty, and selects an enabled target
+(preferring non-`USD`). When no series is enabled, it emits a `RuntimeWarning`
+stating that the successful exchange-rate path was not tested and then skips
+with the same reason. That warning and skip are not successful live execution
+of the `getExchangeRates` response contract. The test never enables a currency
+or substitutes a disabled target, and the `200` request and response assertions
+still execute whenever an enabled series exists.
+
 `searchTransactions` and `countTransactionsAcrossUsers` are covered by
 schema-backed admin scenarios over six test-created rows split across distinct
 primary and secondary owners. The scenarios use owner ids returned by public
