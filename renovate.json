@@ -67,6 +67,17 @@
       ]
     },
     {
+      "description": "Keep Python runtime updates within the declared requires-python minor line; minor-line changes are intentional runtime migrations, not routine updates",
+      "matchManagers": [
+        "pyenv",
+        "pep621"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "allowedVersions": "<3.13"
+    },
+    {
       "description": "Keep Playwright package and derived browser metadata coupled",
       "matchPackageNames": [
         "playwright"
@@ -81,7 +92,7 @@
         "github-actions"
       ],
       "prBodyNotes": [
-        "Keep Actions on the approved Node 24-ready majors and run actionlint plus the complete non-live quality suite."
+        "Review the action release notes for runtime and input changes, then run actionlint plus the complete non-live quality suite."
       ]
     }
   ]

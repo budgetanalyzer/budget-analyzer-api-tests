@@ -40,11 +40,14 @@ def test_docs_workflows_and_runner_do_not_repeat_tool_pins() -> None:
     assert issues == ()
     assert contract is not None
 
-    violations = pin_reference_violations(root, (contract.uv_version, contract.pip_audit_version))
+    violations = pin_reference_violations(
+        root, (contract.uv_version, contract.pip_audit_version, contract.python_pin)
+    )
 
     assert violations == [], (
-        "Tool pins must appear only in [tool.dependency-contract] in pyproject.toml. "
-        "Refer to the pin or to .dependency-tools/uv-<pin>/ instead, and run "
+        "Tool pins must appear only in [tool.dependency-contract] in pyproject.toml, "
+        "and the exact Python runtime pin only in .python-version. Refer to the pin, "
+        "to .python-version, or to .dependency-tools/uv-<pin>/ instead, and run "
         "tools/check-dependency-contract.py without --uv so it resolves the pinned "
         "path:\n" + "\n".join(violations)
     )
@@ -68,3 +71,20 @@ def test_guard_reports_reintroduced_literal(tmp_path: Path) -> None:
         "AGENTS.md:1: run .dependency-tools/uv-1.2.3/bin/uv",
         ".github/workflows/ci.yml:1: pip-audit==4.5.6",
     ]
+
+
+def test_guard_reports_python_patch_pin_but_not_minor_line(tmp_path: Path) -> None:
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "README.md").write_text(
+        "uses the .python-version runtime (currently 3.12.15)\n", encoding="utf-8"
+    )
+    (tmp_path / "run-tests").write_text("exec python3.12 -m venv\n", encoding="utf-8")
+    (tmp_path / "docs" / "guide.md").write_text(
+        "supported 3.12 minor line\nrequires >=3.12,<3.13 and ==3.12.*\nnot 3.12.150\n",
+        encoding="utf-8",
+    )
+
+    violations = pin_reference_violations(tmp_path, ("3.12.15",))
+
+    assert violations == ["README.md:1: uses the .python-version runtime (currently 3.12.15)"]
