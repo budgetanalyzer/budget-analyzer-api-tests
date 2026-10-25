@@ -41,6 +41,11 @@ class DependencyContract:
     locked_requirements: tuple[LockedRequirement, ...]
 
 
+def pinned_uv_executable(root: Path, contract: DependencyContract) -> Path:
+    """Return the repository-local path for the declared bootstrap tool."""
+    return root / ".dependency-tools" / f"uv-{contract.uv_version}" / "bin" / "uv"
+
+
 def canonicalize_name(name: str) -> str:
     """Return the normalized distribution name used for comparisons."""
     return re.sub(r"[-_.]+", "-", name).lower()
@@ -169,7 +174,11 @@ def validate_uv_resolution(
     try:
         version_result = run((uv_executable, "--version"), root)
     except FileNotFoundError:
-        return (f"pinned uv {contract.uv_version} is unavailable at {uv_executable!r}",)
+        return (
+            f"pinned uv {contract.uv_version} is unavailable at {uv_executable!r}; "
+            "install it with ./run-tests or "
+            "PYTHONPATH=src python -m api_tests.local_bootstrap",
+        )
 
     expected_version_prefix = f"uv {contract.uv_version}"
     if version_result.returncode != 0:
@@ -221,14 +230,19 @@ def validate_uv_resolution(
 
 def check_dependency_contract(
     root: Path,
-    uv_executable: str,
+    uv_executable: str | None = None,
     *,
     runner: CommandRunner | None = None,
 ) -> tuple[str, ...]:
-    """Validate declaration policy, lock structure, freshness, and frozen export."""
+    """Validate declaration policy, lock structure, freshness, and frozen export.
+
+    Without an explicit executable, use the repository-pinned uv from the contract.
+    """
     contract, file_issues = validate_contract_files(root)
     if contract is None or file_issues:
         return file_issues
+    if uv_executable is None:
+        uv_executable = str(pinned_uv_executable(root, contract))
     return validate_uv_resolution(root, contract, uv_executable, runner=runner)
 
 

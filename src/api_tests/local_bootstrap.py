@@ -16,6 +16,7 @@ from api_tests.dependency_contract import (
     PROJECT_NAME,
     DependencyContract,
     canonicalize_name,
+    pinned_uv_executable,
     validate_contract_files,
 )
 
@@ -124,8 +125,8 @@ def ensure_pinned_uv(
     python_executable: Path,
 ) -> Path:
     """Install and verify the declared uv pin outside the project environment."""
-    tool_root = root / ".dependency-tools" / f"uv-{contract.uv_version}"
-    uv_executable = tool_root / "bin" / "uv"
+    uv_executable = pinned_uv_executable(root, contract)
+    tool_root = uv_executable.parent.parent
     if _uv_version_matches(uv_executable, root, contract.uv_version):
         return uv_executable
 
@@ -256,11 +257,6 @@ def ensure_managed_python(
             f"expected {contract.python_pin}"
         )
     return python_executable
-
-
-def pinned_uv_executable(root: Path, contract: DependencyContract) -> Path:
-    """Return the repository-local path for the declared bootstrap tool."""
-    return root / ".dependency-tools" / f"uv-{contract.uv_version}" / "bin" / "uv"
 
 
 def frozen_sync_check_command(uv_executable: Path) -> tuple[str, ...]:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import tomllib
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -102,10 +103,12 @@ def test_tool_pin_change_invalidates_tool_and_environment(
     )
 
     pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
-    (root / "pyproject.toml").write_text(
-        pyproject.replace('uv = "0.13.0"', 'uv = "0.13.1"'),
-        encoding="utf-8",
-    )
+    current_pin = _uv_pin(pyproject)
+    replacement_pin = "0.0.1"
+    assert current_pin != replacement_pin
+    updated = pyproject.replace(f'uv = "{current_pin}"', f'uv = "{replacement_pin}"')
+    assert updated != pyproject
+    (root / "pyproject.toml").write_text(updated, encoding="utf-8")
     commands.clear()
     assert not local_bootstrap.bootstrap_environment(
         root,
@@ -113,7 +116,7 @@ def test_tool_pin_change_invalidates_tool_and_environment(
         bootstrap_runtime_version="3.12.3",
     )
 
-    assert tool_versions == ["0.13.0", "0.13.1"]
+    assert tool_versions == [current_pin, replacement_pin]
     assert [command[1] for command in commands] == ["lock", "sync", "sync"]
 
 
@@ -422,3 +425,13 @@ def _result(
     stderr: str = "",
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(command, returncode, stdout, stderr)
+
+
+def _uv_pin(pyproject: str) -> str:
+    tool = tomllib.loads(pyproject)["tool"]
+    assert isinstance(tool, dict)
+    dependency_tool = tool["dependency-contract"]
+    assert isinstance(dependency_tool, dict)
+    pin = dependency_tool["uv"]
+    assert isinstance(pin, str)
+    return pin

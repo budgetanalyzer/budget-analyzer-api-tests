@@ -20,8 +20,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--uv",
-        default="uv",
-        help="path to the pinned uv executable (default: uv)",
+        default=None,
+        help=(
+            "path to the pinned uv executable "
+            "(default: the repository-pinned .dependency-tools/uv-<pin>/bin/uv)"
+        ),
     )
     args = parser.parse_args(argv)
     issues = check_dependency_contract(args.root.resolve(), args.uv)

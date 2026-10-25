@@ -25,12 +25,13 @@ together. Never edit `uv.lock` by hand.
 The exact `uv` bootstrap and `pip-audit` scanner versions live once in
 `[tool.dependency-contract]`. They stay outside the application graph:
 `uv` creates and inspects the graph, while `pip-audit` will scan evidence in a
-separate tool environment. The selected versions are `uv` 0.13.0 and
-`pip-audit` 2.10.1.
+separate tool environment. Documentation, workflows, and the runner script
+refer to these pins only by reference, never by version literal; a unit test
+enforces that.
 
 `./run-tests` starts with any Python on the supported 3.12 minor line, installs
-`uv` 0.13.0 from standard PyPI into the ignored
-`.dependency-tools/uv-0.13.0/` environment, and uses that pinned tool to
+the pinned `uv` from standard PyPI into the ignored
+`.dependency-tools/uv-<pin>/` environment, and uses that pinned tool to
 install and resolve the exact `.python-version` runtime from uv's per-user
 managed Python store. It then runs `uv lock --check` before
 `uv sync --frozen --all-groups`, passing the resolved managed interpreter to
@@ -52,13 +53,16 @@ distribution. A stale manifest/lock pair fails before synchronization.
 `.github/workflows/ci.yml` runs for pushes to `main`, pull requests targeting
 `main`, and manual dispatch. It has only `contents: read`, forces JavaScript
 actions onto Node 24, and uses the organization-approved first-party
-`actions/checkout@v6` and `actions/setup-python@v6` sources. Concurrent runs for
+`actions/checkout@v7` and `actions/setup-python@v7` sources. Concurrent runs for
 the same ref cancel superseded work.
 
 CI reads the exact `.python-version` with `actions/setup-python` to establish
 its bootstrap interpreter. The declared `uv` then installs/resolves the same
 exact managed project runtime used locally and performs a frozen all-groups
-synchronization. CI then runs dependency contract/parity validation,
+synchronization. CI then runs `tools/check-dependency-contract.py` without
+`--uv`; the tool resolves `.dependency-tools/uv-<pin>/bin/uv` from the
+`[tool.dependency-contract]` pin, not a workflow literal, so a `uv` pin update
+needs no workflow edit. It continues with
 deterministic unit tests, local API collection, production-safe API collection,
 Ruff format and lint checks, and strict mypy. Both API commands are
 collection-only. CI does not install Playwright browsers, acquire test
