@@ -21,9 +21,9 @@ differ from `.python-version`.
 
 On first use, the runner installs the exact reviewed `uv` version into the
 ignored `.dependency-tools/` directory, separate from the project graph. That
-`uv` installs and caches the exact `.python-version` runtime (currently
-3.12.15), then uses only that managed interpreter to synchronize `.venv` from
-`uv.lock` with all dependency groups in frozen mode. Every invocation checks
+`uv` installs and caches the exact runtime pinned in `.python-version`, then
+uses only that managed interpreter to synchronize `.venv` from `uv.lock` with
+all dependency groups in frozen mode. Every invocation checks
 manifest/lock freshness and exact environment parity before reuse. Changes to
 `pyproject.toml`, `.python-version`, the `uv` tool pin, or `uv.lock` invalidate
 readiness; normal runs never rewrite the lock. Playwright Chromium remains a

@@ -11,8 +11,8 @@ requirement has a known-working inclusive lower bound and a reviewed upper
 boundary. These ranges state which versions may be considered during an
 intentional update; they do not make an installation reproducible.
 
-`.python-version` selects the uv-managed Python 3.12.15 project runtime exactly
-for local and hosted setup. The PEP 621 interval remains `>=3.12,<3.13`
+`.python-version` selects the exact uv-managed Python project runtime for
+local and hosted setup. The PEP 621 interval remains `>=3.12,<3.13`
 because the package supports only the selected Python minor line. The lock is
 universal across supported platforms for that line, so its normalized runtime
 constraint is `==3.12.*`.
@@ -26,8 +26,9 @@ The exact `uv` bootstrap and `pip-audit` scanner versions live once in
 `[tool.dependency-contract]`. They stay outside the application graph:
 `uv` creates and inspects the graph, while `pip-audit` will scan evidence in a
 separate tool environment. Documentation, workflows, and the runner script
-refer to these pins only by reference, never by version literal; a unit test
-enforces that.
+refer to these pins, and to the exact Python runtime pin in `.python-version`,
+only by reference, never by version literal; the same unit test enforces all
+three.
 
 `./run-tests` starts with any Python on the supported 3.12 minor line, installs
 the pinned `uv` from standard PyPI into the ignored
@@ -52,9 +53,11 @@ distribution. A stale manifest/lock pair fails before synchronization.
 
 `.github/workflows/ci.yml` runs for pushes to `main`, pull requests targeting
 `main`, and manual dispatch. It has only `contents: read`, forces JavaScript
-actions onto Node 24, and uses the organization-approved first-party
-`actions/checkout@v7` and `actions/setup-python@v7` sources. Concurrent runs for
-the same ref cancel superseded work.
+actions onto the workflow-declared Node runtime, and uses only
+organization-approved first-party action sources. Action refs are SHA-pinned and
+Renovate-owned under the
+[central action-ref policy](https://github.com/budgetanalyzer/orchestration/blob/main/docs/dependency-automation.md#ownership-and-update-policy).
+Concurrent runs for the same ref cancel superseded work.
 
 CI reads the exact `.python-version` with `actions/setup-python` to establish
 its bootstrap interpreter. The declared `uv` then installs/resolves the same
@@ -74,8 +77,8 @@ identities, read application credentials, or contact a Budget Analyzer target.
 manual dispatch, and on trusted `main` pushes that change runtime, manifest,
 lock, scanner, bootstrap, evidence, or workflow inputs. The job refuses to run
 from another ref, declares only `contents: read`, does not cancel an in-progress
-evidence run, and uses the same Node 24-ready first-party action majors as CI
-plus `actions/upload-artifact@v7`.
+evidence run, and uses the same first-party actions as CI plus
+`actions/upload-artifact`.
 
 Run the credential-free implementation locally with the pinned interpreter:
 

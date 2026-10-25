@@ -52,7 +52,12 @@ not change. The repeated `setuptools` build requirement is grouped as one build
 contract. Other direct packages are intentionally not grouped because they do
 not share a release train. The Playwright package remains the sole owner of its
 coupled browser revision; review regenerated browser metadata rather than
-introducing another version pin.
+introducing another version pin. A `python` package rule for the `pyenv` and
+`pep621` managers sets `allowedVersions` to the upper bound of the declared
+`requires-python` interval, so Renovate proposes only patch updates within the
+supported minor line. Changing that line is an intentional runtime migration of
+`requires-python`, `.python-version`, the lock, and the runner together, not a
+routine update.
 
 The shared preset keeps automerge off, requires dashboard approval for major
 updates, limits pull-request concurrency, and labels routine updates. A proposed
@@ -140,8 +145,8 @@ days and does not install a browser or contact a Budget Analyzer deployment.
 - For graph or evidence mismatch, compare normalized package names and exact
   versions across lock selection, installation, dependency tree, SBOM, and
   audit. Do not report missing evidence as zero findings.
-- For Action changes, retain Node 24-ready majors, least-privilege permissions,
-  bounded artifact upload, and `actionlint` success.
+- For Action changes, retain least-privilege permissions, bounded artifact
+  upload, and `actionlint` success.
 - For anonymous lookup failures, preserve sanitized manager/package diagnostics
   and require a hosted run with normal Mend/GitHub access. Never place tokens or
   package-index credentials in logs or artifacts.
