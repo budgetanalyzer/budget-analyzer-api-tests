@@ -14,12 +14,12 @@ from api_tests.dependency_contract import (
     DependencyContract,
     LockedRequirement,
     canonicalize_name,
+    pinned_uv_executable,
     validate_contract_files,
 )
 from api_tests.local_bootstrap import (
     frozen_lock_check_command,
     frozen_sync_check_command,
-    pinned_uv_executable,
     sanitized_environment,
 )
 

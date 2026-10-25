@@ -257,8 +257,7 @@ falling back to global tooling.
 Run the repository quality gates with:
 
 ```bash
-PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py \
-  --uv .dependency-tools/uv-0.13.0/bin/uv
+PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py
 .venv/bin/python -m pytest tests/unit --env local
 .venv/bin/python -m pytest tests/api --env local --collect-only
 .venv/bin/python -m pytest tests/api --env production -m "readonly and production_safe" --collect-only

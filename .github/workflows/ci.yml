@@ -39,9 +39,7 @@ jobs:
       - name: Verify dependency contract and exact environment parity
         env:
           PYTHONPATH: src
-        run: >-
-          .venv/bin/python tools/check-dependency-contract.py
-          --uv .dependency-tools/uv-0.13.0/bin/uv
+        run: .venv/bin/python tools/check-dependency-contract.py
 
       - name: Run deterministic unit tests
         run: .venv/bin/python -m pytest tests/unit --env local

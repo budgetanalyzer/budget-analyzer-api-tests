@@ -65,12 +65,12 @@ proposal when lock generation failed.
 
 Normal setup and CI are frozen and must not update `uv.lock`. For a deliberate
 dependency update, follow the refresh sequence in `docs/dependency-contract.md`,
-review all source/version/hash changes, then run:
+review all source/version/hash changes, then run the gates below. The contract
+check resolves the pinned `uv` from `[tool.dependency-contract]` and already
+runs `uv lock --check`:
 
 ```bash
-PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py \
-  --uv .dependency-tools/uv-0.13.0/bin/uv
-.dependency-tools/uv-0.13.0/bin/uv lock --check
+PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py
 .venv/bin/python -m pytest tests/unit --env local
 .venv/bin/python -m pytest tests/api --env local --collect-only
 .venv/bin/python -m pytest tests/api --env production \

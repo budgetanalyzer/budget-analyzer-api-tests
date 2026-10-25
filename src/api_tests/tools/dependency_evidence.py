@@ -7,7 +7,11 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from api_tests.dependency_contract import PYPI_INDEX, validate_contract_files
+from api_tests.dependency_contract import (
+    PYPI_INDEX,
+    pinned_uv_executable,
+    validate_contract_files,
+)
 from api_tests.dependency_evidence import (
     GENERATED_OUTPUTS,
     LEGACY_OUTPUTS,
@@ -112,7 +116,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if install.returncode != 0:
             raise DependencyEvidenceError("could not install pinned pip-audit: " + _detail(install))
 
-        uv_executable = root / ".dependency-tools" / f"uv-{contract.uv_version}" / "bin" / "uv"
+        uv_executable = pinned_uv_executable(root, contract)
         project_python = root / ".venv" / "bin" / "python"
         child = _run(
             (

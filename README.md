@@ -116,11 +116,12 @@ the pinned bootstrap and scanner tools, and the intentional lock-refresh
 procedure are documented in [docs/dependency-contract.md](docs/dependency-contract.md).
 
 Validate declarations, lock structure, lock freshness, and the exact hashed
-export with the pinned `uv` executable installed by `./run-tests`:
+export with the pinned `uv` executable installed by `./run-tests`. The tool
+resolves `.dependency-tools/uv-<pin>/bin/uv` from `[tool.dependency-contract]`
+in `pyproject.toml`; pass `--uv PATH` only to override it:
 
 ```bash
-PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py \
-  --uv .dependency-tools/uv-0.13.0/bin/uv
+PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py
 ```
 
 GitHub Actions CI runs on pushes to `main`, pull requests targeting `main`, and
@@ -688,8 +689,7 @@ intentional; do not make the suite accept an unexplained service change.
 ## Quality Gates
 
 ```bash
-PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py \
-  --uv .dependency-tools/uv-0.13.0/bin/uv
+PYTHONPATH=src .venv/bin/python tools/check-dependency-contract.py
 .venv/bin/python -m pytest tests/unit --env local
 .venv/bin/python -m pytest tests/api --env local --collect-only
 .venv/bin/python -m pytest tests/api --env production \

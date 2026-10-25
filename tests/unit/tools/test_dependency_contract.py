@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import re
 import subprocess
+import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 
+import pytest
+
+from api_tests import dependency_contract
 from api_tests.config import repository_root
 from api_tests.dependency_contract import (
     DependencyContract,
@@ -11,16 +16,35 @@ from api_tests.dependency_contract import (
     validate_contract_files,
     validate_uv_resolution,
 )
+from api_tests.tools.dependency_contract import main
 
 
 def test_checked_in_dependency_contract_files_are_valid() -> None:
-    contract, issues = validate_contract_files(repository_root())
+    root = repository_root()
+    contract, issues = validate_contract_files(root)
 
+    python_pin = (root / ".python-version").read_text(encoding="utf-8").strip()
+    uv_pin = _checked_in_tool_pin(root, "uv")
+    pip_audit_pin = _checked_in_tool_pin(root, "pip-audit")
     assert issues == ()
     assert contract is not None
-    assert contract.python_pin == "3.12.15"
-    assert contract.uv_version == "0.13.0"
-    assert contract.pip_audit_version == "2.10.1"
+    for pin in (python_pin, uv_pin, pip_audit_pin):
+        assert re.fullmatch(r"\d+\.\d+\.\d+", pin), pin
+    assert contract.python_pin == python_pin
+    assert contract.uv_version == uv_pin
+    assert contract.pip_audit_version == pip_audit_pin
+
+
+def _checked_in_tool_pin(root: Path, name: str) -> str:
+    with (root / "pyproject.toml").open("rb") as file:
+        document = tomllib.load(file)
+    tool = document["tool"]
+    assert isinstance(tool, dict)
+    dependency_tool = tool["dependency-contract"]
+    assert isinstance(dependency_tool, dict)
+    pin = dependency_tool[name]
+    assert isinstance(pin, str)
+    return pin
 
 
 def test_unbounded_direct_requirement_is_rejected(tmp_path: Path) -> None:
@@ -174,6 +198,112 @@ def test_frozen_export_must_match_locked_names_and_versions() -> None:
         "frozen export is missing locked requirement(s): example==1.2.3",
         "frozen export has unexpected requirement(s) or version(s): example==1.2.4",
     )
+
+
+def test_cli_defaults_to_repository_pinned_uv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _copy_contract_files(tmp_path)
+    contract = _copied_contract(root)
+    executables = _install_fake_runner(monkeypatch, contract)
+
+    exit_code = main(["--root", str(root)])
+
+    expected = str(root / ".dependency-tools" / f"uv-{contract.uv_version}" / "bin" / "uv")
+    assert exit_code == 0
+    assert executables
+    assert set(executables) == {expected}
+    assert "Dependency contract is valid" in capsys.readouterr().out
+
+
+def test_cli_explicit_uv_overrides_pinned_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _copy_contract_files(tmp_path)
+    executables = _install_fake_runner(monkeypatch, _copied_contract(root))
+
+    exit_code = main(["--root", str(root), "--uv", "/custom/uv"])
+
+    assert exit_code == 0
+    assert executables
+    assert set(executables) == {"/custom/uv"}
+
+
+def test_cli_reports_invalid_contract_files_without_running_uv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _copy_contract_files(tmp_path)
+    (root / ".python-version").write_text("not-a-version\n", encoding="utf-8")
+    executables = _install_fake_runner(monkeypatch, None)
+
+    exit_code = main(["--root", str(root)])
+
+    assert exit_code == 1
+    assert executables == []
+    error = capsys.readouterr().err
+    assert "dependency contract error: .python-version must contain" in error
+    assert "Traceback" not in error
+
+
+def test_cli_reports_missing_pinned_uv_with_bootstrap_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _copy_contract_files(tmp_path)
+    contract = _copied_contract(root)
+
+    def runner(command: Sequence[str], root: Path) -> subprocess.CompletedProcess[str]:
+        del root
+        raise FileNotFoundError(command[0])
+
+    monkeypatch.setattr(dependency_contract, "_run_command", runner)
+
+    exit_code = main(["--root", str(root)])
+
+    expected = root / ".dependency-tools" / f"uv-{contract.uv_version}" / "bin" / "uv"
+    error = capsys.readouterr().err
+    assert exit_code == 1
+    assert f"unavailable at {str(expected)!r}" in error
+    assert "./run-tests" in error
+    assert "PYTHONPATH=src python -m api_tests.local_bootstrap" in error
+
+
+def _copied_contract(root: Path) -> DependencyContract:
+    contract, issues = validate_contract_files(root)
+    assert issues == ()
+    assert contract is not None
+    return contract
+
+
+def _install_fake_runner(
+    monkeypatch: pytest.MonkeyPatch, contract: DependencyContract | None
+) -> list[str]:
+    executables: list[str] = []
+
+    def runner(command: Sequence[str], root: Path) -> subprocess.CompletedProcess[str]:
+        del root
+        assert contract is not None
+        executables.append(command[0])
+        if command[1] == "--version":
+            return _result(command, stdout=f"uv {contract.uv_version} (test)\n")
+        if command[1] == "lock":
+            return _result(command)
+        return _result(
+            command,
+            stdout="".join(
+                f"{requirement.name}=={requirement.version} \\\n    --hash=sha256:{'0' * 64}\n"
+                for requirement in contract.locked_requirements
+            ),
+        )
+
+    monkeypatch.setattr(dependency_contract, "_run_command", runner)
+    return executables
 
 
 def _copy_contract_files(tmp_path: Path) -> Path:
