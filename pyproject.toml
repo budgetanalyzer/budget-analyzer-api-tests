@@ -32,7 +32,7 @@ dev = [
 
 [tool.dependency-contract]
 # renovate: datasource=pypi depName=uv
-uv = "0.13.0"
+uv = "0.13.5"
 # renovate: datasource=pypi depName=pip-audit
 pip-audit = "2.10.1"
 
