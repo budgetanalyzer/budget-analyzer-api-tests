@@ -722,7 +722,6 @@
             "type": "string"
           },
           "enabled": {
-            "default": true,
             "description": "Whether this currency is enabled for exchange rate access",
             "example": true,
             "type": "boolean"
@@ -737,6 +736,7 @@
         },
         "required": [
           "currencyCode",
+          "enabled",
           "providerSeriesId"
         ],
         "type": "object"
@@ -4577,7 +4577,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "500": {
             "content": {
@@ -4955,7 +4955,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "500": {
             "content": {
@@ -7264,7 +7264,7 @@
       "url": "https://app.budgetanalyzer.localhost/api"
     },
     {
-      "description": "Production environment",
+      "description": "Historical production reference (not live)",
       "url": "https://api.budgetanalyzer.org"
     }
   ],
