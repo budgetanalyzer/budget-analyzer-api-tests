@@ -251,7 +251,7 @@ def test_primary_fixture_does_not_eagerly_acquire_secondary_session(
     def record_acquisition(config: object, role: str) -> Session:
         del config
         acquired_roles.append(role)
-        return Session(cookie_name="BA_SESSION", cookie_value=f"{role}-cookie")
+        return Session(cookie_name="__Host-BA_SESSION", cookie_value=f"{role}-cookie")
 
     monkeypatch.setattr(pytest_plugin, "acquire_session", record_acquisition)
     pytester.makeconftest('pytest_plugins = ["api_tests.pytest_plugin"]')
@@ -279,7 +279,7 @@ def test_admin_only_fixture_acquires_no_ordinary_identity(
     def record_acquisition(config: object, role: str) -> Session:
         del config
         acquired_roles.append(role)
-        return Session(cookie_name="BA_SESSION", cookie_value=f"{role}-cookie")
+        return Session(cookie_name="__Host-BA_SESSION", cookie_value=f"{role}-cookie")
 
     monkeypatch.setattr(pytest_plugin, "acquire_session", record_acquisition)
     monkeypatch.setattr(
@@ -316,7 +316,7 @@ def test_missing_admin_role_exits_with_actionable_code_two(
     monkeypatch.setattr(
         pytest_plugin,
         "acquire_session",
-        lambda config, role: Session(cookie_name="BA_SESSION", cookie_value="admin-cookie"),
+        lambda config, role: Session(cookie_name="__Host-BA_SESSION", cookie_value="admin-cookie"),
     )
     monkeypatch.setattr(
         pytest_plugin,
@@ -358,7 +358,7 @@ def test_admin_missing_permissions_fails_without_promotion_message(
     monkeypatch.setattr(
         pytest_plugin,
         "acquire_session",
-        lambda config, role: Session(cookie_name="BA_SESSION", cookie_value="admin-cookie"),
+        lambda config, role: Session(cookie_name="__Host-BA_SESSION", cookie_value="admin-cookie"),
     )
     monkeypatch.setattr(
         pytest_plugin,

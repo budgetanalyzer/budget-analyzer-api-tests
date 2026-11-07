@@ -5,7 +5,7 @@ openapi_path: /api-docs/openapi.json
 environment_type: production
 allow_mutation: false
 allow_destructive: false
-session_cookie_name: BA_SESSION
+session_cookie_name: __Host-BA_SESSION
 auth:
   mode: supplied_sessions
   supplied_sessions:

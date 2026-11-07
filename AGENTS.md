@@ -87,8 +87,9 @@ replace missing prerequisites with test-harness workarounds.
 - Use `browser_preprovisioned` as the primary local and staging auth mode.
   Local identities are generated lazily through public hosted signup and saved
   only in gitignored `.env.local`; staging identities remain pre-provisioned.
-  `supplied_sessions` is allowed with opaque `BA_SESSION` values supplied
-  through environment variables.
+  `supplied_sessions` is allowed with opaque session-cookie values, named by
+  the environment's `session_cookie_name`, supplied through environment
+  variables.
 - Production defaults must remain read-only: `allow_mutation: false` and
   `allow_destructive: false`.
 - Do not broaden production permissions to reach coverage targets.

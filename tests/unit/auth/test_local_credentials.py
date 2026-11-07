@@ -37,7 +37,7 @@ def _credentials() -> BrowserLoginCredentials:
 
 
 def _session() -> Session:
-    return Session(cookie_name="BA_SESSION", cookie_value="session-cookie")
+    return Session(cookie_name="__Host-BA_SESSION", cookie_value="session-cookie")
 
 
 def test_missing_file_is_saved_before_signup_and_marked_complete(tmp_path: Path) -> None:
