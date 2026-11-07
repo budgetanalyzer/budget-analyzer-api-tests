@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import json
 import traceback
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
 from typing import Self, TypedDict, cast
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from playwright.sync_api import BrowserContext, CDPSession, Page, Response
+from playwright.sync_api import Browser, BrowserContext, CDPSession, Page, Response
 from playwright.sync_api import Error as PlaywrightError
 
 import api_tests.auth as auth_module
@@ -142,6 +144,87 @@ def test_session_verification_uses_gateway_client(
     verify_session(config, session)
 
     assert calls == [(config, session, "GET", "/auth/v1/user")]
+
+
+@pytest.mark.parametrize("signup", [False, True], ids=["login", "signup"])
+def test_browser_helpers_keep_login_start_cookies_through_callback(
+    monkeypatch: pytest.MonkeyPatch,
+    signup: bool,
+) -> None:
+    config = load_environment("local")
+    credentials = BrowserLoginCredentials("user@example.invalid", "test-password")
+    binding_cookie = {"name": "__Host-BA_OAUTH_BINDING", "value": "ab" * 32}
+    session_cookie = {"name": config.session_cookie_name, "value": "test-session"}
+    cookies: list[dict[str, str]] = []
+    response_handlers: list[Callable[[Response], None]] = []
+    callback_cookies: list[dict[str, str]] = []
+    cdp = FakeCdpSession()
+    context = MagicMock(spec=BrowserContext)
+    page = MagicMock(spec=Page)
+    browser = MagicMock(spec=Browser)
+    playwright = MagicMock()
+    playwright.__enter__.return_value.chromium.launch.return_value = browser
+    browser.new_context.return_value = context
+    context.new_page.return_value = page
+    context.new_cdp_session.return_value = cdp
+    context.cookies.side_effect = lambda: list(cookies)
+    page.context = context
+
+    def register_response(event: str, handler: Callable[[Response], None]) -> None:
+        assert event == "response"
+        response_handlers.append(handler)
+
+    def open_login(url: str, *, wait_until: str, timeout: int) -> Response:
+        assert url == f"{config.origin}/oauth2/authorization/idp"
+        cookies.append(binding_cookie)
+        page.url = "https://identity.example.test/login"
+        return cast(Response, FakeBrowserResponse(page.url, status=200))
+
+    def complete_callback(*, timeout: int) -> None:
+        assert page.context is context
+        assert binding_cookie in page.context.cookies()
+        callback_cookies.extend(page.context.cookies())
+        callback_url = f"{config.origin}{config.browser_auth_contract.callback_path}?code=test"
+        handler = cast(Callable[[object], None], cdp.handlers["Fetch.requestPaused"])
+        handler(
+            {
+                "requestId": "callback",
+                "request": {
+                    "url": callback_url,
+                    "headers": {"Cookie": "__Host-BA_OAUTH_BINDING=" + binding_cookie["value"]},
+                },
+            }
+        )
+        # Chromium retains its cookie headers when the interceptor only continues the request.
+        assert cdp.commands[-1] == ("Fetch.continueRequest", {"requestId": "callback"})
+        for response_handler in response_handlers:
+            response_handler(cast(Response, FakeBrowserResponse(callback_url)))
+        cookies.append(session_cookie)
+        page.url = f"{config.origin}/"
+
+    page.on.side_effect = register_response
+    page.goto.side_effect = open_login
+    page.locator.return_value.first.click.side_effect = complete_callback
+    monkeypatch.setattr(browser_login_module, "sync_playwright", lambda: playwright)
+    monkeypatch.setattr(GatewayClient, "pace_shared_request", staticmethod(lambda path: None))
+    verify = MagicMock()
+    monkeypatch.setattr(browser_login_module, "verify_session", verify)
+
+    helper = (
+        browser_login_module.signup_with_browser
+        if signup
+        else browser_login_module.login_with_browser
+    )
+    session = helper(config, credentials)
+
+    assert callback_cookies == [binding_cookie]
+    assert session == Session(config.session_cookie_name, "test-session")
+    verify.assert_called_once_with(config, session)
+    browser.new_context.assert_called_once_with()
+    context.new_page.assert_called_once_with()
+    context.clear_cookies.assert_not_called()
+    context.close.assert_called_once_with()
+    browser.close.assert_called_once_with()
 
 
 def test_browser_request_interception_paces_only_same_origin_and_strips_queries(

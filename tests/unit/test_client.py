@@ -78,6 +78,40 @@ def test_request_pacer_uses_monotonic_fixed_intervals() -> None:
     assert timing.sleeps == pytest.approx([0.125, 0.125])
 
 
+def test_gateway_client_carries_login_start_binding_cookie_to_callback() -> None:
+    config = load_environment("local")
+    binding = "ab" * 32
+    callback_cookies: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oauth2/authorization/idp":
+            assert "cookie" not in request.headers
+            return httpx.Response(
+                302,
+                headers={
+                    "location": "https://identity.example.test/authorize",
+                    "set-cookie": (
+                        f"__Host-BA_OAUTH_BINDING={binding}; Path=/; Secure; HttpOnly; SameSite=Lax"
+                    ),
+                },
+            )
+        assert request.url.path == config.browser_auth_contract.callback_path
+        callback_cookies.append(request.headers.get("cookie", ""))
+        return httpx.Response(302, headers={"location": "/login?error=access_denied"})
+
+    with GatewayClient(
+        config,
+        transport=httpx.MockTransport(handler),
+        request_pacing=_request_pacing(FakeTiming()),
+    ) as client:
+        assert client.raw_request("GET", "/oauth2/authorization/idp").status_code == 302
+        client.raw_request(
+            "GET", f"{config.browser_auth_contract.callback_path}?error=access_denied&state=test"
+        )
+
+    assert callback_cookies == [f"__Host-BA_OAUTH_BINDING={binding}"]
+
+
 def test_request_pacer_preserves_interval_after_sleep_overshoots() -> None:
     timing = FakeTiming(now=0.0, sleep_overshoot=0.2)
     pacer = RequestPacer(
