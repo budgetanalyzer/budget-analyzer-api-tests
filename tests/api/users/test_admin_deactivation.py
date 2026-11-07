@@ -307,7 +307,7 @@ def _assert_target_sessions_active(
             if current_identity.subject != identity.subject:
                 raise AssertionError("target sessions resolved to different public subjects")
 
-            heartbeat = client.raw_request("GET", "/auth/v1/session")
+            heartbeat = client.raw_request("POST", "/auth/v1/session")
             assert_response_matches_openapi(
                 heartbeat,
                 "getSessionStatus",

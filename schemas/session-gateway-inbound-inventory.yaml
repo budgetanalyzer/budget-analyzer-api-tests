@@ -52,7 +52,7 @@ routes:
         reason: redis_failure_requires_controlled_dependency_fault
         prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned login.
 
-  - method: GET
+  - method: POST
     path: /logout
     owner: controller
     exposure: public
@@ -88,7 +88,7 @@ routes:
         reason: redis_failure_requires_controlled_dependency_fault
         prerequisite: An approved Redis fault-injection lane in a controllable test deployment, scoped to a test-owned session read.
 
-  - method: GET
+  - method: POST
     path: /auth/v1/session
     owner: controller
     exposure: public

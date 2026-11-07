@@ -41,3 +41,27 @@ Actual browser cookie attributes and cross-site delivery remain the responsibili
 of [plan 02.1 phase 3](../../../orchestration/docs/plans/security-hardening-02.1-oauth-callback-binding.md).
 No new API coverage, snapshot changes, dependency changes, credential changes or
 local-state resets were needed in this phase.
+
+## Plan 02.7, Phase 3: POST Heartbeat And Logout API-Test Callers
+
+Validated on 2026-11-07 for worker run
+`20261107T161240Z-phase-3-135f9029-5c1d-4d55-9c89-1dffd07e58c3`.
+
+The black-box callers now use `POST /auth/v1/session` for heartbeat and
+`POST /logout` for logout, including failed-browser cleanup, stale-cookie replay,
+OAuth lifecycle cleanup, and admin-deactivation verification. Logout assertions and
+the checked-in Session Gateway contract require `303 See Other`. The inbound-route
+inventory retains the same 14 routes and 35 scenarios while recording the two
+mutating routes as POST. Heartbeat tests are mutations and no longer part of the
+production-safe read selection.
+
+Regression evidence:
+
+- Focused helper, contract, assertion, pacing, and deactivation tests: 103 passed.
+- `.venv/bin/python -m pytest tests/unit --env local`: 324 passed, no skips.
+
+This was an offline phase. It did not contact local, staging, or production
+deployments, mutate cluster or application state, add Origin enforcement, or add new
+API coverage. Exact-Origin enforcement remains assigned to plan 02.8, and synchronized
+live verification remains assigned to the later orchestration phase. No local-state
+reset is required for this HTTP method change.

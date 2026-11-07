@@ -24,12 +24,10 @@ def test_unknown_session_gateway_route_returns_non_html_not_found(
 
 @pytest.mark.gateway_routing
 @pytest.mark.mutation
-@pytest.mark.parametrize("path", ["/auth/v1/user", "/auth/v1/session"], ids=["user", "session"])
-def test_session_gateway_machine_routes_reject_post(
+def test_session_gateway_user_route_rejects_post(
     gateway_client: GatewayClient,
-    path: str,
 ) -> None:
-    response = gateway_client.raw_request("POST", path)
+    response = gateway_client.raw_request("POST", "/auth/v1/user")
 
     assert response.status_code == httpx.codes.METHOD_NOT_ALLOWED
     assert_non_html_response(response)

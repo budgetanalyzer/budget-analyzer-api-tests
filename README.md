@@ -365,18 +365,18 @@ not log in or provision either browser identity. `GET` cases are read-only and
 production-safe; every other method remains blocked by production mutation
 policy even though authentication should reject it before request parsing.
 
-The same selection also checks unauthenticated `GET /auth/v1/user` and
-`GET /auth/v1/session` through the public gateway. Both require the generic
-`401` `UNAUTHORIZED` / `Authentication required` JSON response, use no session
-fixture, and are read-only and production-safe. Session Gateway publishes its
-own checked-in OpenAPI contract, so its operation markers use the explicit
-`session_gateway` namespace and cannot collide with unified `/api` operation
-ids.
+The same selection also checks unauthenticated `GET /auth/v1/user` through the
+public gateway. The unauthenticated and stale-cookie heartbeat checks use
+`POST /auth/v1/session`; they require the same generic `401` `UNAUTHORIZED` /
+`Authentication required` JSON response but are conservatively marked as mutations
+and excluded from production. Session Gateway publishes its own checked-in OpenAPI
+contract, so its operation markers use the explicit `session_gateway` namespace and
+cannot collide with unified `/api` operation ids.
 
 Machine-endpoint coverage lives under `tests/api/session_gateway/`. It checks
 missing and plausible invalid cookies, valid user semantics, invalid-cookie
 clearing, and authenticated heartbeat refresh followed by a still-valid user
-read. Heartbeat is intentionally a `mutation` despite using `GET`. Unknown
+read. Heartbeat is a `mutation` performed through `POST`. Unknown
 `/auth/v1/...` paths and wrong methods are tracked as gateway-routing
 regressions rather than OpenAPI operations.
 
@@ -400,7 +400,7 @@ cookie may remain an internal framework detail, but it is never selected as the
 public authentication contract.
 
 Logout stops at the first identity-provider redirect. It requires the reviewed
-OpenAPI `302`, an allowlisted HTTPS provider `/v2/logout` endpoint, the configured
+OpenAPI `303`, an allowlisted HTTPS provider `/v2/logout` endpoint, the configured
 same-origin return target, and a correctly scoped public-cookie clearing header.
 Fresh clients then reuse the pre-logout cookie against both user and heartbeat
 routes and require schema-backed `401` responses, proving server-side deletion.
@@ -416,7 +416,7 @@ Each completed same-origin rate-limited browser response must also match a
 request-stage pacing reservation; an unmatched callback fails the flow as a
 pacing regression before later requests can exhaust ingress capacity.
 
-The Session Gateway snapshot requires `GET /logout` to return `302 Found` with
+The Session Gateway snapshot requires `POST /logout` to return `303 See Other` with
 a URI-formatted `Location` header for the identity-provider logout endpoint.
 The offline checker rejects a stale `200` declaration.
 

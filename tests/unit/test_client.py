@@ -163,7 +163,7 @@ def test_gateway_clients_share_one_default_pacer(
     ):
         primary_client.raw_request("GET", "/auth/v1/user?client=primary")
         GatewayClient.pace_shared_request("/auth/v1/session?source=browser")
-        secondary_client.raw_request("GET", "/logout?client=secondary")
+        secondary_client.raw_request("POST", "/logout?client=secondary")
 
     assert request_started_at == pytest.approx([100.0, 100.5])
     assert timing.sleeps == pytest.approx([0.25, 0.25])

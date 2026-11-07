@@ -26,8 +26,7 @@ _MAX_EXPECTED_FUTURE_EXPIRY_SECONDS = 3_600
 
 
 @pytest.mark.authentication
-@pytest.mark.readonly
-@pytest.mark.production_safe
+@pytest.mark.mutation
 @pytest.mark.openapi("getSessionStatus", contract="session_gateway")
 @pytest.mark.session_gateway_case("heartbeat-unauthenticated")
 def test_session_heartbeat_rejects_missing_session(
@@ -35,15 +34,14 @@ def test_session_heartbeat_rejects_missing_session(
     env_config: EnvironmentConfig,
     session_gateway_openapi_snapshot: OpenApiDocument,
 ) -> None:
-    response = unauthenticated_gateway_client.raw_request("GET", _PATH)
+    response = unauthenticated_gateway_client.raw_request("POST", _PATH)
 
     assert_cookie_not_set(response, env_config.session_cookie_name)
     _assert_unauthorized(response, session_gateway_openapi_snapshot)
 
 
 @pytest.mark.authentication
-@pytest.mark.readonly
-@pytest.mark.production_safe
+@pytest.mark.mutation
 @pytest.mark.openapi("getSessionStatus", contract="session_gateway")
 @pytest.mark.session_gateway_case("heartbeat-invalid-session")
 def test_session_heartbeat_rejects_and_clears_invalid_session(
@@ -51,7 +49,7 @@ def test_session_heartbeat_rejects_and_clears_invalid_session(
     env_config: EnvironmentConfig,
     session_gateway_openapi_snapshot: OpenApiDocument,
 ) -> None:
-    response = invalid_session_gateway_client.raw_request("GET", _PATH)
+    response = invalid_session_gateway_client.raw_request("POST", _PATH)
 
     assert_cookie_cleared(response, env_config.session_cookie_name)
     _assert_unauthorized(response, session_gateway_openapi_snapshot)
@@ -67,7 +65,7 @@ def test_session_heartbeat_refreshes_and_preserves_primary_session(
     session_gateway_openapi_snapshot: OpenApiDocument,
 ) -> None:
     request_started_at = int(time.time())
-    heartbeat = gateway_client.raw_request("GET", _PATH)
+    heartbeat = gateway_client.raw_request("POST", _PATH)
     response_received_at = int(time.time())
 
     assert_response_matches_openapi(

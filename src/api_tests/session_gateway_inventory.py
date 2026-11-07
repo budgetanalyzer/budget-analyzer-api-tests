@@ -231,19 +231,19 @@ def validate_session_gateway_contract(openapi_doc: OpenApiDocument) -> None:
         for operation in iter_operations(openapi_doc, contract="session_gateway")
     }
     logout = operations.get("logout")
-    if logout is None or logout.method != "GET" or logout.path != "/logout":
-        raise ValueError("Session Gateway snapshot is missing logout GET /logout")
+    if logout is None or logout.method != "POST" or logout.path != "/logout":
+        raise ValueError("Session Gateway snapshot is missing logout POST /logout")
 
     paths = _mapping(openapi_doc.get("paths"), "Session Gateway OpenAPI paths")
     logout_path = _mapping(paths.get("/logout"), "Session Gateway /logout path item")
-    logout_operation = _mapping(logout_path.get("get"), "Session Gateway GET /logout operation")
+    logout_operation = _mapping(logout_path.get("post"), "Session Gateway POST /logout operation")
     responses = _mapping(logout_operation.get("responses"), "Session Gateway logout responses")
-    if "302" not in responses:
-        raise ValueError("Session Gateway logout must document response 302")
+    if "303" not in responses:
+        raise ValueError("Session Gateway logout must document response 303")
     if "200" in responses:
         raise ValueError("Session Gateway logout must not document stale response 200")
-    response = _mapping(responses.get("302"), "Session Gateway logout response 302")
-    headers = _mapping(response.get("headers"), "Session Gateway logout response 302 headers")
+    response = _mapping(responses.get("303"), "Session Gateway logout response 303")
+    headers = _mapping(response.get("headers"), "Session Gateway logout response 303 headers")
     location = _mapping(headers.get("Location"), "Session Gateway logout Location header")
     schema = _mapping(location.get("schema"), "Session Gateway logout Location header schema")
     if schema.get("type") != "string" or schema.get("format") != "uri":

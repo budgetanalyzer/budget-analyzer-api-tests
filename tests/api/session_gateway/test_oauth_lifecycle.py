@@ -160,12 +160,12 @@ def test_logout_without_cookie_is_idempotent_redirect_and_clear(
     env_config: EnvironmentConfig,
     session_gateway_openapi_snapshot: OpenApiDocument,
 ) -> None:
-    response = unauthenticated_gateway_client.raw_request("GET", _LOGOUT_PATH)
+    response = unauthenticated_gateway_client.raw_request("POST", _LOGOUT_PATH)
 
     assert_response_matches_openapi(
         response,
         "logout",
-        httpx.codes.FOUND,
+        httpx.codes.SEE_OTHER,
         session_gateway_openapi_snapshot,
     )
     assert_logout_redirect(response, env_config)
@@ -201,12 +201,12 @@ def _exercise_owned_lifecycle(
         ) as authenticated_client:
             current_user = authenticated_client.raw_request("GET", _USER_PATH)
             assert_authenticated_user_response(current_user, openapi_snapshot)
-            logout = authenticated_client.raw_request("GET", _LOGOUT_PATH)
+            logout = authenticated_client.raw_request("POST", _LOGOUT_PATH)
 
         assert_response_matches_openapi(
             logout,
             "logout",
-            httpx.codes.FOUND,
+            httpx.codes.SEE_OTHER,
             openapi_snapshot,
         )
         assert_logout_redirect(logout, config)
@@ -234,16 +234,16 @@ def _assert_session_invalidated(
     openapi_snapshot: OpenApiDocument,
     request_log_path: Path | None,
 ) -> None:
-    for path, operation_id in (
-        (_USER_PATH, "getCurrentUser"),
-        (_HEARTBEAT_PATH, "getSessionStatus"),
+    for method, path, operation_id in (
+        ("GET", _USER_PATH, "getCurrentUser"),
+        ("POST", _HEARTBEAT_PATH, "getSessionStatus"),
     ):
         with GatewayClient(
             config,
             artifact_path=request_log_path,
             session=session,
         ) as fresh_client:
-            response = fresh_client.raw_request("GET", path)
+            response = fresh_client.raw_request(method, path)
         body = assert_api_error(
             response,
             httpx.codes.UNAUTHORIZED,
@@ -268,6 +268,6 @@ def _cleanup_exact_owned_session(
         artifact_path=request_log_path,
         session=session,
     ) as cleanup_client:
-        response = cleanup_client.raw_request("GET", _LOGOUT_PATH)
-    if response.status_code != httpx.codes.FOUND:
+        response = cleanup_client.raw_request("POST", _LOGOUT_PATH)
+    if response.status_code != httpx.codes.SEE_OTHER:
         raise AssertionError("narrow cleanup logout did not return the expected redirect")
