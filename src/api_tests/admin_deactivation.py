@@ -179,16 +179,22 @@ def _assert_original_cookie_rejected(
     openapi_snapshot: OpenApiDocument,
 ) -> None:
     requests = (
-        ("raw", "/auth/v1/user", "getCurrentUser", session_gateway_openapi_snapshot),
-        ("api", "/v1/currencies", "getAll", openapi_snapshot),
-        ("raw", "/auth/v1/session", "getSessionStatus", session_gateway_openapi_snapshot),
+        ("raw", "GET", "/auth/v1/user", "getCurrentUser", session_gateway_openapi_snapshot),
+        ("api", "GET", "/v1/currencies", "getAll", openapi_snapshot),
+        (
+            "raw",
+            "POST",
+            "/auth/v1/session",
+            "getSessionStatus",
+            session_gateway_openapi_snapshot,
+        ),
     )
-    for request_kind, path, operation_id, snapshot in requests:
+    for request_kind, method, path, operation_id, snapshot in requests:
         with GatewayClient(config, artifact_path=request_log_path, session=session) as client:
             if request_kind == "api":
-                response = client.api_request("GET", path)
+                response = client.api_request(method, path)
             else:
-                response = client.raw_request("GET", path)
+                response = client.raw_request(method, path)
         body = assert_api_error(
             response,
             httpx.codes.UNAUTHORIZED,

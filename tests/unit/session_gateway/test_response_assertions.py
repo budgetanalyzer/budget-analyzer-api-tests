@@ -125,7 +125,7 @@ def test_browser_cookie_contract_uses_public_cookie_and_safe_metadata_only() -> 
 def test_logout_redirect_parser_requires_provider_return_target_and_cookie_contract() -> None:
     config = load_environment("local")
     response = httpx.Response(
-        httpx.codes.FOUND,
+        httpx.codes.SEE_OTHER,
         headers={
             "location": (
                 "https://tenant.us.auth0.com/v2/logout?"

@@ -220,7 +220,7 @@ def assert_logout_redirect(
     response: httpx.Response,
     config: EnvironmentConfig,
 ) -> str:
-    assert_status(response, httpx.codes.FOUND)
+    assert_status(response, httpx.codes.SEE_OTHER)
     location = response.headers.get("location")
     if location is None:
         raise AssertionError("logout response did not provide a Location header")

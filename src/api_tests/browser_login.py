@@ -535,6 +535,6 @@ def _cleanup_failed_browser_session(config: EnvironmentConfig, session: Session)
     """Best-effort logout of only the session created by the failed browser flow."""
     try:
         with GatewayClient(config, session=session) as client:
-            client.raw_request("GET", "/logout")
+            client.raw_request("POST", "/logout")
     except Exception:
         return

@@ -80,7 +80,7 @@ def test_stale_cookie_replay_uses_fresh_clients_and_restores_each_original_cooki
     session_snapshot = load_snapshot(repository_root() / "schemas" / "session-gateway-openapi.yaml")
     first = Session(config.session_cookie_name, "first-secret-cookie")
     second = Session(config.session_cookie_name, "second-secret-cookie")
-    requests: list[tuple[str, str, str]] = []
+    requests: list[tuple[str, str, str, str]] = []
     client_sessions: list[Session] = []
 
     class FakeGatewayClient:
@@ -114,7 +114,7 @@ def test_stale_cookie_replay_uses_fresh_clients_and_restores_each_original_cooki
             return self._response("api", method, path)
 
         def _response(self, kind: str, method: str, path: str) -> httpx.Response:
-            requests.append((self._session.cookie_value, kind, path))
+            requests.append((self._session.cookie_value, kind, method, path))
             headers = {}
             if path == "/auth/v1/session":
                 headers = {"set-cookie": f"{config.session_cookie_name}=; Max-Age=0; Path=/"}
@@ -137,12 +137,12 @@ def test_stale_cookie_replay_uses_fresh_clients_and_restores_each_original_cooki
     )
 
     assert requests == [
-        ("first-secret-cookie", "raw", "/auth/v1/user"),
-        ("first-secret-cookie", "api", "/v1/currencies"),
-        ("first-secret-cookie", "raw", "/auth/v1/session"),
-        ("second-secret-cookie", "raw", "/auth/v1/user"),
-        ("second-secret-cookie", "api", "/v1/currencies"),
-        ("second-secret-cookie", "raw", "/auth/v1/session"),
+        ("first-secret-cookie", "raw", "GET", "/auth/v1/user"),
+        ("first-secret-cookie", "api", "GET", "/v1/currencies"),
+        ("first-secret-cookie", "raw", "POST", "/auth/v1/session"),
+        ("second-secret-cookie", "raw", "GET", "/auth/v1/user"),
+        ("second-secret-cookie", "api", "GET", "/v1/currencies"),
+        ("second-secret-cookie", "raw", "POST", "/auth/v1/session"),
     ]
     assert client_sessions == [first, first, first, second, second, second]
     assert "first-secret-cookie" not in repr(first)

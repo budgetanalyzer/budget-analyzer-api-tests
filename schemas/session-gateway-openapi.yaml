@@ -25,7 +25,7 @@ tags:
   description: Browser logout and session invalidation
 paths:
   /logout:
-    get:
+    post:
       tags:
       - Logout
       summary: Log out
@@ -33,7 +33,7 @@ paths:
         logout endpoint.
       operationId: logout
       responses:
-        '302':
+        '303':
           description: Redirect to the identity provider logout endpoint
           headers:
             Location:
@@ -100,7 +100,7 @@ paths:
                 type: SERVICE_UNAVAILABLE
                 message: Service Unavailable
   /auth/v1/session:
-    get:
+    post:
       tags:
       - Session
       summary: Session heartbeat

@@ -78,7 +78,7 @@ def test_snapshot_loader_accepts_yaml_and_json(tmp_path: Path) -> None:
 def test_logout_contract_rejects_stale_200_response() -> None:
     document = _session_gateway_document(logout_status="200")
 
-    with pytest.raises(ValueError, match="logout must document response 302"):
+    with pytest.raises(ValueError, match="logout must document response 303"):
         validate_session_gateway_contract(document)
 
 
@@ -135,7 +135,7 @@ def test_inventory_rejects_incomplete_deferral(
 
 def test_inventory_rejects_stale_openapi_route() -> None:
     route = SessionGatewayRoute(
-        method="POST",
+        method="GET",
         path="/logout",
         owner="controller",
         exposure="public",
@@ -161,7 +161,7 @@ def test_inventory_rejects_snapshot_operation_without_route() -> None:
 def test_session_gateway_artifact_is_stable_and_classification_only(tmp_path: Path) -> None:
     document = _session_gateway_document()
     route = SessionGatewayRoute(
-        method="GET",
+        method="POST",
         path="/logout",
         owner="controller",
         exposure="public",
@@ -239,7 +239,7 @@ def test_report_cannot_claim_complete_behavior_with_deferred_or_untestable_cases
     document = _session_gateway_document()
     routes = (
         SessionGatewayRoute(
-            method="GET",
+            method="POST",
             path="/logout",
             owner="controller",
             exposure="public",
@@ -283,7 +283,7 @@ def test_report_cannot_claim_complete_behavior_with_deferred_or_untestable_cases
 def test_report_identifies_executable_case_without_marker() -> None:
     document = _session_gateway_document()
     route = SessionGatewayRoute(
-        method="GET",
+        method="POST",
         path="/logout",
         owner="controller",
         exposure="public",
@@ -302,7 +302,7 @@ def test_report_identifies_executable_case_without_marker() -> None:
 def test_inventory_reports_covered_case_marker_counts() -> None:
     document = _session_gateway_document()
     route = SessionGatewayRoute(
-        method="GET",
+        method="POST",
         path="/logout",
         owner="controller",
         exposure="public",
@@ -411,11 +411,11 @@ routes:
         load_session_gateway_inventory(inventory_path)
 
 
-def _session_gateway_document(*, logout_status: str = "302") -> dict[str, JsonValue]:
+def _session_gateway_document(*, logout_status: str = "303") -> dict[str, JsonValue]:
     response: dict[str, JsonValue]
-    if logout_status == "302":
+    if logout_status == "303":
         response = {
-            "description": "Found",
+            "description": "See Other",
             "headers": {
                 "Location": {"schema": {"type": "string", "format": "uri"}},
             },
@@ -425,7 +425,7 @@ def _session_gateway_document(*, logout_status: str = "302") -> dict[str, JsonVa
     return {
         "paths": {
             "/logout": {
-                "get": {
+                "post": {
                     "operationId": "logout",
                     "responses": {logout_status: response},
                 }
@@ -438,7 +438,7 @@ def _operation_coverage() -> OperationCoverage:
     return OperationCoverage(
         contract="session_gateway",
         operation_id="logout",
-        method="GET",
+        method="POST",
         path="/logout",
         source="snapshot",
         deferred_admin=False,

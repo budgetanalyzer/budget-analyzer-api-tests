@@ -146,6 +146,40 @@ def test_session_verification_uses_gateway_client(
     assert calls == [(config, session, "GET", "/auth/v1/user")]
 
 
+def test_failed_browser_session_cleanup_posts_logout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_environment("local")
+    session = Session(cookie_name="__Host-BA_SESSION", cookie_value="session-value")
+    calls: list[tuple[object, Session, str, str]] = []
+
+    class FakeGatewayClient:
+        def __init__(self, environment_config: object, *, session: Session) -> None:
+            self._config = environment_config
+            self._session = session
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> None:
+            return None
+
+        def raw_request(self, method: str, path: str) -> httpx.Response:
+            calls.append((self._config, self._session, method, path))
+            return httpx.Response(httpx.codes.SEE_OTHER)
+
+    monkeypatch.setattr(browser_login_module, "GatewayClient", FakeGatewayClient)
+
+    browser_login_module._cleanup_failed_browser_session(config, session)
+
+    assert calls == [(config, session, "POST", "/logout")]
+
+
 @pytest.mark.parametrize("signup", [False, True], ids=["login", "signup"])
 def test_browser_helpers_keep_login_start_cookies_through_callback(
     monkeypatch: pytest.MonkeyPatch,

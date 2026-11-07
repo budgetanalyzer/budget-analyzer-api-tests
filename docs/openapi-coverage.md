@@ -72,9 +72,9 @@ contains the resolved snapshot method/path, executable and placeholder marker
 counts, status, and optional deferral reason. The CLI prints the same covered
 and deferred counts and ids.
 
-The Session Gateway snapshot declares `GET /logout` as `302 Found` and requires
+The Session Gateway snapshot declares `POST /logout` as `303 See Other` and requires
 the `Location` header schema to be a URI-formatted string. Snapshot validation
-rejects a missing `302`, a stale `200`, or a weakened header schema through the
+rejects a missing `303`, a stale `200`, or a weakened header schema through the
 normal offline coverage workflow.
 
 The mesh-internal
@@ -188,11 +188,12 @@ typed roles, and a bounded future epoch expiry; a follow-up user read proves
 the shared primary session remains valid with consistent roles.
 
 An authenticated heartbeat is marked `mutation` because it refreshes grants,
-expiry, Redis TTLs, and the per-user session index. Missing and invalid session
-checks remain production-safe reads; only a nonempty stale heartbeat cookie is
-required to receive a scoped `Max-Age=0` clearing response. The independent
-secondary-account smoke is supporting session-acquisition evidence and does
-not add a second operation or behavior-contract claim.
+expiry, Redis TTLs, and the per-user session index. All heartbeat checks use
+`POST` and are conservatively marked as mutations, including missing and invalid
+session checks; only a nonempty stale heartbeat cookie is required to receive a
+scoped `Max-Age=0` clearing response. The independent secondary-account smoke is
+supporting session-acquisition evidence and does not add a second operation or
+behavior-contract claim.
 
 The public admin-deactivation lifecycle now proves bulk revocation. The
 heartbeat-specific inactive-account fallback remains deferred because the
@@ -247,8 +248,8 @@ public authentication cookie.
 
 Each successful scenario creates one additional session for the already
 configured primary identity. It does not replace or invalidate the
-session-scoped primary fixture. The test calls no-follow `GET /logout`, validates
-the OpenAPI `302`, allowlisted provider endpoint, encoded configured return
+session-scoped primary fixture. The test calls no-follow `POST /logout`, validates
+the OpenAPI `303`, allowlisted provider endpoint, encoded configured return
 target, and clearing-cookie attributes, then reuses the old opaque cookie in
 fresh user and heartbeat clients and requires schema-backed `401` responses.
 A narrow `finally` cleanup may repeat logout only for that exact owned cookie
