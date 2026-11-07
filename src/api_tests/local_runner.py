@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from api_tests.client import GatewayClient
 from api_tests.config import EnvironmentConfig, load_environment, repository_root
 from api_tests.coverage import (
-    OperationCoverage,
     missing_operation_ids,
     placeholder_operation_ids,
     write_coverage_artifact,
@@ -25,14 +24,12 @@ from api_tests.openapi import fetch_live_openapi, load_snapshot
 from api_tests.openapi_drift import compare_openapi_documents, write_drift_artifact
 from api_tests.session_gateway_inventory import (
     build_session_gateway_coverage_report,
-    session_gateway_coverage_lines,
     write_session_gateway_coverage_artifact,
 )
 from api_tests.tools.openapi_coverage import (
     build_coverage,
     build_forbidden_coverage,
     build_session_gateway_coverage,
-    forbidden_response_coverage_lines,
 )
 
 
@@ -114,13 +111,6 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
                 )
             return 1
 
-        for line in session_gateway_coverage_lines(session_gateway_report):
-            print(line)
-        for line in forbidden_response_coverage_lines(forbidden_response_coverage):
-            print(line)
-        print(_unified_coverage_summary(coverage))
-        print("Session Gateway reviewed contract and inbound inventory validation passed.")
-
         snapshot_path = repository_root() / "schemas" / "openapi.json"
         request_log_path = artifact_dir / "request-log.jsonl"
         with GatewayClient(config, artifact_path=request_log_path) as client:
@@ -167,16 +157,6 @@ def _run_full_validation(config: EnvironmentConfig, artifact_dir: Path) -> int:
 
     print("Unified live OpenAPI contract drift: none; contract matches schemas/openapi.json.")
     return _run_pytest([], artifact_dir)
-
-
-def _unified_coverage_summary(coverage: Sequence[OperationCoverage]) -> str:
-    unified = tuple(row for row in coverage if row.contract == "unified")
-    covered = sum(row.status == "covered" for row in unified)
-    deferred_admin = sum(row.deferred_admin for row in unified)
-    return (
-        "Unified OpenAPI operation coverage passed: "
-        f"{len(unified)} operations ({covered} covered, {deferred_admin} deferred admin)."
-    )
 
 
 def _run_pytest(arguments: Sequence[str], artifact_dir: Path) -> int:
