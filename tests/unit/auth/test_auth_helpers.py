@@ -99,7 +99,7 @@ def test_read_session_cookie_extracts_session_value() -> None:
             return [
                 {"name": "unrelated", "value": "x", "domain": "example.test", "path": "/"},
                 {
-                    "name": "BA_SESSION",
+                    "name": "__Host-BA_SESSION",
                     "value": "session-value",
                     "domain": "app.budgetanalyzer.localhost",
                     "path": "/",
@@ -107,16 +107,16 @@ def test_read_session_cookie_extracts_session_value() -> None:
                 },
             ]
 
-    session = read_session_cookie(cast(BrowserContext, FakeContext()), "BA_SESSION")
+    session = read_session_cookie(cast(BrowserContext, FakeContext()), "__Host-BA_SESSION")
 
-    assert session == Session(cookie_name="BA_SESSION", cookie_value="session-value")
+    assert session == Session(cookie_name="__Host-BA_SESSION", cookie_value="session-value")
 
 
 def test_session_verification_uses_gateway_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_environment("local")
-    session = Session(cookie_name="BA_SESSION", cookie_value="session-value")
+    session = Session(cookie_name="__Host-BA_SESSION", cookie_value="session-value")
     calls: list[tuple[object, Session, str, str]] = []
 
     class FakeGatewayClient:
@@ -358,7 +358,7 @@ def test_admin_browser_acquisition_accepts_pre_and_post_promotion_destinations(
         assert environment_config is config
         assert credentials.username == "staging-admin@example.invalid"
         observed_return_paths.append(expected_return_paths)
-        return Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+        return Session(cookie_name="__Host-BA_SESSION", cookie_value="admin-cookie")
 
     monkeypatch.setattr(auth_module, "login_with_browser", fake_browser_login)
 
@@ -371,7 +371,7 @@ def test_admin_browser_acquisition_accepts_pre_and_post_promotion_destinations(
         },
     )
 
-    assert session == Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+    assert session == Session(cookie_name="__Host-BA_SESSION", cookie_value="admin-cookie")
     assert observed_return_paths == [("/", "/admin")]
 
 
@@ -390,7 +390,7 @@ def test_primary_browser_acquisition_accepts_only_normal_default_destination(
         assert environment_config is config
         assert credentials.username == "staging-primary@example.invalid"
         observed_return_paths.append(expected_return_paths)
-        return Session(cookie_name="BA_SESSION", cookie_value="primary-cookie")
+        return Session(cookie_name="__Host-BA_SESSION", cookie_value="primary-cookie")
 
     monkeypatch.setattr(auth_module, "login_with_browser", fake_browser_login)
 
@@ -403,7 +403,7 @@ def test_primary_browser_acquisition_accepts_only_normal_default_destination(
         },
     )
 
-    assert session == Session(cookie_name="BA_SESSION", cookie_value="primary-cookie")
+    assert session == Session(cookie_name="__Host-BA_SESSION", cookie_value="primary-cookie")
     assert observed_return_paths == [("/",)]
 
 
@@ -442,7 +442,7 @@ def test_browser_acquisition_logs_in_only_requested_user() -> None:
         assert environment_config is config
         login_credentials.append(credentials)
         return Session(
-            cookie_name="BA_SESSION",
+            cookie_name="__Host-BA_SESSION",
             cookie_value=f"{credentials.username}-cookie",
         )
 
@@ -460,7 +460,7 @@ def test_browser_acquisition_logs_in_only_requested_user() -> None:
         "primary-user@example.invalid"
     ]
     assert session == Session(
-        cookie_name="BA_SESSION",
+        cookie_name="__Host-BA_SESSION",
         cookie_value="primary-user@example.invalid-cookie",
     )
 
@@ -501,9 +501,9 @@ def test_supplied_sessions_load_all_roles_independently() -> None:
     secondary = load_supplied_session(config, "secondary", environ=source)
     admin = load_supplied_session(config, "admin", environ=source)
 
-    assert primary == Session(cookie_name="BA_SESSION", cookie_value="primary-cookie")
-    assert secondary == Session(cookie_name="BA_SESSION", cookie_value="secondary-cookie")
-    assert admin == Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+    assert primary == Session(cookie_name="__Host-BA_SESSION", cookie_value="primary-cookie")
+    assert secondary == Session(cookie_name="__Host-BA_SESSION", cookie_value="secondary-cookie")
+    assert admin == Session(cookie_name="__Host-BA_SESSION", cookie_value="admin-cookie")
 
 
 def test_staging_browser_admin_uses_explicit_admin_credential_names() -> None:
@@ -516,7 +516,7 @@ def test_staging_browser_admin_uses_explicit_admin_credential_names() -> None:
     ) -> Session:
         assert environment_config is config
         observed.append(credentials)
-        return Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+        return Session(cookie_name="__Host-BA_SESSION", cookie_value="admin-cookie")
 
     session = acquire_browser_session(
         config,
@@ -529,7 +529,7 @@ def test_staging_browser_admin_uses_explicit_admin_credential_names() -> None:
     )
 
     assert observed == [BrowserLoginCredentials("staging-admin@example.invalid", "admin-password")]
-    assert session == Session(cookie_name="BA_SESSION", cookie_value="admin-cookie")
+    assert session == Session(cookie_name="__Host-BA_SESSION", cookie_value="admin-cookie")
 
 
 def test_isolated_lifecycle_rejects_supplied_session_mode() -> None:
@@ -559,14 +559,14 @@ def test_isolated_lifecycle_loads_only_an_existing_local_identity(tmp_path: Path
 
 
 def test_authorization_sessions_must_be_distinct() -> None:
-    session = Session(cookie_name="BA_SESSION", cookie_value="reused-cookie")
+    session = Session(cookie_name="__Host-BA_SESSION", cookie_value="reused-cookie")
 
     with pytest.raises(IndistinctSessionsError, match="same authenticated session"):
         ensure_distinct_sessions(session, session)
 
     ensure_distinct_sessions(
-        Session(cookie_name="BA_SESSION", cookie_value="primary-cookie"),
-        Session(cookie_name="BA_SESSION", cookie_value="secondary-cookie"),
+        Session(cookie_name="__Host-BA_SESSION", cookie_value="primary-cookie"),
+        Session(cookie_name="__Host-BA_SESSION", cookie_value="secondary-cookie"),
     )
 
 
@@ -580,7 +580,7 @@ def test_production_allows_primary_without_configuring_secondary() -> None:
     )
 
     assert primary == Session(
-        cookie_name="BA_SESSION",
+        cookie_name="__Host-BA_SESSION",
         cookie_value="production-smoke-cookie",
     )
     with pytest.raises(MissingSecondarySessionError, match="does not configure"):
@@ -643,14 +643,14 @@ def test_supplied_admin_promotion_requires_a_refreshed_external_session() -> Non
 
 def test_secret_value_representations_are_redacted() -> None:
     credentials = BrowserLoginCredentials(username="user@example.test", password="secret-password")
-    session = Session(cookie_name="BA_SESSION", cookie_value="secret-cookie")
+    session = Session(cookie_name="__Host-BA_SESSION", cookie_value="secret-cookie")
 
     rendered = "\n".join((repr(credentials), repr(session)))
 
     assert "user@example.test" not in rendered
     assert "secret-password" not in rendered
     assert "secret-cookie" not in rendered
-    assert "BA_SESSION" in rendered
+    assert "__Host-BA_SESSION" in rendered
 
 
 def test_browser_login_failure_traceback_does_not_expose_original_diagnostics(
@@ -707,7 +707,7 @@ def test_gateway_client_uses_origin_api_prefix_session_and_request_log(
             200,
             headers={
                 "content-type": "application/json",
-                "set-cookie": "BA_SESSION=secret",
+                "set-cookie": "__Host-BA_SESSION=secret",
             },
             json={
                 "ok": True,
@@ -724,14 +724,14 @@ def test_gateway_client_uses_origin_api_prefix_session_and_request_log(
     with GatewayClient(
         config,
         artifact_path=artifact_path,
-        session=Session(cookie_name="BA_SESSION", cookie_value="debug-cookie"),
+        session=Session(cookie_name="__Host-BA_SESSION", cookie_value="debug-cookie"),
         transport=httpx.MockTransport(handler),
     ) as client:
         response = client.api_request("GET", "/transactions")
 
     assert response.status_code == 200
     assert str(requests[0].url) == "https://app.budgetanalyzer.localhost/api/transactions"
-    assert requests[0].headers["cookie"] == "BA_SESSION=debug-cookie"
+    assert requests[0].headers["cookie"] == "__Host-BA_SESSION=debug-cookie"
 
     log_entry = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert log_entry["method"] == "GET"

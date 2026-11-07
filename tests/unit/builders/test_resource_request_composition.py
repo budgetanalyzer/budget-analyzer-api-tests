@@ -244,7 +244,7 @@ def _mock_gateway_client(
 ) -> GatewayClient:
     return GatewayClient(
         load_environment("local"),
-        session=Session(cookie_name="BA_SESSION", cookie_value="debug-cookie"),
+        session=Session(cookie_name="__Host-BA_SESSION", cookie_value="debug-cookie"),
         transport=httpx.MockTransport(handler),
     )
 

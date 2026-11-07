@@ -35,20 +35,22 @@ def test_string_array_field_rejects_non_string_items() -> None:
 def test_assert_cookie_cleared_accepts_empty_max_age_zero_cookie() -> None:
     response = httpx.Response(
         401,
-        headers={"set-cookie": "BA_SESSION=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict"},
+        headers={
+            "set-cookie": "__Host-BA_SESSION=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict"
+        },
     )
 
-    assert_cookie_cleared(response, "BA_SESSION")
+    assert_cookie_cleared(response, "__Host-BA_SESSION")
 
 
 def test_assert_cookie_cleared_does_not_expose_nonempty_value() -> None:
     response = httpx.Response(
         401,
-        headers={"set-cookie": "BA_SESSION=sensitive-invalid-value; Path=/; Max-Age=0"},
+        headers={"set-cookie": "__Host-BA_SESSION=sensitive-invalid-value; Path=/; Max-Age=0"},
     )
 
     with pytest.raises(AssertionError) as exc_info:
-        assert_cookie_cleared(response, "BA_SESSION")
+        assert_cookie_cleared(response, "__Host-BA_SESSION")
 
     assert "sensitive-invalid-value" not in str(exc_info.value)
 
@@ -56,14 +58,16 @@ def test_assert_cookie_cleared_does_not_expose_nonempty_value() -> None:
 def test_assert_cookie_not_set_ignores_unrelated_cookie() -> None:
     response = httpx.Response(401, headers={"set-cookie": "SESSION=framework; Path=/"})
 
-    assert_cookie_not_set(response, "BA_SESSION")
+    assert_cookie_not_set(response, "__Host-BA_SESSION")
 
 
 def test_assert_cookie_not_set_rejects_public_cookie() -> None:
-    response = httpx.Response(401, headers={"set-cookie": "BA_SESSION=; Path=/; Max-Age=0"})
+    response = httpx.Response(401, headers={"set-cookie": "__Host-BA_SESSION=; Path=/; Max-Age=0"})
 
-    with pytest.raises(AssertionError, match="expected response not to set cookie 'BA_SESSION'"):
-        assert_cookie_not_set(response, "BA_SESSION")
+    with pytest.raises(
+        AssertionError, match="expected response not to set cookie '__Host-BA_SESSION'"
+    ):
+        assert_cookie_not_set(response, "__Host-BA_SESSION")
 
 
 def test_authorization_redirect_parser_validates_oidc_and_pkce_without_repr_secrets() -> None:
@@ -99,16 +103,16 @@ def test_controlled_callback_failure_parser_accepts_safe_return_url() -> None:
 def test_browser_cookie_contract_uses_public_cookie_and_safe_metadata_only() -> None:
     config = load_environment("local")
     result = BrowserLoginResult(
-        session=Session(cookie_name="BA_SESSION", cookie_value="sensitive-session"),
+        session=Session(cookie_name="__Host-BA_SESSION", cookie_value="sensitive-session"),
         session_cookie=BrowserCookieMetadata(
-            name="BA_SESSION",
+            name="__Host-BA_SESSION",
             domain="app.budgetanalyzer.localhost",
             path="/",
             http_only=True,
             secure=True,
             same_site="Strict",
         ),
-        cookie_names=("BA_SESSION", "SESSION"),
+        cookie_names=("__Host-BA_SESSION", "SESSION"),
         final_path="/peace",
         callback_observed=True,
         observations=(),
@@ -128,7 +132,9 @@ def test_logout_redirect_parser_requires_provider_return_target_and_cookie_contr
                 "returnTo=https%3A%2F%2Fapp.budgetanalyzer.localhost%2Fpeace"
                 "&client_id=environment-specific"
             ),
-            "set-cookie": ("BA_SESSION=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict"),
+            "set-cookie": (
+                "__Host-BA_SESSION=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Strict"
+            ),
         },
     )
 

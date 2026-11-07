@@ -110,7 +110,7 @@ def _mocked_supplied_session_client(
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "GET"
         assert request.url.path == "/auth/v1/user"
-        assert request.headers["cookie"] == f"BA_SESSION={expected_cookie}"
+        assert request.headers["cookie"] == f"__Host-BA_SESSION={expected_cookie}"
         if response_status == httpx.codes.OK:
             return httpx.Response(
                 response_status,
