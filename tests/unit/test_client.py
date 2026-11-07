@@ -299,3 +299,46 @@ def test_gateway_client_without_session_sends_no_authentication_headers() -> Non
     assert len(requests) == 1
     assert "cookie" not in requests[0].headers
     assert "authorization" not in requests[0].headers
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "post"])
+def test_gateway_client_sends_configured_origin_on_unsafe_requests(method: str) -> None:
+    config = load_environment("local")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(httpx.codes.NO_CONTENT)
+
+    with GatewayClient(
+        config,
+        transport=httpx.MockTransport(handler),
+        request_pacing=_request_pacing(FakeTiming()),
+    ) as gateway_client:
+        gateway_client.api_request(method, "/v1/transactions", headers={"x-test": "kept"})
+        gateway_client.raw_request(method, "/logout")
+
+    assert [request.headers.get_list("origin") for request in requests] == [
+        [config.origin],
+        [config.origin],
+    ]
+    assert requests[0].headers["x-test"] == "kept"
+
+
+@pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS"])
+def test_gateway_client_omits_origin_on_safe_requests(method: str) -> None:
+    config = load_environment("local")
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(httpx.codes.OK)
+
+    with GatewayClient(
+        config,
+        transport=httpx.MockTransport(handler),
+        request_pacing=_request_pacing(FakeTiming()),
+    ) as gateway_client:
+        gateway_client.api_request(method, "/v1/transactions")
+
+    assert "origin" not in requests[0].headers

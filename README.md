@@ -88,6 +88,13 @@ returned directly and never retried. A response carrying
 concurrent traffic outside this harness; it is not a transient response to hide
 with a retry. There is no first-use cooldown or callback-timeout padding.
 
+`GatewayClient` sends the environment's configured `origin` as the `Origin`
+header on every request method other than `GET`, `HEAD`, and `OPTIONS`, as a
+browser would for same-origin mutations. This satisfies the exact-Origin
+ingress rule for unsafe requests. The header is CSRF provenance, not
+authentication: it does not grant access to arbitrary HTTP clients. Safe
+methods carry no `Origin` header.
+
 The first test that needs a local primary, secondary, or admin identity generates
 its credentials and signs up through the public hosted flow; no credential
 editing or separate bootstrap command is needed. Preserve the resulting

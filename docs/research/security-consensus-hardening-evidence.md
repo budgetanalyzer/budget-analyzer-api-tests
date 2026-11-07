@@ -65,3 +65,26 @@ deployments, mutate cluster or application state, add Origin enforcement, or add
 API coverage. Exact-Origin enforcement remains assigned to plan 02.8, and synchronized
 live verification remains assigned to the later orchestration phase. No local-state
 reset is required for this HTTP method change.
+
+## Plan 02.8, Phase 1: Exact-Origin API-Test Client
+
+`GatewayClient.raw_request`, and therefore `api_request`, adds the environment's
+configured `origin` as the `Origin` header to every method other than `GET`,
+`HEAD`, and `OPTIONS`. Method matching is case-insensitive. Other caller-supplied
+headers are preserved, and safe methods send no `Origin`. The header is CSRF
+provenance for the planned exact-Origin ingress `DENY`. It is not authentication
+for arbitrary HTTP clients. Browser-driven requests rely on Chromium's own
+`Origin` behavior and are unchanged.
+
+Regression evidence:
+
+- New unit tests cover `POST`, `PUT`, `PATCH`, `DELETE`, lowercase `post`, the
+  API and `/logout` lanes, and the absence of `Origin` on `GET`, `HEAD`, and
+  `OPTIONS`.
+- `.venv/bin/python -m pytest tests/unit --env local`: 332 passed.
+- `.venv/bin/python -m pytest tests/api --env local --collect-only`: 105 collected.
+- `ruff format --check`, `ruff check`, and `mypy src tests`: clean.
+
+This was an offline phase. It did not contact any deployment or add API coverage.
+The header is harmless without the ingress rule, and the orchestration phase
+adds that rule. No local-state reset is required.

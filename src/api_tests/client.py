@@ -20,6 +20,7 @@ LOGIN_INITIATION_REQUESTS_PER_SECOND: Final = 0.8
 LOGIN_COMPLETION_REQUESTS_PER_SECOND: Final = 1.6
 SESSION_OPERATIONS_REQUESTS_PER_SECOND: Final = 4.0
 API_REQUESTS_PER_SECOND: Final = 8.0
+SAFE_METHODS: Final = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 class PublicRatePolicyName(StrEnum):
@@ -188,6 +189,10 @@ class GatewayClient:
 
     def raw_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         request_target = _absolute_path(path)
+        if method.upper() not in SAFE_METHODS:
+            headers = httpx.Headers(kwargs.pop("headers", None))
+            headers.setdefault("origin", self.config.origin)
+            kwargs["headers"] = headers
         self._request_pacing.wait(request_target)
         return self._client.request(method, request_target, **kwargs)
 
