@@ -37,11 +37,9 @@ parity evidence. Any stale lock, environment mismatch, failed test, incomplete
 coverage, or contract drift makes the command fail. It always selects
 `environments/local.yaml` and rejects `--env`.
 
-The preflight reports the 40 unified operations separately from the 3 filtered
-Session Gateway operations. It also prints every Session Gateway scenario id
-by classification, including the 11 deferred and 9 untestable cases, before
-reporting unified live-contract drift. The Session Gateway snapshot is
-validated offline and exercised semantically by public tests; the runner never
+The preflight writes coverage classifications only to the run's JSON
+artifacts; console output reports failures and the live-contract drift result.
+The Session Gateway snapshot is validated offline and exercised semantically by public tests; the runner never
 fetches its non-public service-local Springdoc route.
 
 Ordinary pytest selectors pass through. The command labels these runs as
