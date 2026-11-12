@@ -225,6 +225,19 @@ file values. Failed login or interrupted signup preserves the same saved
 identity for diagnosis and retry. Reusing one username across slots is rejected.
 Passwords and session cookies are not written to test artifacts.
 
+Session Gateway binds each OAuth login to the initiating browser through the
+reusable `__Host-BA_OAUTH_BINDING` cookie, which must travel from login
+initiation to the callback. `login_flow_with_browser` and `signup_with_browser`
+therefore keep one Playwright browser context and page from public login
+initiation through the hosted form and callback, and the pacing interceptor
+continues paused requests without replacing their headers. Direct callback
+scenarios, such as provider rejection, reuse one `GatewayClient` so its cookie
+jar carries login-start cookies to the callback. Only the application session
+cookie is extracted afterwards; the binding is not an application credential.
+See the Session Gateway
+[OAuth callback browser binding](../session-gateway/docs/security.md#oauth-callback-browser-binding)
+contract.
+
 Authentication smokes are identifiable as `auth_smoke` and
 `secondary_auth_smoke`, run as ordinary outcomes in the full local suite, and
 remain directly selectable:
