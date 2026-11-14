@@ -2125,6 +2125,33 @@
         },
         "type": "object"
       },
+      "UserSyncRequest": {
+        "description": "Identity provider profile data for login-time user sync",
+        "properties": {
+          "displayName": {
+            "description": "User display name",
+            "example": "Example User",
+            "type": "string"
+          },
+          "email": {
+            "description": "User email",
+            "example": "user@example.com",
+            "type": "string"
+          },
+          "idpSub": {
+            "description": "Identity provider subject identifier (OIDC sub claim, provider-agnostic)",
+            "example": "auth0|abc123",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName",
+          "email",
+          "idpSub"
+        ],
+        "type": "object"
+      },
       "ViewMembershipResponse": {
         "description": "Complete static saved-view transaction membership",
         "properties": {
@@ -2641,7 +2668,7 @@
             }
           },
           {
-            "description": "End date for exchange rates in ISO format",
+            "description": "End date for exchange rates in ISO format. Defaults to today (UTC). Dates after today are treated as today. A start date after the end date is rejected with 400 before this clamping, even when both dates are in the future.",
             "example": "2024-12-31",
             "in": "query",
             "name": "endDate",
