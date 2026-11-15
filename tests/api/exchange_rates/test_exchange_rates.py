@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import warnings
+from datetime import UTC, date, datetime, timedelta
+from itertools import pairwise
 
 import httpx
 import pytest
@@ -47,6 +49,87 @@ def test_get_exchange_rates_returns_rates(
         string_field(rate, "publishedDate")
         value = rate.get("rate")
         assert isinstance(value, int | float) and not isinstance(value, bool) and value > 0
+
+
+@pytest.mark.openapi("getExchangeRates")
+@pytest.mark.readonly
+@pytest.mark.production_safe
+def test_get_exchange_rates_caps_future_end_date_at_tomorrow(
+    gateway_client: GatewayClient,
+    openapi_snapshot: OpenApiDocument,
+) -> None:
+    target_currency = _first_enabled_target_currency(gateway_client, openapi_snapshot)
+    today_before = datetime.now(UTC).date()
+
+    response = gateway_client.api_request(
+        "GET",
+        "/v1/exchange-rates",
+        params={
+            "targetCurrency": target_currency,
+            "startDate": (today_before - timedelta(days=30)).isoformat(),
+            "endDate": "9999-12-31",
+        },
+    )
+    today_after = datetime.now(UTC).date()
+
+    _assert_dense_rates_end_on(
+        response,
+        target_currency,
+        openapi_snapshot,
+        {today_before + timedelta(days=1), today_after + timedelta(days=1)},
+    )
+
+
+@pytest.mark.openapi("getExchangeRates")
+@pytest.mark.readonly
+@pytest.mark.production_safe
+def test_get_exchange_rates_defaults_omitted_end_date_to_today(
+    gateway_client: GatewayClient,
+    openapi_snapshot: OpenApiDocument,
+) -> None:
+    target_currency = _first_enabled_target_currency(gateway_client, openapi_snapshot)
+    today_before = datetime.now(UTC).date()
+
+    response = gateway_client.api_request(
+        "GET",
+        "/v1/exchange-rates",
+        params={
+            "targetCurrency": target_currency,
+            "startDate": (today_before - timedelta(days=30)).isoformat(),
+        },
+    )
+    today_after = datetime.now(UTC).date()
+
+    _assert_dense_rates_end_on(
+        response,
+        target_currency,
+        openapi_snapshot,
+        {today_before, today_after},
+    )
+
+
+def _assert_dense_rates_end_on(
+    response: httpx.Response,
+    target_currency: str,
+    openapi_snapshot: OpenApiDocument,
+    acceptable_end_dates: set[date],
+) -> None:
+    assert_response_matches_openapi(response, "getExchangeRates", httpx.codes.OK, openapi_snapshot)
+    rates = json_array_response(response, httpx.codes.OK)
+    assert rates, f"expected current exchange rates for {target_currency}"
+
+    rate_dates: list[date] = []
+    for item in rates:
+        rate = object_item(item)
+        assert string_field(rate, "targetCurrency") == target_currency
+        rate_dates.append(date.fromisoformat(string_field(rate, "date")))
+
+    assert rate_dates[-1] in acceptable_end_dates
+    assert all(
+        current == previous + timedelta(days=1) for previous, current in pairwise(rate_dates)
+    )
+    latest_acceptable_end_date = max(acceptable_end_dates)
+    assert len(rate_dates) <= (latest_acceptable_end_date - rate_dates[0]).days + 1
 
 
 def _first_enabled_target_currency(
